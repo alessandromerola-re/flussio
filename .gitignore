@@ -1,32 +1,11 @@
-# OS / editor
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
-*.log
-
-# Frontend build
-frontend/dist/
-frontend/.vite/
-frontend/node_modules/
-
-# Backend
-backend/node_modules/
-backend/uploads/
-backend/.cache/
-
-# Env / secrets
+node_modules
 .env
 .env.*
-backend/.env
-frontend/.env
-
-# Docker / local
-db_data/
-*.tar
+!.env.example
+/dist
+/build
+*.log
+/uploads
+backend/uploads
+frontend/dist
+.DS_Store
