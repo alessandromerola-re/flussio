@@ -5,33 +5,17 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
-    try {
-      const result = await query(
-        `
-        SELECT p.id, p.name, p.notes, p.contact_id, p.is_active, c.name AS contact_name
-        FROM properties p
-        LEFT JOIN contacts c ON p.contact_id = c.id
-        WHERE p.company_id = $1
-        ORDER BY p.name
-        `,
-        [req.user.company_id]
-      );
-      return res.json(result.rows);
-    } catch (error) {
-      if (error.code !== '42703') {
-        throw error;
-      }
-      const fallback = await query(
-        `
-        SELECT id, name, notes, is_active
-        FROM properties
-        WHERE company_id = $1
-        ORDER BY name
-        `,
-        [req.user.company_id]
-      );
-      return res.json(fallback.rows);
-    }
+    const result = await query(
+      `
+      SELECT p.id, p.name, p.notes, p.contact_id, p.is_active, c.name AS contact_name
+      FROM properties p
+      LEFT JOIN contacts c ON p.contact_id = c.id
+      WHERE p.company_id = $1
+      ORDER BY p.name
+      `,
+      [req.user.company_id]
+    );
+    return res.json(result.rows);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
