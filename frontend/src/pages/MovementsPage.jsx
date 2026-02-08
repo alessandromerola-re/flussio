@@ -25,29 +25,60 @@ const MovementsPage = () => {
   const [selected, setSelected] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
 
   const loadData = async () => {
-    const [accountsData, categoriesData, contactsData, propertiesData, movementsData] =
-      await Promise.all([
-        api.getAccounts(),
-        api.getCategories(),
-        api.getContacts(),
-        api.getProperties(),
-        api.getTransactions(),
-      ]);
-    setAccounts(accountsData);
-    setCategories(categoriesData);
-    setContacts(contactsData);
-    setProperties(propertiesData);
-    setMovements(movementsData);
+    setLoadError('');
+    const results = await Promise.allSettled([
+      api.getAccounts(),
+      api.getCategories(),
+      api.getContacts(),
+      api.getProperties(),
+      api.getTransactions(),
+    ]);
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult, movementsResult] =
+      results;
+
+    if (accountsResult.status === 'fulfilled') {
+      setAccounts(accountsResult.value);
+    }
+    if (categoriesResult.status === 'fulfilled') {
+      setCategories(categoriesResult.value);
+    }
+    if (contactsResult.status === 'fulfilled') {
+      setContacts(contactsResult.value);
+    }
+    if (propertiesResult.status === 'fulfilled') {
+      setProperties(propertiesResult.value);
+    }
+    if (movementsResult.status === 'fulfilled') {
+      setMovements(movementsResult.value);
+    }
+
+    if (results.some((result) => result.status === 'rejected')) {
+      setLoadError(t('errors.SERVER_ERROR'));
+    }
   };
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const formatDate = (value) => {
+    if (!value) return '';
+    const [year, month, day] = value.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const formatAccounts = (accountsList = []) => {
+    const names = accountsList
+      .map((account) => account?.account_name)
+      .filter(Boolean);
+    return names.length ? names.join(' → ') : t('common.none');
+  };
 
   useEffect(() => {
     const loadAttachments = async () => {
@@ -183,6 +214,7 @@ const MovementsPage = () => {
       <div className="page-header">
         <h1>{t('pages.movements.title')}</h1>
       </div>
+      {loadError && <div className="error">{loadError}</div>}
 
       <div className="grid-two">
         <form className="card" onSubmit={handleSubmit}>
@@ -268,27 +300,6 @@ const MovementsPage = () => {
                 </select>
               </label>
             )}
-            {form.type !== 'transfer' && (
-              <label>
-                {t('pages.movements.category')}
-                <select
-                  value={form.category_id}
-                  onChange={(event) => handleChange('category_id', event.target.value)}
-                >
-                  <option value="">{t('common.none')}</option>
-                  {groupedCategories.map((category) => (
-                    <optgroup key={category.id} label={category.name}>
-                      <option value={category.id}>{category.name}</option>
-                      {category.children.map((child) => (
-                        <option key={child.id} value={child.id}>
-                          └ {child.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-            )}
             <label className="relative">
               {t('pages.movements.contact')}
               <input
@@ -310,6 +321,27 @@ const MovementsPage = () => {
                 </ul>
               )}
             </label>
+            {form.type !== 'transfer' && (
+              <label>
+                {t('pages.movements.category')}
+                <select
+                  value={form.category_id}
+                  onChange={(event) => handleChange('category_id', event.target.value)}
+                >
+                  <option value="">{t('common.none')}</option>
+                  {groupedCategories.map((category) => (
+                    <optgroup key={category.id} label={category.name}>
+                      <option value={category.id}>{category.name}</option>
+                      {category.children.map((child) => (
+                        <option key={child.id} value={child.id}>
+                          └ {child.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               {t('pages.movements.property')}
               <select
@@ -350,7 +382,16 @@ const MovementsPage = () => {
               >
                 <div>
                   <strong>{movement.description || movement.type}</strong>
-                  <div className="muted">{movement.date}</div>
+                  <div className="muted">{formatDate(movement.date)}</div>
+                  <div className="muted">
+                    {t('pages.movements.account')}: {formatAccounts(movement.accounts)}
+                  </div>
+                  <div className="muted">
+                    {t('pages.movements.category')}: {movement.category_name || t('common.none')}
+                  </div>
+                  <div className="muted">
+                    {t('pages.movements.contact')}: {movement.contact_name || t('common.none')}
+                  </div>
                 </div>
                 <div
                   className={
