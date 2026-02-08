@@ -15,8 +15,24 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
+  : '*';
+
+app.use(
+  cors({
+    origin: corsOrigins,
+  })
+);
 app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.json({ name: 'Flussio API', status: 'ok' });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });

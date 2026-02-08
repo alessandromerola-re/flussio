@@ -84,6 +84,7 @@ const MovementsPage = () => {
   const handleContactSearch = async (value) => {
     setContactSearch(value);
     if (!value) {
+      handleChange('contact_id', '');
       setContactResults([]);
       setShowContactResults(false);
       return;

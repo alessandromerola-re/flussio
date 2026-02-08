@@ -7,7 +7,14 @@ RUN npm install --omit=dev
 
 COPY src ./src
 
-RUN mkdir -p /app/uploads
+ENV NODE_ENV=production
+
+RUN mkdir -p /app/uploads \
+  && addgroup -S appgroup \
+  && adduser -S appuser -G appgroup \
+  && chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 4000
 

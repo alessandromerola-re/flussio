@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const getToken = () => localStorage.getItem('flussio_token');
 
@@ -17,7 +17,7 @@ const request = async (path, options = {}) => {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
   });

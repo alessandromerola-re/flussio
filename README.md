@@ -11,7 +11,9 @@ docker compose up -d
 The services will be available at:
 - Frontend: http://localhost:8080
 - Backend API: http://localhost:4000
-- PostgreSQL: localhost:5432
+- PostgreSQL: localhost:5432 (only when using the dev override)
+
+> Tip: `docker-compose.override.yml` exposes Postgres on 5432 for local development. Remove or ignore the override file in production.
 
 ## Environment configuration
 
@@ -23,6 +25,11 @@ cp frontend/.env.example frontend/.env
 ```
 
 Adjust the values if needed (ports, database URL, JWT secret).
+
+## Health checks
+
+- Via frontend reverse proxy: http://localhost:8080/api/health
+- Direct backend: http://localhost:4000/health
 
 ## Default DEV login (DEV ONLY)
 
@@ -45,6 +52,34 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 ```
 
 See `database/README.md` for details.
+
+## Deploy su QNAP Container Station
+
+### Metodo 1 (consigliato): caricare il file Compose dal NAS
+1. Copia la repo su NAS, ad esempio: `/share/CACHEDEV1_DATA/Container/flussio`.
+2. Crea i file `.env` partendo dagli example:
+   ```bash
+   cp backend/.env.example backend/.env
+   cp frontend/.env.example frontend/.env
+   ```
+3. Apri **Container Station** → **Create Application**.
+4. Seleziona **Carica file** e scegli `docker-compose.yml` direttamente dalla cartella sul NAS.
+5. Avvia l'applicazione. Porte default: frontend **8080**, backend **4000**.
+
+> Nota: evita di incollare il YAML direttamente nell'editor QNAP se usi `env_file`, perché QNAP salva in `/tmp` e i path relativi falliscono.
+
+### Metodo 2: incollare docker-compose.qnap.yml
+Se vuoi incollare il YAML nell'editor QNAP, usa `docker-compose.qnap.yml` che non dipende da `env_file`.
+
+1. Apri **Container Station** → **Create Application** → **Incolla YAML**.
+2. Incolla il contenuto di `docker-compose.qnap.yml`.
+3. (Opzionale) Personalizza le variabili nel pannello **Environment**:
+   - `FLUSSIO_ROOT` (default: `/share/CACHEDEV1_DATA/Container/flussio`)
+   - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+   - `DATABASE_URL`, `JWT_SECRET`
+   - `VITE_API_BASE` (default: `/api`)
+   - `DEV_USER_EMAIL`, `DEV_USER_PASSWORD` (seed utente dev)
+4. Avvia l'applicazione. Porte default: frontend **8080**, backend **4000**.
 
 ## Basic QNAP notes (high-level)
 
@@ -82,3 +117,8 @@ No automated tests are provided yet for Phase 1. Manual smoke testing:
 - Create accounts/categories/contacts/properties
 - Create movements and verify the dashboard KPIs
 - Switch language IT/EN from the header
+
+## Docker Quickstart notes (Windows/Docker Desktop)
+
+- Apri http://localhost:8080 e usa `dev@flussio.local` / `flussio123`.
+- Non usare http://localhost:4000 nel browser per verificare il login: usa `/health` o `/api/health`.

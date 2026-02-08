@@ -7,8 +7,14 @@ router.get('/:transactionId', async (req, res) => {
   const { transactionId } = req.params;
   try {
     const result = await query(
-      'SELECT id, transaction_id, file_name, path, created_at FROM attachments WHERE transaction_id = $1 ORDER BY created_at DESC',
-      [transactionId]
+      `
+      SELECT a.id, a.transaction_id, a.file_name, a.path, a.created_at
+      FROM attachments a
+      JOIN transactions t ON a.transaction_id = t.id
+      WHERE a.transaction_id = $1 AND t.company_id = $2
+      ORDER BY a.created_at DESC
+      `,
+      [transactionId, req.user.company_id]
     );
     return res.json(result.rows);
   } catch (error) {
