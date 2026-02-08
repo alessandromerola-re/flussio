@@ -26,12 +26,19 @@ const request = async (path, options = {}) => {
     return null;
   }
 
-  const data = await response.json();
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
   if (!response.ok) {
-    const error = new Error(data.message || 'Request failed');
-    error.code = data.error_code;
+    const error = new Error(data?.message || response.statusText || 'Request failed');
+    error.code = data?.error_code;
     throw error;
   }
+
   return data;
 };
 

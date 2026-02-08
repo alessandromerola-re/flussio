@@ -25,24 +25,42 @@ const MovementsPage = () => {
   const [selected, setSelected] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
 
   const loadData = async () => {
-    const [accountsData, categoriesData, contactsData, propertiesData, movementsData] =
-      await Promise.all([
-        api.getAccounts(),
-        api.getCategories(),
-        api.getContacts(),
-        api.getProperties(),
-        api.getTransactions(),
-      ]);
-    setAccounts(accountsData);
-    setCategories(categoriesData);
-    setContacts(contactsData);
-    setProperties(propertiesData);
-    setMovements(movementsData);
+    setLoadError('');
+    const results = await Promise.allSettled([
+      api.getAccounts(),
+      api.getCategories(),
+      api.getContacts(),
+      api.getProperties(),
+      api.getTransactions(),
+    ]);
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult, movementsResult] =
+      results;
+
+    if (accountsResult.status === 'fulfilled') {
+      setAccounts(accountsResult.value);
+    }
+    if (categoriesResult.status === 'fulfilled') {
+      setCategories(categoriesResult.value);
+    }
+    if (contactsResult.status === 'fulfilled') {
+      setContacts(contactsResult.value);
+    }
+    if (propertiesResult.status === 'fulfilled') {
+      setProperties(propertiesResult.value);
+    }
+    if (movementsResult.status === 'fulfilled') {
+      setMovements(movementsResult.value);
+    }
+
+    if (results.some((result) => result.status === 'rejected')) {
+      setLoadError(t('errors.SERVER_ERROR'));
+    }
   };
 
   useEffect(() => {
@@ -196,6 +214,7 @@ const MovementsPage = () => {
       <div className="page-header">
         <h1>{t('pages.movements.title')}</h1>
       </div>
+      {loadError && <div className="error">{loadError}</div>}
 
       <div className="grid-two">
         <form className="card" onSubmit={handleSubmit}>

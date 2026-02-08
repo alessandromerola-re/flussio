@@ -31,18 +31,34 @@ const RegistryPage = () => {
   const [contactForm, setContactForm] = useState(initialContact);
   const [propertyForm, setPropertyForm] = useState(initialProperty);
   const [editingId, setEditingId] = useState(null);
+  const [loadError, setLoadError] = useState('');
 
   const loadData = async () => {
-    const [accountsData, categoriesData, contactsData, propertiesData] = await Promise.all([
+    setLoadError('');
+    const results = await Promise.allSettled([
       api.getAccounts(),
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
     ]);
-    setAccounts(accountsData);
-    setCategories(categoriesData);
-    setContacts(contactsData);
-    setProperties(propertiesData);
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult] = results;
+
+    if (accountsResult.status === 'fulfilled') {
+      setAccounts(accountsResult.value);
+    }
+    if (categoriesResult.status === 'fulfilled') {
+      setCategories(categoriesResult.value);
+    }
+    if (contactsResult.status === 'fulfilled') {
+      setContacts(contactsResult.value);
+    }
+    if (propertiesResult.status === 'fulfilled') {
+      setProperties(propertiesResult.value);
+    }
+
+    if (results.some((result) => result.status === 'rejected')) {
+      setLoadError(t('errors.SERVER_ERROR'));
+    }
   };
 
   useEffect(() => {
@@ -144,6 +160,7 @@ const RegistryPage = () => {
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
       </div>
+      {loadError && <div className="error">{loadError}</div>}
       <div className="tabs">
         <button type="button" className={tab === 'accounts' ? 'active' : ''} onClick={() => setTab('accounts')}>
           {t('pages.registry.accounts')}
