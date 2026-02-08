@@ -58,7 +58,7 @@ const MovementsPage = () => {
       setMovements(movementsResult.value);
     }
 
-    if (results.every((result) => result.status === 'rejected')) {
+    if (results.some((result) => result.status === 'rejected')) {
       setLoadError(t('errors.SERVER_ERROR'));
     }
   };
@@ -69,10 +69,6 @@ const MovementsPage = () => {
 
   const formatDate = (value) => {
     if (!value) return '';
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleDateString('it-IT');
-    }
     const [year, month, day] = value.split('-');
     return `${day}/${month}/${year}`;
   };
