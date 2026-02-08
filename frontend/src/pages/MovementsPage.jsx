@@ -58,7 +58,7 @@ const MovementsPage = () => {
       setMovements(movementsResult.value);
     }
 
-    if (results.every((result) => result.status === 'rejected')) {
+    if (results.some((result) => result.status === 'rejected')) {
       setLoadError(t('errors.SERVER_ERROR'));
     }
   };
