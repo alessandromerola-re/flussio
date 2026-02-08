@@ -59,7 +59,6 @@ router.put('/:id', async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
-    return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
