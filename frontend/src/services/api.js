@@ -22,6 +22,14 @@ const request = async (path, options = {}) => {
     headers,
   });
 
+  if (response.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+    const error = new Error('Unauthorized');
+    error.code = 'UNAUTHORIZED';
+    throw error;
+  }
+
   if (response.status === 204) {
     return null;
   }
