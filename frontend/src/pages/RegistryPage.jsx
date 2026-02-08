@@ -17,7 +17,7 @@ const initialContact = {
   default_category_id: '',
   is_active: true,
 };
-const initialProperty = { name: '', notes: '', is_active: true };
+const initialProperty = { name: '', notes: '', contact_id: '', is_active: true };
 
 const RegistryPage = () => {
   const { t } = useTranslation();
@@ -111,10 +111,14 @@ const RegistryPage = () => {
 
   const handlePropertySubmit = async (event) => {
     event.preventDefault();
+    const payload = {
+      ...propertyForm,
+      contact_id: propertyForm.contact_id ? Number(propertyForm.contact_id) : null,
+    };
     if (editingId) {
-      await api.updateProperty(editingId, propertyForm);
+      await api.updateProperty(editingId, payload);
     } else {
-      await api.createProperty(propertyForm);
+      await api.createProperty(payload);
     }
     resetForms();
     setProperties(await api.getProperties());
@@ -450,6 +454,20 @@ const RegistryPage = () => {
                 onChange={(event) => setPropertyForm({ ...propertyForm, notes: event.target.value })}
               />
             </label>
+            <label>
+              {t('forms.referenceContact')}
+              <select
+                value={propertyForm.contact_id}
+                onChange={(event) => setPropertyForm({ ...propertyForm, contact_id: event.target.value })}
+              >
+                <option value="">{t('common.none')}</option>
+                {contacts.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button type="submit">{t('buttons.save')}</button>
           </form>
           <div className="card">
@@ -459,6 +477,9 @@ const RegistryPage = () => {
                   <div>
                     <strong>{property.name}</strong>
                     <div className="muted">{property.notes || t('common.none')}</div>
+                    <div className="muted">
+                      {t('forms.referenceContact')}: {property.contact_name || t('common.none')}
+                    </div>
                   </div>
                   <div className="row-actions">
                     <button
@@ -468,6 +489,7 @@ const RegistryPage = () => {
                         setPropertyForm({
                           name: property.name,
                           notes: property.notes || '',
+                          contact_id: property.contact_id || '',
                           is_active: property.is_active,
                         });
                         setEditingId(property.id);

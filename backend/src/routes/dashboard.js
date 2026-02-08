@@ -5,16 +5,51 @@ const router = express.Router();
 
 const getPeriodRange = (period) => {
   const now = new Date();
+  const end = new Date(now);
+
+  if (period === 'last7days') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    return { start, end };
+  }
+
+  if (period === 'last30days') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 29);
+    start.setHours(0, 0, 0, 0);
+    return { start, end };
+  }
+
+  if (period === 'currentmonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { start, end };
+  }
+
   if (period === 'currentyear') {
     const start = new Date(now.getFullYear(), 0, 1);
-    return { start, end: now };
+    return { start, end };
   }
+
+  if (period === 'previousyear') {
+    const start = new Date(now.getFullYear() - 1, 0, 1);
+    const previousYearEnd = new Date(now.getFullYear() - 1, 11, 31);
+    return { start, end: previousYearEnd };
+  }
+
   const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  return { start, end: now };
+  return { start, end };
+};
+
+const getCashflowGrouping = (period) => {
+  if (period === 'last7days' || period === 'last30days' || period === 'currentmonth') {
+    return { trunc: 'day', format: 'YYYY-MM-DD' };
+  }
+  return { trunc: 'month', format: 'YYYY-MM' };
 };
 
 router.get('/summary', async (req, res) => {
-  const { period = 'last6months' } = req.query;
+  const { period = 'currentmonth' } = req.query;
   const { start, end } = getPeriodRange(period);
   try {
     const result = await query(
@@ -43,19 +78,20 @@ router.get('/summary', async (req, res) => {
 });
 
 router.get('/cashflow', async (req, res) => {
-  const { period = 'last6months' } = req.query;
+  const { period = 'currentmonth' } = req.query;
   const { start, end } = getPeriodRange(period);
+  const grouping = getCashflowGrouping(period);
   try {
     const result = await query(
       `
       SELECT
-        to_char(date_trunc('month', date), 'YYYY-MM') AS month,
+        to_char(date_trunc('${grouping.trunc}', date), '${grouping.format}') AS bucket,
         SUM(CASE WHEN type = 'income' THEN amount_total ELSE 0 END) AS income,
         SUM(CASE WHEN type = 'expense' THEN amount_total ELSE 0 END) AS expense
       FROM transactions
       WHERE company_id = $1 AND date BETWEEN $2 AND $3
-      GROUP BY month
-      ORDER BY month
+      GROUP BY bucket
+      ORDER BY bucket
       `,
       [req.user.company_id, start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)]
     );
@@ -68,7 +104,7 @@ router.get('/cashflow', async (req, res) => {
 });
 
 router.get('/top-categories', async (req, res) => {
-  const { period = 'last6months', direction = 'expense' } = req.query;
+  const { period = 'currentmonth', direction = 'expense' } = req.query;
   const { start, end } = getPeriodRange(period);
   try {
     const result = await query(
