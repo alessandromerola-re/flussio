@@ -49,6 +49,19 @@ const MovementsPage = () => {
     loadData();
   }, []);
 
+  const formatDate = (value) => {
+    if (!value) return '';
+    const [year, month, day] = value.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const formatAccounts = (accountsList = []) => {
+    const names = accountsList
+      .map((account) => account?.account_name)
+      .filter(Boolean);
+    return names.length ? names.join(' → ') : t('common.none');
+  };
+
   useEffect(() => {
     const loadAttachments = async () => {
       if (!selected) {
@@ -268,27 +281,6 @@ const MovementsPage = () => {
                 </select>
               </label>
             )}
-            {form.type !== 'transfer' && (
-              <label>
-                {t('pages.movements.category')}
-                <select
-                  value={form.category_id}
-                  onChange={(event) => handleChange('category_id', event.target.value)}
-                >
-                  <option value="">{t('common.none')}</option>
-                  {groupedCategories.map((category) => (
-                    <optgroup key={category.id} label={category.name}>
-                      <option value={category.id}>{category.name}</option>
-                      {category.children.map((child) => (
-                        <option key={child.id} value={child.id}>
-                          └ {child.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-            )}
             <label className="relative">
               {t('pages.movements.contact')}
               <input
@@ -310,6 +302,27 @@ const MovementsPage = () => {
                 </ul>
               )}
             </label>
+            {form.type !== 'transfer' && (
+              <label>
+                {t('pages.movements.category')}
+                <select
+                  value={form.category_id}
+                  onChange={(event) => handleChange('category_id', event.target.value)}
+                >
+                  <option value="">{t('common.none')}</option>
+                  {groupedCategories.map((category) => (
+                    <optgroup key={category.id} label={category.name}>
+                      <option value={category.id}>{category.name}</option>
+                      {category.children.map((child) => (
+                        <option key={child.id} value={child.id}>
+                          └ {child.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               {t('pages.movements.property')}
               <select
@@ -350,7 +363,16 @@ const MovementsPage = () => {
               >
                 <div>
                   <strong>{movement.description || movement.type}</strong>
-                  <div className="muted">{movement.date}</div>
+                  <div className="muted">{formatDate(movement.date)}</div>
+                  <div className="muted">
+                    {t('pages.movements.account')}: {formatAccounts(movement.accounts)}
+                  </div>
+                  <div className="muted">
+                    {t('pages.movements.category')}: {movement.category_name || t('common.none')}
+                  </div>
+                  <div className="muted">
+                    {t('pages.movements.contact')}: {movement.contact_name || t('common.none')}
+                  </div>
                 </div>
                 <div
                   className={

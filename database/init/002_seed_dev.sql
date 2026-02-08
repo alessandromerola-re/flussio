@@ -25,10 +25,10 @@ VALUES
   (1, 'Cliente Alpha', 'alpha@example.com', '+39 333 000 111', 1),
   (1, 'Fornitore Beta', 'beta@example.com', '+39 333 000 222', 3);
 
-INSERT INTO properties (company_id, name, notes)
+INSERT INTO properties (company_id, name, notes, contact_id)
 VALUES
-  (1, 'Immobile Centro', 'Appartamento principale'),
-  (1, 'Progetto Verde', 'Ristrutturazione 2024');
+  (1, 'Immobile Centro', 'Appartamento principale', 1),
+  (1, 'Progetto Verde', 'Ristrutturazione 2024', 2);
 
 INSERT INTO transactions (company_id, date, type, amount_total, description, category_id, contact_id, property_id)
 VALUES
