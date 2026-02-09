@@ -16,7 +16,7 @@ ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip,
 
 const DashboardPage = () => {
   const { t } = useTranslation();
-  const [period, setPeriod] = useState('last6months');
+  const [period, setPeriod] = useState('currentmonth');
   const [summary, setSummary] = useState({ income_total: 0, expense_total: 0, net: 0 });
   const [cashflow, setCashflow] = useState([]);
   const [topCategories, setTopCategories] = useState([]);
@@ -36,7 +36,16 @@ const DashboardPage = () => {
   }, [period]);
 
   const chartData = useMemo(() => {
-    const labels = cashflow.map((item) => item.month);
+    const formatLabel = (value) => {
+      if (!value) return '';
+      if (period === 'last7days' || period === 'last30days' || period === 'currentmonth') {
+        const [year, month, day] = value.split('-');
+        return `${day}/${month}`;
+      }
+      const [year, month] = value.split('-');
+      return `${month}/${year}`;
+    };
+    const labels = cashflow.map((item) => formatLabel(item.bucket));
     return {
       labels,
       datasets: [
@@ -54,7 +63,7 @@ const DashboardPage = () => {
         },
       ],
     };
-  }, [cashflow, t]);
+  }, [cashflow, period, t]);
 
   return (
     <div className="page">
@@ -65,8 +74,12 @@ const DashboardPage = () => {
             {t('pages.dashboard.period')}
           </label>
           <select id="period" value={period} onChange={(event) => setPeriod(event.target.value)}>
+            <option value="last7days">{t('pages.dashboard.last7days')}</option>
+            <option value="last30days">{t('pages.dashboard.last30days')}</option>
+            <option value="currentmonth">{t('pages.dashboard.currentMonth')}</option>
             <option value="last6months">{t('pages.dashboard.last6months')}</option>
             <option value="currentyear">{t('pages.dashboard.currentYear')}</option>
+            <option value="previousyear">{t('pages.dashboard.previousYear')}</option>
           </select>
         </div>
       </div>

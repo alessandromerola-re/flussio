@@ -49,6 +49,7 @@ CREATE TABLE properties (
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   notes TEXT,
+  contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
