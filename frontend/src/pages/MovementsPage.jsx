@@ -415,7 +415,7 @@ const MovementsPage = () => {
           <div className="modal-content">
             <h2>{t('pages.movements.details')}</h2>
             <p>
-              <strong>{t('pages.movements.date')}:</strong> {selected.date}
+              <strong>{t('pages.movements.date')}:</strong> {formatDate(selected.date)}
             </p>
             <p>
               <strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}
