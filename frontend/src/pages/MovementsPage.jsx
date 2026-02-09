@@ -58,7 +58,7 @@ const MovementsPage = () => {
       setMovements(movementsResult.value);
     }
 
-    if (results.every((result) => result.status === 'rejected')) {
+    if (results.some((result) => result.status === 'rejected')) {
       setLoadError(t('errors.SERVER_ERROR'));
     }
   };
@@ -69,16 +69,8 @@ const MovementsPage = () => {
 
   const formatDate = (value) => {
     if (!value) return '';
-    const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (isoMatch) {
-      const [year, month, day] = isoMatch[1].split('-');
-      return `${day}/${month}/${year}`;
-    }
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleDateString('it-IT');
-    }
-    return value;
+    const [year, month, day] = value.split('-');
+    return `${day}/${month}/${year}`;
   };
 
   const formatAccounts = (accountsList = []) => {
