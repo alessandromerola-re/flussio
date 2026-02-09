@@ -36,7 +36,7 @@ const App = () => {
           <div className="brand">Flussio</div>
           <nav className="nav-links">
             {navItems.map((item) => (
-              <Link key={item.path} to={item.path}>
+              <Link key={item.path} to={item.path} className="nav-link">
                 {item.label}
               </Link>
             ))}
