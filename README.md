@@ -19,7 +19,7 @@ docker compose up -d --build
 ```
 
 Default URLs:
-- Frontend: http://localhost:98080
+- Frontend: http://localhost:9808
 - Backend API: http://localhost:4000
 
 ## Frontend host port configuration
@@ -27,13 +27,13 @@ Default URLs:
 The frontend host port is configurable via env var in compose mapping:
 
 ```yaml
-${FRONTEND_HOST_PORT:-98080}:80
+${FRONTEND_HOST_PORT:-9808}:80
 ```
 
 Examples:
 
 ```bash
-# default (98080)
+# default (9808)
 docker compose up -d --build
 
 # custom

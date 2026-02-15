@@ -88,6 +88,20 @@ const request = async (path, options = {}) => {
     return blob;
   }
 
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+
+    const blob = await response.blob();
+    if (includeHeaders === true) {
+      return { blob, headers: response.headers };
+    }
+    return blob;
+  }
+
   let data = null;
   try {
     data = await response.json();
