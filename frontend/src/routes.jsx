@@ -1,8 +1,8 @@
+import { Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import MovementsPage from './pages/MovementsPage.jsx';
 import RegistryPage from './pages/RegistryPage.jsx';
-import { getToken } from './services/api.js';
 
 const routes = ({ setTokenState, token }) => [
   {
@@ -11,19 +11,19 @@ const routes = ({ setTokenState, token }) => [
   },
   {
     path: '/dashboard',
-    element: token ? <DashboardPage /> : <LoginPage onLogin={setTokenState} />,
+    element: token ? <DashboardPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/movements',
-    element: token ? <MovementsPage /> : <LoginPage onLogin={setTokenState} />,
+    element: token ? <MovementsPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/registry',
-    element: token ? <RegistryPage /> : <LoginPage onLogin={setTokenState} />,
+    element: token ? <RegistryPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/',
-    element: getToken() ? <DashboardPage /> : <LoginPage onLogin={setTokenState} />,
+    element: <Navigate to={token ? '/dashboard' : '/login'} replace />,
   },
 ];
 
