@@ -6,7 +6,7 @@ import { clearToken, getToken } from './services/api.js';
 import { setLanguage } from './i18n/index.js';
 
 const App = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [token, setTokenState] = useState(getToken());
 
