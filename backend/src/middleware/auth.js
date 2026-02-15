@@ -6,9 +6,10 @@ export const authMiddleware = (req, res, next) => {
     return res.status(401).json({ error_code: 'UNAUTHORIZED' });
   }
 
-  const [, token] = header.split(' ');
-  if (!token) {
-    return res.status(401).json({ error_code: 'UNAUTHORIZED' });
+  const header = req.headers.authorization || '';
+const token = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
+if (!token) return res.status(401).json({ error_code: 'UNAUTHORIZED' });
+
   }
 
   try {
