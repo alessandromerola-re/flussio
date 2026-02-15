@@ -44,6 +44,14 @@ const MovementsPage = () => {
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState(null);
+  const [filters, setFilters] = useState(defaultFilters);
+  const [draftFilters, setDraftFilters] = useState(defaultFilters);
+  const [filterContactSearch, setFilterContactSearch] = useState('');
+  const [filterContactResults, setFilterContactResults] = useState([]);
+  const [showFilterContactResults, setShowFilterContactResults] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadMessage, setUploadMessage] = useState('');
+
 
   const loadLookupData = async () => {
     const results = await Promise.allSettled([
@@ -65,7 +73,7 @@ const MovementsPage = () => {
     }
   };
 
-  const loadMovements = async (activeFilters = filters) => {
+  const loadMovements = async (activeFilters = defaultFilters) => { ... }
     try {
       const data = await api.getTransactions(activeFilters);
       setMovements(data);
