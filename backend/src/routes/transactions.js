@@ -56,8 +56,13 @@ const validateTransactionRefs = async (client, companyId, { category_id, contact
 };
 
 router.get('/', async (req, res) => {
-  const limit = Number(req.query.limit) || 30;
+  const filters = buildTransactionsFilters(req.query, req.user.company_id);
+  if (filters.error) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
   try {
+    const params = [...filters.params, filters.limit, filters.offset];
     const result = await query(
       `
       SELECT

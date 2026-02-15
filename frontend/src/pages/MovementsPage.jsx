@@ -15,6 +15,19 @@ const emptyForm = {
   property_id: '',
 };
 
+const defaultFilters = {
+  date_from: '',
+  date_to: '',
+  type: '',
+  account_id: '',
+  category_id: '',
+  contact_id: '',
+  property_id: '',
+  q: '',
+  limit: 30,
+  offset: 0,
+};
+
 const MovementsPage = () => {
   const { t } = useTranslation();
   const [form, setForm] = useState(emptyForm);
@@ -32,37 +45,39 @@ const MovementsPage = () => {
   const [showContactResults, setShowContactResults] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState(null);
 
-  const loadData = async () => {
-    setLoadError('');
+  const loadLookupData = async () => {
     const results = await Promise.allSettled([
       api.getAccounts(),
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
-      api.getTransactions(),
     ]);
-    const [accountsResult, categoriesResult, contactsResult, propertiesResult, movementsResult] =
-      results;
 
-    if (accountsResult.status === 'fulfilled') {
-      setAccounts(accountsResult.value);
-    }
-    if (categoriesResult.status === 'fulfilled') {
-      setCategories(categoriesResult.value);
-    }
-    if (contactsResult.status === 'fulfilled') {
-      setContacts(contactsResult.value);
-    }
-    if (propertiesResult.status === 'fulfilled') {
-      setProperties(propertiesResult.value);
-    }
-    if (movementsResult.status === 'fulfilled') {
-      setMovements(movementsResult.value);
-    }
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult] = results;
+
+    if (accountsResult.status === 'fulfilled') setAccounts(accountsResult.value);
+    if (categoriesResult.status === 'fulfilled') setCategories(categoriesResult.value);
+    if (contactsResult.status === 'fulfilled') setContacts(contactsResult.value);
+    if (propertiesResult.status === 'fulfilled') setProperties(propertiesResult.value);
 
     if (results.some((result) => result.status === 'rejected')) {
       setLoadError(t('errors.SERVER_ERROR'));
     }
+  };
+
+  const loadMovements = async (activeFilters = filters) => {
+    try {
+      const data = await api.getTransactions(activeFilters);
+      setMovements(data);
+    } catch (loadMovementsError) {
+      setLoadError(t('errors.SERVER_ERROR'));
+    }
+  };
+
+  const loadData = async () => {
+    setLoadError('');
+    await loadLookupData();
+    await loadMovements(defaultFilters);
   };
 
   useEffect(() => {
@@ -70,9 +85,7 @@ const MovementsPage = () => {
   }, []);
 
   const formatAccounts = (accountsList = []) => {
-    const names = accountsList
-      .map((account) => account?.account_name)
-      .filter(Boolean);
+    const names = accountsList.map((account) => account?.account_name).filter(Boolean);
     return names.length ? names.join(' → ') : t('common.none');
   };
 
@@ -125,6 +138,20 @@ const MovementsPage = () => {
     setShowContactResults(true);
   };
 
+  const handleFilterContactSearch = async (value) => {
+    setFilterContactSearch(value);
+    if (!value) {
+      setDraftFilters((prev) => ({ ...prev, contact_id: '' }));
+      setFilterContactResults([]);
+      setShowFilterContactResults(false);
+      return;
+    }
+
+    const results = await api.getContacts(value);
+    setFilterContactResults(results);
+    setShowFilterContactResults(true);
+  };
+
   const handleSelectContact = (contact) => {
     handleChange('contact_id', contact.id);
     setContactSearch(contact.name);
@@ -135,6 +162,12 @@ const MovementsPage = () => {
         handleChange('category_id', contact.default_category_id);
       }
     }
+  };
+
+  const handleSelectFilterContact = (contact) => {
+    setDraftFilters((prev) => ({ ...prev, contact_id: contact.id }));
+    setFilterContactSearch(contact.name);
+    setShowFilterContactResults(false);
   };
 
   const validate = () => {
@@ -154,6 +187,54 @@ const MovementsPage = () => {
     return '';
   };
 
+  const hasActiveFilters = useMemo(
+    () =>
+      Object.entries(filters).some(([key, value]) => {
+        if (key === 'limit') {
+          return Number(value) !== 30;
+        }
+        if (key === 'offset') {
+          return Number(value) !== 0;
+        }
+        return value !== '' && value != null;
+      }),
+    [filters]
+  );
+
+  const applyFilters = async () => {
+    const nextFilters = {
+      ...draftFilters,
+      offset: 0,
+    };
+    setFilters(nextFilters);
+    await loadMovements(nextFilters);
+  };
+
+  const resetFilters = async () => {
+    setDraftFilters(defaultFilters);
+    setFilters(defaultFilters);
+    setFilterContactSearch('');
+    setFilterContactResults([]);
+    setShowFilterContactResults(false);
+    await loadMovements(defaultFilters);
+  };
+
+  const handleExportCsv = async () => {
+    const { blob, headers } = await api.exportTransactions(filters);
+    const disposition = headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const filename = match?.[1] || `flussio_movimenti_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     const validationError = validate();
@@ -165,24 +246,12 @@ const MovementsPage = () => {
 
     const accountsPayload = [];
     if (form.type === 'transfer') {
-      accountsPayload.push({
-        account_id: Number(form.account_out),
-        direction: 'out',
-        amount: Number(form.amount_total),
-      });
-      accountsPayload.push({
-        account_id: Number(form.account_in),
-        direction: 'in',
-        amount: Number(form.amount_total),
-      });
+      accountsPayload.push({ account_id: Number(form.account_out), direction: 'out', amount: Number(form.amount_total) });
+      accountsPayload.push({ account_id: Number(form.account_in), direction: 'in', amount: Number(form.amount_total) });
     } else {
       const direction = form.type === 'income' ? 'in' : 'out';
       const accountId = Number(form.account_in || form.account_out);
-      accountsPayload.push({
-        account_id: accountId,
-        direction,
-        amount: Number(form.amount_total),
-      });
+      accountsPayload.push({ account_id: accountId, direction, amount: Number(form.amount_total) });
     }
 
     await api.createTransaction({
@@ -195,6 +264,7 @@ const MovementsPage = () => {
       property_id: form.property_id ? Number(form.property_id) : null,
       accounts: accountsPayload,
     });
+
     setForm(emptyForm);
     setContactSearch('');
     setMovements(await api.getTransactions());
@@ -256,19 +326,11 @@ const MovementsPage = () => {
           <div className="form-grid">
             <label>
               {t('pages.movements.date')}
-              <input
-                type="date"
-                value={form.date}
-                onChange={(event) => handleChange('date', event.target.value)}
-                required
-              />
+              <input type="date" value={form.date} onChange={(event) => handleChange('date', event.target.value)} required />
             </label>
             <label>
               {t('pages.movements.type')}
-              <select
-                value={form.type}
-                onChange={(event) => handleChange('type', event.target.value)}
-              >
+              <select value={form.type} onChange={(event) => handleChange('type', event.target.value)}>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -276,43 +338,25 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.amount')}
-              <input
-                type="number"
-                step="0.01"
-                value={form.amount_total}
-                onChange={(event) => handleChange('amount_total', event.target.value)}
-                required
-              />
+              <input type="number" step="0.01" value={form.amount_total} onChange={(event) => handleChange('amount_total', event.target.value)} required />
             </label>
             {form.type === 'transfer' ? (
               <>
                 <label>
                   {t('pages.movements.accountFrom')}
-                  <select
-                    value={form.account_out}
-                    onChange={(event) => handleChange('account_out', event.target.value)}
-                    required
-                  >
+                  <select value={form.account_out} onChange={(event) => handleChange('account_out', event.target.value)} required>
                     <option value="">{t('common.none')}</option>
                     {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
+                      <option key={account.id} value={account.id}>{account.name}</option>
                     ))}
                   </select>
                 </label>
                 <label>
                   {t('pages.movements.accountTo')}
-                  <select
-                    value={form.account_in}
-                    onChange={(event) => handleChange('account_in', event.target.value)}
-                    required
-                  >
+                  <select value={form.account_in} onChange={(event) => handleChange('account_in', event.target.value)} required>
                     <option value="">{t('common.none')}</option>
                     {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
+                      <option key={account.id} value={account.id}>{account.name}</option>
                     ))}
                   </select>
                 </label>
@@ -320,16 +364,10 @@ const MovementsPage = () => {
             ) : (
               <label>
                 {t('pages.movements.account')}
-                <select
-                  value={form.account_in || form.account_out}
-                  onChange={(event) => handleChange('account_in', event.target.value)}
-                  required
-                >
+                <select value={form.account_in || form.account_out} onChange={(event) => handleChange('account_in', event.target.value)} required>
                   <option value="">{t('common.none')}</option>
                   {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
+                    <option key={account.id} value={account.id}>{account.name}</option>
                   ))}
                 </select>
               </label>
@@ -347,9 +385,7 @@ const MovementsPage = () => {
                 <ul className="dropdown">
                   {contactResults.map((contact) => (
                     <li key={contact.id}>
-                      <button type="button" onClick={() => handleSelectContact(contact)}>
-                        {contact.name}
-                      </button>
+                      <button type="button" onClick={() => handleSelectContact(contact)}>{contact.name}</button>
                     </li>
                   ))}
                 </ul>
@@ -358,18 +394,13 @@ const MovementsPage = () => {
             {form.type !== 'transfer' && (
               <label>
                 {t('pages.movements.category')}
-                <select
-                  value={form.category_id}
-                  onChange={(event) => handleChange('category_id', event.target.value)}
-                >
+                <select value={form.category_id} onChange={(event) => handleChange('category_id', event.target.value)}>
                   <option value="">{t('common.none')}</option>
                   {groupedCategories.map((category) => (
                     <optgroup key={category.id} label={category.name}>
                       <option value={category.id}>{category.name}</option>
                       {category.children.map((child) => (
-                        <option key={child.id} value={child.id}>
-                          └ {child.name}
-                        </option>
+                        <option key={child.id} value={child.id}>└ {child.name}</option>
                       ))}
                     </optgroup>
                   ))}
@@ -378,15 +409,10 @@ const MovementsPage = () => {
             )}
             <label>
               {t('pages.movements.property')}
-              <select
-                value={form.property_id}
-                onChange={(event) => handleChange('property_id', event.target.value)}
-              >
+              <select value={form.property_id} onChange={(event) => handleChange('property_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
                 {properties.map((property) => (
-                  <option key={property.id} value={property.id}>
-                    {property.name}
-                  </option>
+                  <option key={property.id} value={property.id}>{property.name}</option>
                 ))}
               </select>
             </label>
@@ -405,15 +431,112 @@ const MovementsPage = () => {
         </form>
 
         <div className="card">
+          <h2>{t('pages.movements.filters')}</h2>
+          {hasActiveFilters && <div className="muted">{t('pages.movements.activeFilters')}</div>}
+          <div className="form-grid">
+            <label>
+              {t('pages.movements.dateFrom')}
+              <input
+                type="date"
+                value={draftFilters.date_from}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, date_from: event.target.value }))}
+              />
+            </label>
+            <label>
+              {t('pages.movements.dateTo')}
+              <input
+                type="date"
+                value={draftFilters.date_to}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, date_to: event.target.value }))}
+              />
+            </label>
+            <label>
+              {t('pages.movements.type')}
+              <select
+                value={draftFilters.type}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, type: event.target.value }))}
+              >
+                <option value="">{t('common.all')}</option>
+                <option value="income">{t('pages.movements.income')}</option>
+                <option value="expense">{t('pages.movements.expense')}</option>
+                <option value="transfer">{t('pages.movements.transfer')}</option>
+              </select>
+            </label>
+            <label>
+              {t('pages.movements.account')}
+              <select
+                value={draftFilters.account_id}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, account_id: event.target.value }))}
+              >
+                <option value="">{t('common.all')}</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t('pages.movements.category')}
+              <select
+                value={draftFilters.category_id}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, category_id: event.target.value }))}
+              >
+                <option value="">{t('common.all')}</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="relative">
+              {t('pages.movements.contact')}
+              <input
+                type="text"
+                value={filterContactSearch}
+                onChange={(event) => handleFilterContactSearch(event.target.value)}
+                onFocus={() => filterContactSearch && setShowFilterContactResults(true)}
+                placeholder={t('placeholders.searchContacts')}
+              />
+              {showFilterContactResults && filterContactResults.length > 0 && (
+                <ul className="dropdown">
+                  {filterContactResults.map((contact) => (
+                    <li key={contact.id}>
+                      <button type="button" onClick={() => handleSelectFilterContact(contact)}>{contact.name}</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </label>
+            <label>
+              {t('pages.movements.property')}
+              <select
+                value={draftFilters.property_id}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, property_id: event.target.value }))}
+              >
+                <option value="">{t('common.all')}</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>{property.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t('pages.movements.searchText')}
+              <input
+                type="text"
+                value={draftFilters.q}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, q: event.target.value }))}
+                placeholder={t('pages.movements.searchText')}
+              />
+            </label>
+          </div>
+          <div className="row-actions">
+            <button type="button" onClick={applyFilters}>{t('buttons.apply')}</button>
+            <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>
+            <button type="button" className="ghost" onClick={handleExportCsv}>{t('buttons.exportCsv')}</button>
+          </div>
+
           <h2>{t('pages.movements.latest')}</h2>
           <div className="list">
             {movements.map((movement) => (
-              <button
-                key={movement.id}
-                type="button"
-                className="list-item"
-                onClick={() => setSelected(movement)}
-              >
+              <button key={movement.id} type="button" className="list-item" onClick={() => setSelected(movement)}>
                 <div>
                   <strong>{movement.description || movement.type}</strong>
                   <div className="muted">{formatDateIT(movement.date)}</div>
@@ -427,15 +550,7 @@ const MovementsPage = () => {
                     {t('pages.movements.contact')}: {movement.contact_name || t('common.none')}
                   </div>
                 </div>
-                <div
-                  className={
-                    movement.type === 'income'
-                      ? 'amount positive'
-                      : movement.type === 'expense'
-                      ? 'amount negative'
-                      : 'amount'
-                  }
-                >
+                <div className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>
                   € {Number(movement.amount_total).toFixed(2)}
                 </div>
               </button>
@@ -472,9 +587,7 @@ const MovementsPage = () => {
             <div>
               <strong>{t('pages.movements.attachments')}:</strong>
               <ul>
-                {attachments.length === 0 && (
-                  <li className="muted">{t('pages.movements.noAttachments')}</li>
-                )}
+                {attachments.length === 0 && <li className="muted">{t('pages.movements.noAttachments')}</li>}
                 {attachments.map((item) => (
                   <li key={item.id} className="list-item-row">
                     <span>{item.file_name}</span>
@@ -501,12 +614,8 @@ const MovementsPage = () => {
               </div>
             </div>
             <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => setSelected(null)}>
-                {t('buttons.close')}
-              </button>
-              <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>
-                {t('buttons.delete')}
-              </button>
+              <button type="button" className="ghost" onClick={() => { setSelected(null); setUploadError(''); setUploadMessage(''); setAttachmentFile(null); }}>{t('buttons.close')}</button>
+              <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>
             </div>
           </div>
         </div>

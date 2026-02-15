@@ -10,6 +10,17 @@ export const clearToken = () => {
   localStorage.removeItem('flussio_token');
 };
 
+const toQueryString = (params = {}) => {
+  const entries = Object.entries(params).filter(([, value]) => value != null && value !== '');
+  if (entries.length === 0) {
+    return '';
+  }
+
+  return `?${entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&')}`;
+};
+
 const request = async (path, options = {}) => {
   const headers = { ...(options.headers || {}) };
   const hasBody = options.body !== undefined;
@@ -86,7 +97,18 @@ export const api = {
   createProperty: (payload) => request('/properties', { method: 'POST', body: JSON.stringify(payload) }),
   updateProperty: (id, payload) => request(`/properties/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteProperty: (id) => request(`/properties/${id}`, { method: 'DELETE' }),
-  getTransactions: (limit = 30) => request(`/transactions?limit=${limit}`),
+  getTransactions: (input = 30) => {
+    if (typeof input === 'number') {
+      return request(`/transactions?limit=${input}`);
+    }
+
+    const queryString = toQueryString(input);
+    return request(`/transactions${queryString}`);
+  },
+  exportTransactions: (filters = {}) => {
+    const queryString = toQueryString(filters);
+    return request(`/transactions/export${queryString}`, { responseType: 'blob', includeHeaders: true });
+  },
   createTransaction: (payload) => request('/transactions', { method: 'POST', body: JSON.stringify(payload) }),
   deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
   getAttachments: (transactionId) => request(`/attachments/${transactionId}`),
