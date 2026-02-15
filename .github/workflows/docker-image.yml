@@ -1,4 +1,4 @@
-name: Build & Publish Docker image
+name: Build & Publish Docker images
 
 on:
   push:
@@ -11,11 +11,64 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: flussio
+          POSTGRES_PASSWORD: flussio
+          POSTGRES_DB: flussio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U flussio -d flussio_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          JWT_SECRET: test_secret
+          DATABASE_URL: postgres://flussio:flussio@localhost:5432/flussio_test
+        run: npm test
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - image_suffix: backend
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+          - image_suffix: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,7 +90,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image_suffix }}
           tags: |
             type=raw,value=latest
             type=sha
@@ -45,8 +98,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

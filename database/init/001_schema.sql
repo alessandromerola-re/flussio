@@ -17,6 +17,7 @@ CREATE TABLE accounts (
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   type TEXT NOT NULL,
+  opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
   balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
