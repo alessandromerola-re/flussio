@@ -12,8 +12,14 @@ Docker uses the SQL scripts in `database/init/` the **first time** it creates th
 2. Apply it manually with a SQL client (psql, DBeaver) against the running database.
 3. Record the change in your internal changelog.
 
+### Current migration set
+- `002_20260215__opening_balance_and_recalc.sql`
+  - Adds `accounts.opening_balance`.
+  - Preserves existing values.
+  - Recalculates `accounts.balance` from transaction history.
+
 Example (psql):
 
 ```bash
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20241015__add_indexes.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20260215__opening_balance_and_recalc.sql
 ```

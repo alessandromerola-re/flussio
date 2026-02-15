@@ -5,7 +5,9 @@ Flussio is a lightweight accounting web app for tracking income, expenses, trans
 ## Quickstart (Docker)
 
 ```bash
-docker compose up -d
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+docker compose up -d --build
 ```
 
 The services will be available at:
@@ -15,43 +17,44 @@ The services will be available at:
 
 > Tip: `docker-compose.override.yml` exposes Postgres on 5432 for local development. Remove or ignore the override file in production.
 
-## Environment configuration
-
-Create `.env` files from the examples:
-
-```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-```
-
-Adjust the values if needed (ports, database URL, JWT secret).
-
-## Health checks
-
-- Via frontend reverse proxy: http://localhost:8080/api/health
-- Direct backend: http://localhost:4000/health
-
 ## Default DEV login (DEV ONLY)
 
 - **Email:** `dev@flussio.local`
 - **Password:** `flussio123`
 
-> ⚠️ This user is seeded for local development only.
+## Phase 1 smoke test checklist
+
+1. Login with `dev@flussio.local / flussio123`.
+2. Open **Anagrafiche** and verify CRUD on:
+   - Conti
+   - Categorie
+   - Contatti
+   - Immobili/Progetti
+3. Open **Movimenti** and create:
+   - Entrata
+   - Uscita
+   - Giroconto
+4. Open movement details and verify attachments:
+   - upload
+   - download
+   - delete
+5. Verify account balances update after movement create/delete and are reflected in dashboard widgets.
 
 ## Manual migrations (Approach A)
 
 - Init schema/seed runs only on the first database boot (empty volume) from `database/init/`.
-- To create incremental changes, add a SQL file to `database/migrations/` in the format:
-  - `002_YYYYMMDD__short_description.sql`
-- Apply migrations manually using your SQL tool (psql, DBeaver).
+- Incremental changes are SQL files in `database/migrations/`.
 
-Example:
+Apply migration `002_20260215__opening_balance_and_recalc.sql`:
 
 ```bash
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20241015__add_indexes.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20260215__opening_balance_and_recalc.sql
 ```
 
-See `database/README.md` for details.
+What migration 002 does:
+- adds `accounts.opening_balance`
+- copies old `balance` values into `opening_balance`
+- recalculates `accounts.balance` from `opening_balance + movements delta`
 
 ## Deploy su QNAP Container Station
 
@@ -81,44 +84,18 @@ Se vuoi incollare il YAML nell'editor QNAP, usa `docker-compose.qnap.yml` che no
    - `DEV_USER_EMAIL`, `DEV_USER_PASSWORD` (seed utente dev)
 4. Avvia l'applicazione. Porte default: frontend **8080**, backend **4000**.
 
-## Basic QNAP notes (high-level)
+## CI / Docker images
 
-- Ensure Docker is enabled on your QNAP NAS (Container Station).
-- Map ports 8080 (frontend) and 4000 (backend) to avoid conflicts.
-- Use named volumes so PostgreSQL data persists across container restarts.
-- For backups, export the PostgreSQL volume or run periodic `pg_dump`.
+GitHub Actions now:
+- runs backend integration tests (with PostgreSQL service)
+- builds frontend bundle
+- builds/pushes two multi-arch images:
+  - `ghcr.io/<owner>/<repo>-backend`
+  - `ghcr.io/<owner>/<repo>-frontend`
 
-## Architecture overview
+## Local tests
 
-- **Frontend:** React + Vite + i18next (IT/EN), API client, responsive UI.
-- **Backend:** Express + pg + JWT auth, REST endpoints for registry, movements, dashboard.
-- **Database:** PostgreSQL 16 with manual migrations.
-
-## How to run locally (without Docker)
-
-1. Start Postgres (ensure DB + user exist).
-2. Backend:
-   ```bash
-   cd backend
-   npm install
-   npm run dev
-   ```
-3. Frontend:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-## Testing
-
-No automated tests are provided yet for Phase 1. Manual smoke testing:
-- Login with DEV credentials
-- Create accounts/categories/contacts/properties
-- Create movements and verify the dashboard KPIs
-- Switch language IT/EN from the header
-
-## Docker Quickstart notes (Windows/Docker Desktop)
-
-- Apri http://localhost:8080 e usa `dev@flussio.local` / `flussio123`.
-- Non usare http://localhost:4000 nel browser per verificare il login: usa `/health` o `/api/health`.
+```bash
+cd frontend && npm run build
+cd backend && JWT_SECRET=test DATABASE_URL=postgres://flussio:flussio@localhost:5432/flussio_test npm test
+```
