@@ -1,12 +1,11 @@
 import jwt from 'jsonwebtoken';
 
 export const authMiddleware = (req, res, next) => {
-  const header = req.headers.authorization;
-  if (!header) {
-    return res.status(401).json({ error_code: 'UNAUTHORIZED' });
-  }
+  const authHeader = req.headers.authorization ?? '';
+  const token = authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : '';
 
-  const [, token] = header.split(' ');
   if (!token) {
     return res.status(401).json({ error_code: 'UNAUTHORIZED' });
   }
