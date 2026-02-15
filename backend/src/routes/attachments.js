@@ -6,7 +6,6 @@ import { getClient, query } from '../db/index.js';
 
 const router = express.Router();
 const uploadsRoot = path.resolve(process.cwd(), 'uploads');
-const rawUpload = express.raw({ type: 'multipart/form-data', limit: '10mb' });
 
 const safeFileName = (name) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
@@ -42,7 +41,7 @@ const parseMultipartFile = (req) => {
   }
 
   const fileBuffer = req.body.subarray(dataStart, nextBoundary);
-  return { originalName: fileNameMatch[1]?.trim(), buffer: fileBuffer };
+  return { originalName: fileNameMatch[1], buffer: fileBuffer };
 };
 
 const getTransactionForCompany = async (client, transactionId, companyId) => {
@@ -101,7 +100,7 @@ router.get('/:transactionId', async (req, res) => {
   }
 });
 
-router.post('/:transactionId', rawUpload, async (req, res) => {
+router.post('/:transactionId', express.raw({ type: 'multipart/form-data', limit: '10mb' }), async (req, res) => {
   const { transactionId } = req.params;
   const parsedFile = parseMultipartFile(req);
   if (!parsedFile || !parsedFile.originalName || parsedFile.buffer.length === 0) {
@@ -189,13 +188,6 @@ router.delete('/:id', async (req, res) => {
   } finally {
     client.release();
   }
-});
-
-router.use((error, req, res, next) => {
-  if (error?.type === 'entity.too.large') {
-    return res.status(413).json({ error_code: 'FILE_TOO_LARGE' });
-  }
-  return next(error);
 });
 
 export default router;

@@ -57,12 +57,7 @@ const request = async (path, options = {}) => {
       error.code = 'SERVER_ERROR';
       throw error;
     }
-
-    const blob = await response.blob();
-    if (options.includeHeaders) {
-      return { blob, headers: response.headers };
-    }
-    return blob;
+    return response.blob();
   }
 
   let data = null;
