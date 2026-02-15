@@ -95,5 +95,17 @@
   "forms.openingBalance": "Opening balance",
   "forms.currentBalance": "Current balance",
   "buttons.upload": "Upload",
-  "buttons.download": "Download"
+  "buttons.download": "Download",
+  "pages.movements.filters": "Filters",
+  "pages.movements.activeFilters": "Active filters",
+  "pages.movements.dateFrom": "From date",
+  "pages.movements.dateTo": "To date",
+  "pages.movements.searchText": "Text search",
+  "buttons.apply": "Apply",
+  "buttons.reset": "Reset",
+  "buttons.exportCsv": "Export CSV",
+  "common.all": "All",
+  "pages.movements.uploadSuccess": "Uploaded",
+  "pages.movements.uploadError": "Attachment upload failed.",
+  "errors.FILE_TOO_LARGE": "File too large (max 10MB)."
 }

@@ -46,7 +46,7 @@ const App = () => {
           <div className="actions">
             <label>
               {t('common.language')}{' '}
-              <select defaultValue="it" onChange={handleLanguageChange}>
+              <select value={i18n.resolvedLanguage || 'it'} onChange={handleLanguageChange}>
                 <option value="it">IT</option>
                 <option value="en">EN</option>
               </select>

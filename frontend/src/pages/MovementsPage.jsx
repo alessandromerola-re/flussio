@@ -44,14 +44,14 @@ const MovementsPage = () => {
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadError, setUploadError] = useState('');
   const [filters, setFilters] = useState(defaultFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
   const [filterContactSearch, setFilterContactSearch] = useState('');
   const [filterContactResults, setFilterContactResults] = useState([]);
   const [showFilterContactResults, setShowFilterContactResults] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const [uploadMessage, setUploadMessage] = useState('');
-
 
   const loadLookupData = async () => {
     const results = await Promise.allSettled([
@@ -73,7 +73,7 @@ const MovementsPage = () => {
     }
   };
 
-  const loadMovements = async (activeFilters = defaultFilters) => { ... }
+  const loadMovements = async (activeFilters = defaultFilters) => {
     try {
       const data = await api.getTransactions(activeFilters);
       setMovements(data);
@@ -275,20 +275,32 @@ const MovementsPage = () => {
 
     setForm(emptyForm);
     setContactSearch('');
-    setMovements(await api.getTransactions());
+    await loadMovements(filters);
     setAccounts(await api.getAccounts());
   };
-
-
 
   const handleUploadAttachment = async () => {
     if (!selected || !attachmentFile) {
       return;
     }
 
-    await api.uploadAttachment(selected.id, attachmentFile);
-    setAttachmentFile(null);
-    setAttachments(await api.getAttachments(selected.id));
+    setUploadLoading(true);
+    setUploadError('');
+    setUploadMessage('');
+
+    try {
+      await api.uploadAttachment(selected.id, attachmentFile);
+      setAttachmentFile(null);
+      setAttachments(await api.getAttachments(selected.id));
+      setUploadMessage(t('pages.movements.uploadSuccess'));
+    } catch (uploadAttachmentError) {
+      const messageKey = uploadAttachmentError.code === 'FILE_TOO_LARGE'
+        ? 'errors.FILE_TOO_LARGE'
+        : 'pages.movements.uploadError';
+      setUploadError(t(messageKey));
+    } finally {
+      setUploadLoading(false);
+    }
   };
 
   const handleDownloadAttachment = async (attachment) => {
@@ -317,7 +329,7 @@ const MovementsPage = () => {
     }
     await api.deleteTransaction(id);
     setSelected(null);
-    setMovements(await api.getTransactions());
+    await loadMovements(filters);
     setAccounts(await api.getAccounts());
   };
 
@@ -548,15 +560,12 @@ const MovementsPage = () => {
                 <div>
                   <strong>{movement.description || movement.type}</strong>
                   <div className="muted">{formatDateIT(movement.date)}</div>
-                  <div className="muted">
-                    {t('pages.movements.account')}: {formatAccounts(movement.accounts)}
-                  </div>
-                  <div className="muted">
-                    {t('pages.movements.category')}: {movement.category_name || t('common.none')}
-                  </div>
-                  <div className="muted">
-                    {t('pages.movements.contact')}: {movement.contact_name || t('common.none')}
-                  </div>
+                  <div className="muted">{t('pages.movements.account')}: {formatAccounts(movement.accounts)}</div>
+                  <div className="muted">{t('pages.movements.category')}: {movement.category_name || t('common.none')}</div>
+                  <div className="muted">{t('pages.movements.contact')}: {movement.contact_name || t('common.none')}</div>
+                  {movement.property_name && (
+                    <div className="muted">{t('pages.movements.property')}: {movement.property_name}</div>
+                  )}
                 </div>
                 <div className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>
                   € {Number(movement.amount_total).toFixed(2)}
@@ -571,27 +580,13 @@ const MovementsPage = () => {
         <div className="modal">
           <div className="modal-content">
             <h2>{t('pages.movements.details')}</h2>
-            <p>
-              <strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}
-            </p>
-            <p>
-              <strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}
-            </p>
-            <p>
-              <strong>{t('pages.movements.amount')}:</strong> € {Number(selected.amount_total).toFixed(2)}
-            </p>
-            <p>
-              <strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}
-            </p>
-            <p>
-              <strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}
-            </p>
-            <p>
-              <strong>{t('pages.movements.property')}:</strong> {selected.property_name || t('common.none')}
-            </p>
-            <p>
-              <strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}
-            </p>
+            <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
+            <p><strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}</p>
+            <p><strong>{t('pages.movements.amount')}:</strong> € {Number(selected.amount_total).toFixed(2)}</p>
+            <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
+            <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
+            <p><strong>{t('pages.movements.property')}:</strong> {selected.property_name || t('common.none')}</p>
+            <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
             <div>
               <strong>{t('pages.movements.attachments')}:</strong>
               <ul>
@@ -600,29 +595,42 @@ const MovementsPage = () => {
                   <li key={item.id} className="list-item-row">
                     <span>{item.file_name}</span>
                     <div className="row-actions">
-                      <button type="button" className="ghost" onClick={() => handleDownloadAttachment(item)}>
-                        {t('buttons.download')}
-                      </button>
-                      <button
-                        type="button"
-                        className="danger"
-                        onClick={() => handleDeleteAttachment(item.id)}
-                      >
-                        {t('buttons.delete')}
-                      </button>
+                      <button type="button" className="ghost" onClick={() => handleDownloadAttachment(item)}>{t('buttons.download')}</button>
+                      <button type="button" className="danger" onClick={() => handleDeleteAttachment(item.id)}>{t('buttons.delete')}</button>
                     </div>
                   </li>
                 ))}
               </ul>
               <div className="row-actions">
-                <input type="file" onChange={(event) => setAttachmentFile(event.target.files?.[0] || null)} />
-                <button type="button" onClick={handleUploadAttachment} disabled={!attachmentFile}>
-                  {t('buttons.upload')}
+                <input
+                  type="file"
+                  accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
+                  onChange={(event) => setAttachmentFile(event.target.files?.[0] || null)}
+                />
+                <button
+                  type="button"
+                  onClick={handleUploadAttachment}
+                  disabled={!attachmentFile || !selected || uploadLoading}
+                >
+                  {uploadLoading ? t('common.loading') : t('buttons.upload')}
                 </button>
               </div>
+              {uploadMessage && <div className="muted">{uploadMessage}</div>}
+              {uploadError && <div className="error">{uploadError}</div>}
             </div>
             <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => { setSelected(null); setUploadError(''); setUploadMessage(''); setAttachmentFile(null); }}>{t('buttons.close')}</button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setSelected(null);
+                  setUploadError('');
+                  setUploadMessage('');
+                  setAttachmentFile(null);
+                }}
+              >
+                {t('buttons.close')}
+              </button>
               <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>
             </div>
           </div>

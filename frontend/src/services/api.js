@@ -23,19 +23,22 @@ const toQueryString = (params = {}) => {
 
 const request = async (path, options = {}) => {
   const { responseType, includeHeaders, ...fetchOptions } = options;
-
   const headers = { ...(fetchOptions.headers || {}) };
   const hasBody = fetchOptions.body !== undefined;
   const isFormData = hasBody && fetchOptions.body instanceof FormData;
-
   if (!isFormData && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
 
   const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...fetchOptions,
+    headers,
+  });
 
   if (response.status === 401) {
     clearToken();
@@ -55,6 +58,20 @@ const request = async (path, options = {}) => {
     }
     const blob = await response.blob();
     return includeHeaders ? { blob, headers: response.headers } : blob;
+  }
+
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+
+    const blob = await response.blob();
+    if (includeHeaders === true) {
+      return { blob, headers: response.headers };
+    }
+    return blob;
   }
 
   let data = null;
