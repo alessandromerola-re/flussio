@@ -23,10 +23,13 @@ a {
   flex-direction: column;
 }
 
-.app-header {
+.app-header,
+.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
   padding: 1rem 2rem;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
@@ -40,9 +43,11 @@ a {
   font-size: 1.2rem;
 }
 
-.nav-links {
+.nav-links,
+.nav {
   display: flex;
   gap: 1rem;
+  align-items: center;
 }
 
 .nav-link {
@@ -60,10 +65,24 @@ a {
   background: #eef2ff;
 }
 
-.header-actions {
+.header-actions,
+.actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.actions label {
+  margin: 0;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.actions select,
+.actions button {
+  width: auto;
 }
 
 .app-main {
