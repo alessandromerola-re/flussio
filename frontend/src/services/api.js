@@ -22,22 +22,20 @@ const toQueryString = (params = {}) => {
 };
 
 const request = async (path, options = {}) => {
-  const headers = { ...(options.headers || {}) };
-  const hasBody = options.body !== undefined;
-  const isFormData = hasBody && options.body instanceof FormData;
+  const { responseType, includeHeaders, ...fetchOptions } = options;
+
+  const headers = { ...(fetchOptions.headers || {}) };
+  const hasBody = fetchOptions.body !== undefined;
+  const isFormData = hasBody && fetchOptions.body instanceof FormData;
+
   if (!isFormData && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
 
   const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const response = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
 
   if (response.status === 401) {
     clearToken();
@@ -47,17 +45,16 @@ const request = async (path, options = {}) => {
     throw error;
   }
 
-  if (response.status === 204) {
-    return null;
-  }
+  if (response.status === 204) return null;
 
-  if (options.responseType === 'blob') {
+  if (responseType === 'blob') {
     if (!response.ok) {
       const error = new Error(response.statusText || 'Request failed');
       error.code = 'SERVER_ERROR';
       throw error;
     }
-    return response.blob();
+    const blob = await response.blob();
+    return includeHeaders ? { blob, headers: response.headers } : blob;
   }
 
   let data = null;
