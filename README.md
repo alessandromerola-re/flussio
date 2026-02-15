@@ -24,7 +24,7 @@ Default URLs:
 
 ## Frontend host port configuration
 
-## Default DEV login (DEV ONLY)
+DEV seed stores password as bcrypt hash. Login uses bcrypt verification only.
 
 ## Manual migrations (Approach A)
 

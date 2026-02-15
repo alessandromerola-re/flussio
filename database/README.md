@@ -18,7 +18,7 @@ Current migrations:
   - Preserves existing values.
   - Recalculates `accounts.balance` from transaction history.
 
-Example (psql):
+Example:
 
 ```bash
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20260215__opening_balance_and_recalc.sql

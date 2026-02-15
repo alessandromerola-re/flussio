@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
+import { formatDateIT } from '../utils/date.js';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -67,12 +68,6 @@ const MovementsPage = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  const formatDate = (value) => {
-    if (!value) return '';
-    const [year, month, day] = value.split('-');
-    return `${day}/${month}/${year}`;
-  };
 
   const formatAccounts = (accountsList = []) => {
     const names = accountsList
@@ -421,7 +416,7 @@ const MovementsPage = () => {
               >
                 <div>
                   <strong>{movement.description || movement.type}</strong>
-                  <div className="muted">{formatDate(movement.date)}</div>
+                  <div className="muted">{formatDateIT(movement.date)}</div>
                   <div className="muted">
                     {t('pages.movements.account')}: {formatAccounts(movement.accounts)}
                   </div>
@@ -454,7 +449,7 @@ const MovementsPage = () => {
           <div className="modal-content">
             <h2>{t('pages.movements.details')}</h2>
             <p>
-              <strong>{t('pages.movements.date')}:</strong> {formatDate(selected.date)}
+              <strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}
             </p>
             <p>
               <strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}
