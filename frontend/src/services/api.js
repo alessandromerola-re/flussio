@@ -48,8 +48,58 @@ const request = async (path, options = {}) => {
     throw error;
   }
 
-  if (response.status === 204) {
-    return null;
+  if (response.status === 204) return null;
+
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+    const blob = await response.blob();
+    return includeHeaders ? { blob, headers: response.headers } : blob;
+  }
+
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+
+    const blob = await response.blob();
+    if (includeHeaders === true) {
+      return { blob, headers: response.headers };
+    }
+    return blob;
+  }
+
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+
+    const blob = await response.blob();
+    if (includeHeaders === true) {
+      return { blob, headers: response.headers };
+    }
+    return blob;
+  }
+
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+
+    const blob = await response.blob();
+    if (includeHeaders === true) {
+      return { blob, headers: response.headers };
+    }
+    return blob;
   }
 
   if (responseType === 'blob') {
