@@ -1,13 +1,13 @@
 INSERT INTO companies (name) VALUES ('Flussio Demo');
 
 INSERT INTO users (company_id, email, password_hash)
-VALUES (1, 'dev@flussio.local', 'flussio123');
+VALUES (1, 'dev@flussio.local', '$2a$10$VLjcBGe17jXHE4u5YHpkDOOgnoMvZLElu4HGAg42zAiFOsUM6/EMK');
 
-INSERT INTO accounts (company_id, name, type, balance)
+INSERT INTO accounts (company_id, name, type, opening_balance, balance)
 VALUES
-  (1, 'Cassa', 'cash', 1500.00),
-  (1, 'Banca', 'bank', 4200.00),
-  (1, 'Carta', 'card', 300.00);
+  (1, 'Cassa', 'cash', 1500.00, 1500.00),
+  (1, 'Banca', 'bank', 4200.00, 4200.00),
+  (1, 'Carta', 'card', 300.00, 300.00);
 
 INSERT INTO categories (company_id, name, direction, color)
 VALUES
@@ -42,3 +42,14 @@ VALUES
   (2, 2, 'out', 450.00),
   (3, 1, 'out', 200.00),
   (3, 2, 'in', 200.00);
+
+UPDATE accounts a
+SET balance = a.opening_balance + COALESCE(m.delta, 0)
+FROM (
+  SELECT
+    ta.account_id,
+    SUM(CASE WHEN ta.direction = 'in' THEN ta.amount ELSE -ta.amount END) AS delta
+  FROM transaction_accounts ta
+  GROUP BY ta.account_id
+) m
+WHERE a.id = m.account_id;

@@ -50,7 +50,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - '8080:80'
+      - '${FRONTEND_HOST_PORT:-98080}:80'
 
 volumes:
   db_data:

@@ -91,5 +91,9 @@
   "common.none": "Nessuno",
   "common.yes": "Sì",
   "common.no": "No",
-  "common.language": "Lingua"
+  "common.language": "Lingua",
+  "forms.openingBalance": "Saldo iniziale",
+  "forms.currentBalance": "Saldo attuale",
+  "buttons.upload": "Carica",
+  "buttons.download": "Scarica"
 }

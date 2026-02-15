@@ -29,6 +29,7 @@ const MovementsPage = () => {
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
+  const [attachmentFile, setAttachmentFile] = useState(null);
 
   const loadData = async () => {
     setLoadError('');
@@ -86,8 +87,12 @@ const MovementsPage = () => {
         setAttachments([]);
         return;
       }
-      const data = await api.getAttachments(selected.id);
-      setAttachments(data);
+      try {
+        const data = await api.getAttachments(selected.id);
+        setAttachments(data);
+      } catch (loadAttachmentError) {
+        setAttachments([]);
+      }
     };
     loadAttachments();
   }, [selected]);
@@ -198,6 +203,39 @@ const MovementsPage = () => {
     setForm(emptyForm);
     setContactSearch('');
     setMovements(await api.getTransactions());
+    setAccounts(await api.getAccounts());
+  };
+
+
+
+  const handleUploadAttachment = async () => {
+    if (!selected || !attachmentFile) {
+      return;
+    }
+
+    await api.uploadAttachment(selected.id, attachmentFile);
+    setAttachmentFile(null);
+    setAttachments(await api.getAttachments(selected.id));
+  };
+
+  const handleDownloadAttachment = async (attachment) => {
+    const blob = await api.downloadAttachment(attachment.id);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.file_name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    await api.deleteAttachment(attachmentId);
+    if (!selected) {
+      return;
+    }
+    setAttachments(await api.getAttachments(selected.id));
   };
 
   const handleDelete = async (id) => {
@@ -207,6 +245,7 @@ const MovementsPage = () => {
     await api.deleteTransaction(id);
     setSelected(null);
     setMovements(await api.getTransactions());
+    setAccounts(await api.getAccounts());
   };
 
   return (
@@ -442,9 +481,29 @@ const MovementsPage = () => {
                   <li className="muted">{t('pages.movements.noAttachments')}</li>
                 )}
                 {attachments.map((item) => (
-                  <li key={item.id}>{item.file_name}</li>
+                  <li key={item.id} className="list-item-row">
+                    <span>{item.file_name}</span>
+                    <div className="row-actions">
+                      <button type="button" className="ghost" onClick={() => handleDownloadAttachment(item)}>
+                        {t('buttons.download')}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => handleDeleteAttachment(item.id)}
+                      >
+                        {t('buttons.delete')}
+                      </button>
+                    </div>
+                  </li>
                 ))}
               </ul>
+              <div className="row-actions">
+                <input type="file" onChange={(event) => setAttachmentFile(event.target.files?.[0] || null)} />
+                <button type="button" onClick={handleUploadAttachment} disabled={!attachmentFile}>
+                  {t('buttons.upload')}
+                </button>
+              </div>
             </div>
             <div className="modal-actions">
               <button type="button" className="ghost" onClick={() => setSelected(null)}>
