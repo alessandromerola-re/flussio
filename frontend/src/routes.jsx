@@ -7,7 +7,11 @@ import RegistryPage from './pages/RegistryPage.jsx';
 const routes = ({ setTokenState, token }) => [
   {
     path: '/login',
-    element: <LoginPage onLogin={(newToken) => setTokenState(newToken)} />,
+    element: token ? (
+      <Navigate to="/dashboard" replace />
+    ) : (
+      <LoginPage onLogin={(newToken) => setTokenState(newToken)} />
+    ),
   },
   {
     path: '/dashboard',
@@ -23,7 +27,11 @@ const routes = ({ setTokenState, token }) => [
   },
   {
     path: '/',
-    element: <Navigate to={token ? '/dashboard' : '/login'} replace />,
+    element: token ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '*',
+    element: <Navigate to="/" replace />,
   },
 ];
 
