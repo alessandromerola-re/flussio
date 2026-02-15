@@ -91,5 +91,9 @@
   "common.none": "None",
   "common.yes": "Yes",
   "common.no": "No",
-  "common.language": "Language"
+  "common.language": "Language",
+  "forms.openingBalance": "Opening balance",
+  "forms.currentBalance": "Current balance",
+  "buttons.upload": "Upload",
+  "buttons.download": "Download"
 }
