@@ -19,7 +19,7 @@ docker compose up -d --build
 ```
 
 Default URLs:
-- Frontend: http://localhost:98080
+- Frontend: http://localhost:9808
 - Backend API: http://localhost:4000
 
 ## Frontend host port configuration
