@@ -12,9 +12,14 @@ Current migrations:
 - `002_20260215__opening_balance_and_recalc.sql`
 - `003_20260215__hash_dev_seed_password.sql`
 
-Example:
+### Current migration set
+- `002_20260215__opening_balance_and_recalc.sql`
+  - Adds `accounts.opening_balance`.
+  - Preserves existing values.
+  - Recalculates `accounts.balance` from transaction history.
+
+Example (psql):
 
 ```bash
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20260215__opening_balance_and_recalc.sql
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_20260215__hash_dev_seed_password.sql
 ```
