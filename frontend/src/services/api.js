@@ -52,18 +52,12 @@ const request = async (path, options = {}) => {
   }
 
   if (options.responseType === 'blob') {
-    const includeHeaders = options.includeHeaders === true;
     if (!response.ok) {
       const error = new Error(response.statusText || 'Request failed');
       error.code = 'SERVER_ERROR';
       throw error;
     }
-
-    const blob = await response.blob();
-    if (includeHeaders) {
-      return { blob, headers: response.headers };
-    }
-    return blob;
+    return response.blob();
   }
 
   let data = null;

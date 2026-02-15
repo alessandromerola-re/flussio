@@ -95,17 +95,5 @@
   "forms.openingBalance": "Saldo iniziale",
   "forms.currentBalance": "Saldo attuale",
   "buttons.upload": "Carica",
-  "buttons.download": "Scarica",
-  "pages.movements.filters": "Filtri",
-  "pages.movements.activeFilters": "Filtri attivi",
-  "pages.movements.dateFrom": "Da data",
-  "pages.movements.dateTo": "A data",
-  "pages.movements.searchText": "Ricerca testo",
-  "buttons.apply": "Applica",
-  "buttons.reset": "Reset",
-  "buttons.exportCsv": "Esporta CSV",
-  "common.all": "Tutti",
-  "pages.movements.uploadSuccess": "Caricato",
-  "pages.movements.uploadError": "Errore durante il caricamento allegato.",
-  "errors.FILE_TOO_LARGE": "File troppo grande (max 10MB)."
+  "buttons.download": "Scarica"
 }
