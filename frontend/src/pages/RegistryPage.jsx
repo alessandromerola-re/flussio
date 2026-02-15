@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 
-const initialAccount = { name: '', type: 'cash', balance: 0, is_active: true };
+const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = {
   name: '',
   direction: 'income',
@@ -201,12 +201,14 @@ const RegistryPage = () => {
               </select>
             </label>
             <label>
-              {t('forms.balance')}
+              {t('forms.openingBalance')}
               <input
                 type="number"
                 step="0.01"
-                value={accountForm.balance}
-                onChange={(event) => setAccountForm({ ...accountForm, balance: event.target.value })}
+                value={accountForm.opening_balance}
+                onChange={(event) =>
+                  setAccountForm({ ...accountForm, opening_balance: event.target.value })
+                }
               />
             </label>
             <button type="submit">{t('buttons.save')}</button>
@@ -218,13 +220,20 @@ const RegistryPage = () => {
                   <div>
                     <strong>{account.name}</strong>
                     <div className="muted">{t(`labels.${account.type}`)}</div>
+                    <div className="muted">{t('forms.openingBalance')}: € {Number(account.opening_balance).toFixed(2)}</div>
+                    <div className="muted">{t('forms.currentBalance')}: € {Number(account.balance).toFixed(2)}</div>
                   </div>
                   <div className="row-actions">
                     <button
                       type="button"
                       className="ghost"
                       onClick={() => {
-                        setAccountForm(account);
+                        setAccountForm({
+                          name: account.name,
+                          type: account.type,
+                          opening_balance: account.opening_balance,
+                          is_active: account.is_active,
+                        });
                         setEditingId(account.id);
                       }}
                     >
