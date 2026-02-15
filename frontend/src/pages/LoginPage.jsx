@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { api, setToken } from '../services/api.js';
 
 const LoginPage = ({ onLogin }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -17,6 +19,7 @@ const LoginPage = ({ onLogin }) => {
       const data = await api.login({ email, password });
       setToken(data.token);
       onLogin(data.token);
+      navigate('/dashboard');
     } catch (err) {
       setError(err.code ? t(`errors.${err.code}`) : err.message);
     } finally {

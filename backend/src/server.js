@@ -30,7 +30,8 @@ const ensureDevUser = async () => {
       console.log('Dev user created');
     }
   } catch (error) {
-    console.error('Failed to ensure dev user. Is the database initialized?', error);
+    console.error(`Failed to ensure dev user.
+Is the database initialized?`, error);
   }
 };
 
