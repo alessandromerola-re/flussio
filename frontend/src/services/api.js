@@ -11,7 +11,13 @@ export const clearToken = () => {
 };
 
 const request = async (path, options = {}) => {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const headers = { ...(options.headers || {}) };
+  const hasBody = options.body !== undefined;
+  const isFormData = hasBody && options.body instanceof FormData;
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const token = getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -32,6 +38,15 @@ const request = async (path, options = {}) => {
 
   if (response.status === 204) {
     return null;
+  }
+
+  if (options.responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+    return response.blob();
   }
 
   let data = null;
@@ -75,6 +90,13 @@ export const api = {
   createTransaction: (payload) => request('/transactions', { method: 'POST', body: JSON.stringify(payload) }),
   deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
   getAttachments: (transactionId) => request(`/attachments/${transactionId}`),
+  uploadAttachment: (transactionId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request(`/attachments/${transactionId}`, { method: 'POST', body: formData });
+  },
+  downloadAttachment: (attachmentId) => request(`/attachments/file/${attachmentId}`, { responseType: 'blob' }),
+  deleteAttachment: (attachmentId) => request(`/attachments/${attachmentId}`, { method: 'DELETE' }),
   getSummary: (period) => request(`/dashboard/summary?period=${period}`),
   getCashflow: (period) => request(`/dashboard/cashflow?period=${period}`),
   getTopCategories: (period, direction) =>
