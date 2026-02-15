@@ -9,6 +9,7 @@ const App = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [token, setTokenState] = useState(getToken());
+  const [language, setLanguageState] = useState(() => localStorage.getItem('flussio_lang') || 'it');
 
   const handleLogout = () => {
     clearToken();
@@ -26,7 +27,9 @@ const App = () => {
   );
 
   const handleLanguageChange = (event) => {
-    setLanguage(event.target.value);
+    const nextLanguage = event.target.value;
+    setLanguage(nextLanguage);
+    setLanguageState(nextLanguage);
   };
 
   return (
@@ -46,7 +49,7 @@ const App = () => {
           <div className="actions">
             <label>
               {t('common.language')}{' '}
-              <select value={i18n.resolvedLanguage || 'it'} onChange={handleLanguageChange}>
+              <select value={language} onChange={handleLanguageChange}>
                 <option value="it">IT</option>
                 <option value="en">EN</option>
               </select>
