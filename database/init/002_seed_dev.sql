@@ -1,7 +1,7 @@
 INSERT INTO companies (name) VALUES ('Flussio Demo');
 
 INSERT INTO users (company_id, email, password_hash)
-VALUES (1, 'dev@flussio.local', 'flussio123');
+VALUES (1, 'dev@flussio.local', '$2a$10$VLjcBGe17jXHE4u5YHpkDOOgnoMvZLElu4HGAg42zAiFOsUM6/EMK');
 
 INSERT INTO accounts (company_id, name, type, opening_balance, balance)
 VALUES

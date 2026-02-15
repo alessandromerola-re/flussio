@@ -1,6 +1,14 @@
 # Flussio
 
-Flussio is a lightweight accounting web app for tracking income, expenses, transfers, and a full registry of master data (accounts, categories, contacts, properties). This repository contains the Phase 1 MVP with a React + Vite frontend, a Node.js + Express backend, and PostgreSQL 16.
+Flussio is a lightweight accounting web app (Phase 1 MVP) for managing:
+- registry data (accounts, categories, contacts, properties)
+- movements (income, expense, transfer)
+- dashboard metrics
+
+Stack:
+- Frontend: React + Vite
+- Backend: Node.js + Express
+- Database: PostgreSQL 16
 
 ## Quickstart (Docker)
 
@@ -10,17 +18,15 @@ cp frontend/.env.example frontend/.env
 docker compose up -d --build
 ```
 
-The services will be available at:
-- Frontend: http://localhost:8080
+Default URLs:
+- Frontend: http://localhost:98080
 - Backend API: http://localhost:4000
-- PostgreSQL: localhost:5432 (only when using the dev override)
 
-> Tip: `docker-compose.override.yml` exposes Postgres on 5432 for local development. Remove or ignore the override file in production.
+## Frontend host port configuration
 
 ## Default DEV login (DEV ONLY)
 
-- **Email:** `dev@flussio.local`
-- **Password:** `flussio123`
+## Manual migrations (Approach A)
 
 ## Phase 1 smoke test checklist
 
@@ -40,7 +46,38 @@ The services will be available at:
    - delete
 5. Verify account balances update after movement create/delete and are reflected in dashboard widgets.
 
-## Manual migrations (Approach A)
+Apply Phase 1 migrations:
+
+```bash
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20260215__opening_balance_and_recalc.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_20260215__hash_dev_seed_password.sql
+```
+
+## Phase 1 smoke test checklist
+
+1. Login with `dev@flussio.local / flussio123`
+2. Registry CRUD:
+   - accounts
+   - categories
+   - contacts
+   - properties
+3. Movements:
+   - create income/expense/transfer
+   - delete a movement
+   - verify account balances are coherent after create/delete
+4. Attachments in movement details (if enabled in UI):
+   - upload
+   - download
+   - delete
+
+## CI
+
+GitHub Actions workflow (`.github/workflows/docker-image.yml`) does:
+1. backend install + tests
+2. frontend install + build
+3. build/push multi-arch Docker images:
+   - `ghcr.io/<owner>/<repo>-backend`
+   - `ghcr.io/<owner>/<repo>-frontend`
 
 - Init schema/seed runs only on the first database boot (empty volume) from `database/init/`.
 - Incremental changes are SQL files in `database/migrations/`.
