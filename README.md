@@ -88,7 +88,7 @@ curl "http://localhost:4000/api/transactions?date_from=2026-01-01&date_to=2026-0
 Endpoint:
 - `GET /api/transactions/export` (same filters as `/api/transactions`)
 
-Example:
+Run locally:
 
 ```bash
 curl -L -H "Authorization: Bearer <TOKEN>"   "http://localhost:4000/api/transactions/export?date_from=2026-01-01&type=expense"   -o flussio_movimenti.csv
