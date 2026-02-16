@@ -11,6 +11,7 @@ import {
   Legend,
 } from 'chart.js';
 import { api } from '../services/api.js';
+import { formatDayMonthIT, formatMonthYearIT } from '../utils/date.js';
 
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
@@ -39,11 +40,9 @@ const DashboardPage = () => {
     const formatLabel = (value) => {
       if (!value) return '';
       if (period === 'last7days' || period === 'last30days' || period === 'currentmonth') {
-        const [year, month, day] = value.split('-');
-        return `${day}/${month}`;
+        return formatDayMonthIT(value);
       }
-      const [year, month] = value.split('-');
-      return `${month}/${year}`;
+      return formatMonthYearIT(value);
     };
     const labels = cashflow.map((item) => formatLabel(item.bucket));
     return {

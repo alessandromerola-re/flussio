@@ -23,10 +23,13 @@ a {
   flex-direction: column;
 }
 
-.app-header {
+.app-header,
+.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
   padding: 1rem 2rem;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
@@ -40,9 +43,11 @@ a {
   font-size: 1.2rem;
 }
 
-.nav-links {
+.nav-links,
+.nav {
   display: flex;
   gap: 1rem;
+  align-items: center;
 }
 
 .nav-link {
@@ -60,10 +65,24 @@ a {
   background: #eef2ff;
 }
 
-.header-actions {
+.header-actions,
+.actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.actions label {
+  margin: 0;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.actions select,
+.actions button {
+  width: auto;
 }
 
 .app-main {
@@ -149,6 +168,11 @@ button.danger {
   margin-bottom: 1rem;
 }
 
+.success {
+  color: #15803d;
+  margin-bottom: 1rem;
+}
+
 .muted {
   color: #6b7280;
 }
@@ -200,6 +224,7 @@ button.danger {
   border: none;
   width: 100%;
   text-align: left;
+  color: #1f2933;
 }
 
 .list-item-row {
@@ -213,6 +238,16 @@ button.danger {
 .row-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.movement-title-badge {
+  display: inline-block;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0.2rem 0.55rem;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
 .amount {
@@ -268,6 +303,37 @@ button.danger {
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1rem;
+}
+
+
+.attachment-indicator {
+  margin-top: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.attachment-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.attachment-upload input {
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-upload button {
+  width: auto;
+  white-space: nowrap;
 }
 
 .dropdown {
@@ -332,17 +398,48 @@ button.danger {
 }
 
 @media (max-width: 768px) {
-  .app-header {
+  .app-header,
+  .topbar {
     flex-direction: column;
-    gap: 1rem;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
   }
 
   .app-main {
     padding: 1rem;
   }
 
-  .nav-links {
+  .nav-links,
+  .nav {
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-start;
+  }
+
+  .actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .modal-content {
+    padding: 1.25rem;
+  }
+
+  .modal-actions {
+    justify-content: stretch;
+    flex-direction: column;
+  }
+
+  .modal-actions button {
+    width: 100%;
+  }
+
+  .attachment-upload {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .attachment-upload button {
+    width: 100%;
   }
 }
