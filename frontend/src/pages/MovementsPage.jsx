@@ -44,6 +44,7 @@ const MovementsPage = () => {
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState(null);
+  const [newAttachmentFile, setNewAttachmentFile] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadError, setUploadError] = useState('');
@@ -262,7 +263,7 @@ const MovementsPage = () => {
       accountsPayload.push({ account_id: accountId, direction, amount: Number(form.amount_total) });
     }
 
-    await api.createTransaction({
+    const transaction = await api.createTransaction({
       date: form.date,
       type: form.type,
       amount_total: Number(form.amount_total),
@@ -273,7 +274,19 @@ const MovementsPage = () => {
       accounts: accountsPayload,
     });
 
+    if (newAttachmentFile && transaction?.id) {
+      try {
+        await api.uploadAttachment(transaction.id, newAttachmentFile);
+      } catch (uploadAttachmentError) {
+        const messageKey = uploadAttachmentError.code === 'FILE_TOO_LARGE'
+          ? 'errors.FILE_TOO_LARGE'
+          : 'pages.movements.uploadError';
+        setError(t(messageKey));
+      }
+    }
+
     setForm(emptyForm);
+    setNewAttachmentFile(null);
     setContactSearch('');
     await loadMovements(filters);
     setAccounts(await api.getAccounts());
@@ -445,6 +458,14 @@ const MovementsPage = () => {
                 placeholder={t('placeholders.description')}
               />
             </label>
+            <label className="full">
+              {t('pages.movements.attachments')}
+              <input
+                type="file"
+                accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
+                onChange={(event) => setNewAttachmentFile(event.target.files?.[0] || null)}
+              />
+            </label>
           </div>
           {error && <div className="error">{error}</div>}
           <button type="submit">{t('buttons.save')}</button>
@@ -561,14 +582,14 @@ const MovementsPage = () => {
               return (
               <button key={movement.id} type="button" className="list-item" onClick={() => setSelected(movement)}>
                 <div>
-                  <strong>{movement.description || movement.type}</strong>
+                  <strong className="movement-title">{movement.description || movement.type}</strong>
                   <div className="muted">{formatDateIT(movement.date)}</div>
-                  <div className="muted">{t('pages.movements.account')}: {formatAccounts(movement.accounts)}</div>
-                  <div className="muted">{t('pages.movements.category')}: {movement.category_name || t('common.none')}</div>
-                  <div className="muted">{t('pages.movements.contact')}: {movement.contact_name || t('common.none')}</div>
                   {movement.property_name && (
                     <div className="muted">{t('pages.movements.property')}: {movement.property_name}</div>
                   )}
+                  <div className="muted">{t('pages.movements.account')}: {formatAccounts(movement.accounts)}</div>
+                  <div className="muted">{t('pages.movements.category')}: {movement.category_name || t('common.none')}</div>
+                  <div className="muted">{t('pages.movements.contact')}: {movement.contact_name || t('common.none')}</div>
                   {attachmentCount > 0 && (
                     <div className="attachment-indicator" aria-label={`${attachmentCount} attachments`}>
                       📎 {attachmentCount}

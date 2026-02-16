@@ -314,6 +314,15 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
+  const parsedAmountTotal = Number(amount_total);
+  if (!Number.isFinite(parsedAmountTotal) || parsedAmountTotal <= 0) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const normalizedAmountTotal = type === 'expense'
+    ? -Math.abs(parsedAmountTotal)
+    : Math.abs(parsedAmountTotal);
+
   const parsedAccounts = accounts.map((account) => ({
     account_id: Number(account.account_id),
     direction: account.direction,
@@ -354,7 +363,7 @@ router.post('/', async (req, res) => {
         req.user.company_id,
         date,
         type,
-        amount_total,
+        normalizedAmountTotal,
         description,
         category_id,
         contact_id,

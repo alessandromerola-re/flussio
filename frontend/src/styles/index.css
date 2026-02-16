@@ -219,6 +219,7 @@ button.danger {
   border: none;
   width: 100%;
   text-align: left;
+  color: #1f2933;
 }
 
 .list-item-row {
@@ -232,6 +233,10 @@ button.danger {
 .row-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.movement-title {
+  color: #0f172a;
 }
 
 .amount {
