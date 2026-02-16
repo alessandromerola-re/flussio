@@ -172,6 +172,20 @@ const request = async (path, options = {}) => {
     return blob;
   }
 
+  if (responseType === 'blob') {
+    if (!response.ok) {
+      const error = new Error(response.statusText || 'Request failed');
+      error.code = 'SERVER_ERROR';
+      throw error;
+    }
+
+    const blob = await response.blob();
+    if (includeHeaders === true) {
+      return { blob, headers: response.headers };
+    }
+    return blob;
+  }
+
   let data = null;
   try {
     data = await response.json();
@@ -222,6 +236,8 @@ export const api = {
     return request(`/transactions/export${queryString}`, { responseType: 'blob', includeHeaders: true });
   },
   createTransaction: (payload) => request('/transactions', { method: 'POST', body: JSON.stringify(payload) }),
+  updateTransaction: (id, payload) =>
+    request(`/transactions/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
   getAttachments: (transactionId) => request(`/attachments/${transactionId}`),
   uploadAttachment: (transactionId, file) => {

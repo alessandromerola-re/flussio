@@ -46,6 +46,7 @@ const MovementsPage = () => {
   const [showContactResults, setShowContactResults] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [newAttachmentFile, setNewAttachmentFile] = useState(null);
+  const [editingMovementId, setEditingMovementId] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadError, setUploadError] = useState('');
@@ -268,7 +269,7 @@ const MovementsPage = () => {
         accountsPayload.push({ account_id: accountId, direction, amount: Number(form.amount_total) });
       }
 
-      const transaction = await api.createTransaction({
+      const payload = {
         date: form.date,
         type: form.type,
         amount_total: Number(form.amount_total),
@@ -277,7 +278,14 @@ const MovementsPage = () => {
         contact_id: form.contact_id ? Number(form.contact_id) : null,
         property_id: form.property_id ? Number(form.property_id) : null,
         accounts: accountsPayload,
-      });
+      };
+
+      let transaction = null;
+      if (editingMovementId) {
+        transaction = await api.updateTransaction(editingMovementId, payload);
+      } else {
+        transaction = await api.createTransaction(payload);
+      }
 
       if (newAttachmentFile && transaction?.id) {
         await api.uploadAttachment(transaction.id, newAttachmentFile);
@@ -286,6 +294,7 @@ const MovementsPage = () => {
       setForm(emptyForm);
       setNewAttachmentFile(null);
       setContactSearch('');
+      setEditingMovementId(null);
       await loadMovements(filters);
       setAccounts(await api.getAccounts());
       setSubmitMessage(t('pages.movements.createSuccess'));
@@ -295,6 +304,39 @@ const MovementsPage = () => {
       setError(messageKey ? t(messageKey) : fallback);
       setSubmitMessage(t('pages.movements.createError'));
     }
+  };
+
+  const handleStartEdit = () => {
+    if (!selected) {
+      return;
+    }
+
+    const selectedAccounts = selected.accounts || [];
+    const outEntry = selectedAccounts.find((entry) => entry.direction === 'out');
+    const inEntry = selectedAccounts.find((entry) => entry.direction === 'in');
+    const singleEntry = selectedAccounts[0];
+
+    setForm({
+      date: selected.date ? String(selected.date).slice(0, 10) : emptyForm.date,
+      type: selected.type || 'income',
+      amount_total: String(Math.abs(Number(selected.amount_total) || 0)),
+      description: selected.description || '',
+      account_in:
+        selected.type === 'transfer'
+          ? String(inEntry?.account_id || '')
+          : String(singleEntry?.account_id || inEntry?.account_id || outEntry?.account_id || ''),
+      account_out: selected.type === 'transfer' ? String(outEntry?.account_id || '') : '',
+      category_id: selected.category_id ? String(selected.category_id) : '',
+      contact_id: selected.contact_id ? String(selected.contact_id) : '',
+      property_id: selected.property_id ? String(selected.property_id) : '',
+    });
+
+    setContactSearch(selected.contact_name || '');
+    setEditingMovementId(selected.id);
+    setNewAttachmentFile(null);
+    setSelected(null);
+    setError('');
+    setSubmitMessage('');
   };
 
   const handleUploadAttachment = async () => {
@@ -360,7 +402,7 @@ const MovementsPage = () => {
 
       <div className="grid-two">
         <form className="card" onSubmit={handleSubmit}>
-          <h2>{t('pages.movements.new')}</h2>
+          <h2>{editingMovementId ? `${t('buttons.edit')} #${editingMovementId}` : t('pages.movements.new')}</h2>
           <div className="form-grid">
             <label>
               {t('pages.movements.date')}
@@ -474,7 +516,25 @@ const MovementsPage = () => {
           </div>
           {error && <div className="error">{error}</div>}
           {submitMessage && <div className={error ? 'error' : 'success'}>{submitMessage}</div>}
-          <button type="submit">{t('buttons.save')}</button>
+          <div className="row-actions">
+            <button type="submit">{editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>
+            {editingMovementId && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setEditingMovementId(null);
+                  setForm(emptyForm);
+                  setContactSearch('');
+                  setNewAttachmentFile(null);
+                  setError('');
+                  setSubmitMessage('');
+                }}
+              >
+                {t('buttons.cancel')}
+              </button>
+            )}
+          </div>
         </form>
 
         <div className="card">
@@ -655,6 +715,7 @@ const MovementsPage = () => {
               {uploadError && <div className="error">{uploadError}</div>}
             </div>
             <div className="modal-actions">
+              <button type="button" onClick={handleStartEdit}>{t('buttons.edit')}</button>
               <button
                 type="button"
                 className="ghost"

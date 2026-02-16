@@ -406,6 +406,160 @@ router.post('/', async (req, res) => {
   }
 });
 
+
+router.put('/:id', async (req, res) => {
+  const { id } = req.params;
+  const {
+    date,
+    type,
+    amount_total,
+    description = null,
+    category_id = null,
+    contact_id = null,
+    property_id = null,
+    accounts = [],
+  } = req.body;
+
+  if (!date || !type || amount_total == null || accounts.length === 0) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  if (!['income', 'expense', 'transfer'].includes(type)) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const parsedAmountTotal = Number(amount_total);
+  if (!Number.isFinite(parsedAmountTotal) || parsedAmountTotal <= 0) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const normalizedAmountTotal = type === 'expense'
+    ? -Math.abs(parsedAmountTotal)
+    : Math.abs(parsedAmountTotal);
+
+  const parsedAccounts = accounts.map((account) => ({
+    account_id: Number(account.account_id),
+    direction: account.direction,
+    amount: Number(account.amount),
+  }));
+
+  const hasInvalidAccount = parsedAccounts.some(
+    (account) =>
+      !Number.isInteger(account.account_id) ||
+      !isValidDirection(account.direction) ||
+      !(account.amount > 0)
+  );
+  if (hasInvalidAccount) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const transactionResult = await client.query(
+      'SELECT id FROM transactions WHERE id = $1 AND company_id = $2 FOR UPDATE',
+      [id, req.user.company_id]
+    );
+    if (transactionResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error_code: 'NOT_FOUND' });
+    }
+
+    const currentEntriesResult = await client.query(
+      `
+      SELECT ta.account_id, ta.direction, ta.amount
+      FROM transaction_accounts ta
+      JOIN accounts a ON a.id = ta.account_id
+      WHERE ta.transaction_id = $1 AND a.company_id = $2
+      ORDER BY ta.account_id
+      `,
+      [id, req.user.company_id]
+    );
+
+    const oldAccountIds = currentEntriesResult.rows.map((entry) => entry.account_id);
+    const newAccountIds = parsedAccounts.map((entry) => entry.account_id);
+    const allAccountIds = [...new Set([...oldAccountIds, ...newAccountIds])].sort((a, b) => a - b);
+
+    await validateTransactionRefs(client, req.user.company_id, {
+      category_id,
+      contact_id,
+      property_id,
+    });
+    await lockCompanyAccounts(client, req.user.company_id, allAccountIds);
+
+    for (const entry of currentEntriesResult.rows) {
+      await client.query(
+        `
+        UPDATE accounts
+        SET balance = balance - $1
+        WHERE id = $2 AND company_id = $3
+        `,
+        [getAccountDelta(entry.direction, Number(entry.amount)), entry.account_id, req.user.company_id]
+      );
+    }
+
+    const updatedResult = await client.query(
+      `
+      UPDATE transactions
+      SET date = $1,
+          type = $2,
+          amount_total = $3,
+          description = $4,
+          category_id = $5,
+          contact_id = $6,
+          property_id = $7
+      WHERE id = $8 AND company_id = $9
+      RETURNING *
+      `,
+      [
+        date,
+        type,
+        normalizedAmountTotal,
+        description,
+        category_id,
+        contact_id,
+        property_id,
+        id,
+        req.user.company_id,
+      ]
+    );
+
+    await client.query('DELETE FROM transaction_accounts WHERE transaction_id = $1', [id]);
+
+    for (const account of parsedAccounts) {
+      await client.query(
+        `
+        INSERT INTO transaction_accounts (transaction_id, account_id, direction, amount)
+        VALUES ($1, $2, $3, $4)
+        `,
+        [id, account.account_id, account.direction, account.amount]
+      );
+
+      await client.query(
+        `
+        UPDATE accounts
+        SET balance = balance + $1
+        WHERE id = $2 AND company_id = $3
+        `,
+        [getAccountDelta(account.direction, account.amount), account.account_id, req.user.company_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    return res.json(updatedResult.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error(error);
+    if (error.status) {
+      return res.status(error.status).json({ error_code: error.error_code });
+    }
+    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  } finally {
+    client.release();
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   const client = await getClient();
