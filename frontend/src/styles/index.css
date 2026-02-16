@@ -168,6 +168,11 @@ button.danger {
   margin-bottom: 1rem;
 }
 
+.success {
+  color: #15803d;
+  margin-bottom: 1rem;
+}
+
 .muted {
   color: #6b7280;
 }
@@ -235,8 +240,14 @@ button.danger {
   gap: 0.5rem;
 }
 
-.movement-title {
+.movement-title-badge {
+  display: inline-block;
   color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 0.2rem 0.55rem;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
 .amount {

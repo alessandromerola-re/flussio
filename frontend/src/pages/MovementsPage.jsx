@@ -39,6 +39,7 @@ const MovementsPage = () => {
   const [selected, setSelected] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [error, setError] = useState('');
+  const [submitMessage, setSubmitMessage] = useState('');
   const [loadError, setLoadError] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState([]);
@@ -249,47 +250,51 @@ const MovementsPage = () => {
     const validationError = validate();
     if (validationError) {
       setError(validationError);
+      setSubmitMessage('');
       return;
     }
+
     setError('');
+    setSubmitMessage('');
 
-    const accountsPayload = [];
-    if (form.type === 'transfer') {
-      accountsPayload.push({ account_id: Number(form.account_out), direction: 'out', amount: Number(form.amount_total) });
-      accountsPayload.push({ account_id: Number(form.account_in), direction: 'in', amount: Number(form.amount_total) });
-    } else {
-      const direction = form.type === 'income' ? 'in' : 'out';
-      const accountId = Number(form.account_in || form.account_out);
-      accountsPayload.push({ account_id: accountId, direction, amount: Number(form.amount_total) });
-    }
-
-    const transaction = await api.createTransaction({
-      date: form.date,
-      type: form.type,
-      amount_total: Number(form.amount_total),
-      description: form.description,
-      category_id: form.category_id ? Number(form.category_id) : null,
-      contact_id: form.contact_id ? Number(form.contact_id) : null,
-      property_id: form.property_id ? Number(form.property_id) : null,
-      accounts: accountsPayload,
-    });
-
-    if (newAttachmentFile && transaction?.id) {
-      try {
-        await api.uploadAttachment(transaction.id, newAttachmentFile);
-      } catch (uploadAttachmentError) {
-        const messageKey = uploadAttachmentError.code === 'FILE_TOO_LARGE'
-          ? 'errors.FILE_TOO_LARGE'
-          : 'pages.movements.uploadError';
-        setError(t(messageKey));
+    try {
+      const accountsPayload = [];
+      if (form.type === 'transfer') {
+        accountsPayload.push({ account_id: Number(form.account_out), direction: 'out', amount: Number(form.amount_total) });
+        accountsPayload.push({ account_id: Number(form.account_in), direction: 'in', amount: Number(form.amount_total) });
+      } else {
+        const direction = form.type === 'income' ? 'in' : 'out';
+        const accountId = Number(form.account_in || form.account_out);
+        accountsPayload.push({ account_id: accountId, direction, amount: Number(form.amount_total) });
       }
-    }
 
-    setForm(emptyForm);
-    setNewAttachmentFile(null);
-    setContactSearch('');
-    await loadMovements(filters);
-    setAccounts(await api.getAccounts());
+      const transaction = await api.createTransaction({
+        date: form.date,
+        type: form.type,
+        amount_total: Number(form.amount_total),
+        description: form.description,
+        category_id: form.category_id ? Number(form.category_id) : null,
+        contact_id: form.contact_id ? Number(form.contact_id) : null,
+        property_id: form.property_id ? Number(form.property_id) : null,
+        accounts: accountsPayload,
+      });
+
+      if (newAttachmentFile && transaction?.id) {
+        await api.uploadAttachment(transaction.id, newAttachmentFile);
+      }
+
+      setForm(emptyForm);
+      setNewAttachmentFile(null);
+      setContactSearch('');
+      await loadMovements(filters);
+      setAccounts(await api.getAccounts());
+      setSubmitMessage(t('pages.movements.createSuccess'));
+    } catch (submitError) {
+      const messageKey = submitError.code ? `errors.${submitError.code}` : null;
+      const fallback = submitError.message || t('errors.SERVER_ERROR');
+      setError(messageKey ? t(messageKey) : fallback);
+      setSubmitMessage(t('pages.movements.createError'));
+    }
   };
 
   const handleUploadAttachment = async () => {
@@ -468,6 +473,7 @@ const MovementsPage = () => {
             </label>
           </div>
           {error && <div className="error">{error}</div>}
+          {submitMessage && <div className={error ? 'error' : 'success'}>{submitMessage}</div>}
           <button type="submit">{t('buttons.save')}</button>
         </form>
 
@@ -582,7 +588,7 @@ const MovementsPage = () => {
               return (
               <button key={movement.id} type="button" className="list-item" onClick={() => setSelected(movement)}>
                 <div>
-                  <strong className="movement-title">{movement.description || movement.type}</strong>
+                  <strong className="movement-title-badge">{movement.description || movement.type}</strong>
                   <div className="muted">{formatDateIT(movement.date)}</div>
                   {movement.property_name && (
                     <div className="muted">{t('pages.movements.property')}: {movement.property_name}</div>

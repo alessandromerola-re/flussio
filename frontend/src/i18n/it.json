@@ -107,5 +107,7 @@
   "common.all": "Tutti",
   "pages.movements.uploadSuccess": "Caricato",
   "pages.movements.uploadError": "Errore durante il caricamento allegato.",
-  "errors.FILE_TOO_LARGE": "File troppo grande (max 10MB)."
+  "errors.FILE_TOO_LARGE": "File troppo grande (max 10MB).",
+  "pages.movements.createSuccess": "Movimento salvato con successo.",
+  "pages.movements.createError": "Errore durante il salvataggio del movimento."
 }

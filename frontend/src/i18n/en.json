@@ -107,5 +107,7 @@
   "common.all": "All",
   "pages.movements.uploadSuccess": "Uploaded",
   "pages.movements.uploadError": "Attachment upload failed.",
-  "errors.FILE_TOO_LARGE": "File too large (max 10MB)."
+  "errors.FILE_TOO_LARGE": "File too large (max 10MB).",
+  "pages.movements.createSuccess": "Movement saved successfully.",
+  "pages.movements.createError": "Error while saving movement."
 }
