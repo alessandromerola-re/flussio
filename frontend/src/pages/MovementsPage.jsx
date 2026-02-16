@@ -13,6 +13,7 @@ const emptyForm = {
   category_id: '',
   contact_id: '',
   property_id: '',
+  job_id: '',
 };
 
 const defaultFilters = {
@@ -23,6 +24,7 @@ const defaultFilters = {
   category_id: '',
   contact_id: '',
   property_id: '',
+  job_id: '',
   q: '',
   limit: 30,
   offset: 0,
@@ -35,6 +37,7 @@ const MovementsPage = () => {
   const [categories, setCategories] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [movements, setMovements] = useState([]);
   const [selected, setSelected] = useState(null);
   const [attachments, setAttachments] = useState([]);
@@ -62,14 +65,16 @@ const MovementsPage = () => {
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
+      api.getJobs(),
     ]);
 
-    const [accountsResult, categoriesResult, contactsResult, propertiesResult] = results;
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
 
     if (accountsResult.status === 'fulfilled') setAccounts(accountsResult.value);
     if (categoriesResult.status === 'fulfilled') setCategories(categoriesResult.value);
     if (contactsResult.status === 'fulfilled') setContacts(contactsResult.value);
     if (propertiesResult.status === 'fulfilled') setProperties(propertiesResult.value);
+    if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value);
 
     if (results.some((result) => result.status === 'rejected')) {
       setLoadError(t('errors.SERVER_ERROR'));
@@ -277,6 +282,7 @@ const MovementsPage = () => {
         category_id: form.category_id ? Number(form.category_id) : null,
         contact_id: form.contact_id ? Number(form.contact_id) : null,
         property_id: form.property_id ? Number(form.property_id) : null,
+        job_id: form.job_id ? Number(form.job_id) : null,
         accounts: accountsPayload,
       };
 
@@ -329,6 +335,7 @@ const MovementsPage = () => {
       category_id: selected.category_id ? String(selected.category_id) : '',
       contact_id: selected.contact_id ? String(selected.contact_id) : '',
       property_id: selected.property_id ? String(selected.property_id) : '',
+      job_id: selected.job_id ? String(selected.job_id) : '',
     });
 
     setContactSearch(selected.contact_name || '');
@@ -488,11 +495,11 @@ const MovementsPage = () => {
               </label>
             )}
             <label>
-              {t('pages.movements.property')}
-              <select value={form.property_id} onChange={(event) => handleChange('property_id', event.target.value)}>
+              {t('pages.movements.job')}
+              <select value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
-                {properties.map((property) => (
-                  <option key={property.id} value={property.id}>{property.name}</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>{job.name}</option>
                 ))}
               </select>
             </label>
@@ -613,14 +620,14 @@ const MovementsPage = () => {
               )}
             </label>
             <label>
-              {t('pages.movements.property')}
+              {t('pages.movements.job')}
               <select
-                value={draftFilters.property_id}
-                onChange={(event) => setDraftFilters((prev) => ({ ...prev, property_id: event.target.value }))}
+                value={draftFilters.job_id}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, job_id: event.target.value }))}
               >
                 <option value="">{t('common.all')}</option>
-                {properties.map((property) => (
-                  <option key={property.id} value={property.id}>{property.name}</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>{job.name}</option>
                 ))}
               </select>
             </label>
@@ -650,8 +657,8 @@ const MovementsPage = () => {
                 <div>
                   <strong className="movement-title-badge">{movement.description || movement.type}</strong>
                   <div className="muted">{formatDateIT(movement.date)}</div>
-                  {movement.property_name && (
-                    <div className="muted">{t('pages.movements.property')}: {movement.property_name}</div>
+                  {movement.job_name && (
+                    <div className="muted">{t('pages.movements.job')}: {movement.job_name}</div>
                   )}
                   <div className="muted">{t('pages.movements.account')}: {formatAccounts(movement.accounts)}</div>
                   <div className="muted">{t('pages.movements.category')}: {movement.category_name || t('common.none')}</div>
@@ -681,7 +688,7 @@ const MovementsPage = () => {
             <p><strong>{t('pages.movements.amount')}:</strong> € {Number(selected.amount_total).toFixed(2)}</p>
             <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
-            <p><strong>{t('pages.movements.property')}:</strong> {selected.property_name || t('common.none')}</p>
+            <p><strong>{t('pages.movements.job')}:</strong> {selected.job_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
             <div>
               <strong>{t('pages.movements.attachments')}:</strong>

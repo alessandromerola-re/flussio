@@ -17,7 +17,8 @@ const parseMultipartFile = (req) => {
     return null;
   }
 
-  const boundary = `--${boundaryMatch[1]}`;
+  const boundaryValue = boundaryMatch[1].replace(/^"|"$/g, '');
+  const boundary = `--${boundaryValue}`;
   const bodyString = req.body.toString('binary');
   const partName = 'name="file"';
   const partStart = bodyString.indexOf(partName);
@@ -103,6 +104,9 @@ router.get('/:transactionId', async (req, res) => {
 
 router.post('/:transactionId', rawUpload, async (req, res) => {
   const { transactionId } = req.params;
+  if (!(req.headers['content-type'] || '').includes('multipart/form-data')) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
   const parsedFile = parseMultipartFile(req);
   if (!parsedFile || !parsedFile.originalName || parsedFile.buffer.length === 0) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
@@ -192,7 +196,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 router.use((error, req, res, next) => {
-  if (error?.type === 'entity.too.large') {
+  if (error?.type === 'entity.too.large' || error?.status === 413) {
     return res.status(413).json({ error_code: 'FILE_TOO_LARGE' });
   }
   return next(error);

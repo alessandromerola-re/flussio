@@ -109,5 +109,8 @@
   "pages.movements.uploadError": "Attachment upload failed.",
   "errors.FILE_TOO_LARGE": "File too large (max 10MB).",
   "pages.movements.createSuccess": "Movement saved successfully.",
-  "pages.movements.createError": "Error while saving movement."
+  "pages.movements.createError": "Error while saving movement.",
+  "pages.registry.jobs": "Jobs",
+  "pages.registry.propertiesBeta": "Properties (beta)",
+  "pages.movements.job": "Job"
 }
