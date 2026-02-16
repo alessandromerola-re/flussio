@@ -1,29 +1,37 @@
+import { Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import MovementsPage from './pages/MovementsPage.jsx';
 import RegistryPage from './pages/RegistryPage.jsx';
-import { getToken } from './services/api.js';
 
 const routes = ({ setTokenState, token }) => [
   {
     path: '/login',
-    element: <LoginPage onLogin={(newToken) => setTokenState(newToken)} />,
+    element: token ? (
+      <Navigate to="/dashboard" replace />
+    ) : (
+      <LoginPage onLogin={(newToken) => setTokenState(newToken)} />
+    ),
   },
   {
     path: '/dashboard',
-    element: token ? <DashboardPage /> : <LoginPage onLogin={setTokenState} />,
+    element: token ? <DashboardPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/movements',
-    element: token ? <MovementsPage /> : <LoginPage onLogin={setTokenState} />,
+    element: token ? <MovementsPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/registry',
-    element: token ? <RegistryPage /> : <LoginPage onLogin={setTokenState} />,
+    element: token ? <RegistryPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/',
-    element: getToken() ? <DashboardPage /> : <LoginPage onLogin={setTokenState} />,
+    element: token ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '*',
+    element: <Navigate to="/" replace />,
   },
 ];
 

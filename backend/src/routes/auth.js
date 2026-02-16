@@ -22,9 +22,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-    const matches = user.password_hash.startsWith('$2')
-      ? await bcrypt.compare(password, user.password_hash)
-      : password === user.password_hash;
+    const matches = await bcrypt.compare(password, user.password_hash);
     if (!matches) {
       return res.status(401).json({ error_code: 'AUTH_INVALID_CREDENTIALS' });
     }
