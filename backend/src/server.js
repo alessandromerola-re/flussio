@@ -33,6 +33,7 @@ const ensureDevUser = async () => {
     console.error(`Failed to ensure dev user.
 Is the database initialized?`, error);
   }
+
 };
 
 app.listen(port, () => {
