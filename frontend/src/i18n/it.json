@@ -112,5 +112,10 @@
   "pages.movements.createError": "Errore durante il salvataggio del movimento.",
   "pages.registry.jobs": "Commesse",
   "pages.registry.propertiesBeta": "Immobili (beta)",
-  "pages.movements.job": "Commessa"
+  "pages.movements.job": "Commessa",
+  "errors.NO_FILE": "Nessun file selezionato.",
+  "errors.UPLOAD_FAILED": "Upload allegato non riuscito.",
+  "pages.movements.attachmentPreview": "Anteprima allegato",
+  "pages.movements.previewNotAvailable": "Anteprima non disponibile per questo tipo di file.",
+  "pages.movements.previewLoadError": "Impossibile caricare l’anteprima."
 }

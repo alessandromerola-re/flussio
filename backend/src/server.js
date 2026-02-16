@@ -64,8 +64,32 @@ const ensurePhase2Schema = async () => {
   }
 };
 
+
+
+const ensureAttachmentsSchema = async () => {
+  try {
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS original_name TEXT');
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS mime_type TEXT');
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS size INTEGER NOT NULL DEFAULT 0');
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS storage_path TEXT');
+    await query(
+      `
+      UPDATE attachments
+      SET original_name = COALESCE(original_name, file_name),
+          storage_path = COALESCE(storage_path, path)
+      WHERE original_name IS NULL OR storage_path IS NULL
+      `
+    );
+    await query('ALTER TABLE attachments ALTER COLUMN original_name SET NOT NULL');
+    await query('ALTER TABLE attachments ALTER COLUMN storage_path SET NOT NULL');
+  } catch (error) {
+    console.error('Failed to ensure attachments schema', error);
+  }
+};
+
 const bootstrap = async () => {
   await ensurePhase2Schema();
+  await ensureAttachmentsSchema();
   await ensureDevUser();
 
   app.listen(port, () => {

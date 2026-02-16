@@ -62,6 +62,7 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_jobs_and_transactions_job_id.sql
 # optional but recommended if you used properties as jobs in phase 1
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_optional_migrate_properties_to_jobs.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/004_20260216__attachments_metadata.sql
 ```
 
 
@@ -105,6 +106,7 @@ CSV columns:
 
 In movement details modal:
 - upload attachments (`pdf`, images, doc/docx, xls/xlsx)
+- preview images/PDF directly in modal
 - download attachments
 - delete attachments
 

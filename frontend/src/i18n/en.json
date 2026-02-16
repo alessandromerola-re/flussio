@@ -112,5 +112,10 @@
   "pages.movements.createError": "Error while saving movement.",
   "pages.registry.jobs": "Jobs",
   "pages.registry.propertiesBeta": "Properties (beta)",
-  "pages.movements.job": "Job"
+  "pages.movements.job": "Job",
+  "errors.NO_FILE": "No file selected.",
+  "errors.UPLOAD_FAILED": "Attachment upload failed.",
+  "pages.movements.attachmentPreview": "Attachment preview",
+  "pages.movements.previewNotAvailable": "Preview is not available for this file type.",
+  "pages.movements.previewLoadError": "Unable to load preview."
 }

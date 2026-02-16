@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { formatDateIT } from '../utils/date.js';
+import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -53,6 +54,7 @@ const MovementsPage = () => {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [previewAttachment, setPreviewAttachment] = useState(null);
   const [filters, setFilters] = useState(defaultFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
   const [filterContactSearch, setFilterContactSearch] = useState('');
@@ -361,8 +363,8 @@ const MovementsPage = () => {
       setAttachments(await api.getAttachments(selected.id));
       setUploadMessage(t('pages.movements.uploadSuccess'));
     } catch (uploadAttachmentError) {
-      const messageKey = uploadAttachmentError.code === 'FILE_TOO_LARGE'
-        ? 'errors.FILE_TOO_LARGE'
+      const messageKey = uploadAttachmentError.code
+        ? `errors.${uploadAttachmentError.code}`
         : 'pages.movements.uploadError';
       setUploadError(t(messageKey));
     } finally {
@@ -388,6 +390,28 @@ const MovementsPage = () => {
       return;
     }
     setAttachments(await api.getAttachments(selected.id));
+  };
+
+
+  const getAttachmentTypeLabel = (attachment) => {
+    const mime = (attachment?.mime_type || '').toLowerCase();
+    if (mime.startsWith('image/')) {
+      return 'image';
+    }
+    if (mime === 'application/pdf') {
+      return 'pdf';
+    }
+    return 'other';
+  };
+
+  const fetchPreviewBlob = async (attachment) => api.downloadAttachment(attachment.id);
+
+  const handleOpenPreview = (attachment) => {
+    setPreviewAttachment(attachment);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewAttachment(null);
   };
 
   const handleDelete = async (id) => {
@@ -696,7 +720,16 @@ const MovementsPage = () => {
                 {attachments.length === 0 && <li className="muted">{t('pages.movements.noAttachments')}</li>}
                 {attachments.map((item) => (
                   <li key={item.id} className="list-item-row">
-                    <span>{item.file_name}</span>
+                    <div className="attachment-name-row">
+                      <button
+                        type="button"
+                        className="linklike"
+                        onClick={() => handleOpenPreview(item)}
+                      >
+                        {item.original_name || item.file_name}
+                      </button>
+                      <span className="muted attachment-type">[{getAttachmentTypeLabel(item)}]</span>
+                    </div>
                     <div className="row-actions">
                       <button type="button" className="ghost" onClick={() => handleDownloadAttachment(item)}>{t('buttons.download')}</button>
                       <button type="button" className="danger" onClick={() => handleDeleteAttachment(item.id)}>{t('buttons.delete')}</button>
@@ -731,6 +764,7 @@ const MovementsPage = () => {
                   setUploadError('');
                   setUploadMessage('');
                   setAttachmentFile(null);
+                  setPreviewAttachment(null);
                 }}
               >
                 {t('buttons.close')}
@@ -740,6 +774,14 @@ const MovementsPage = () => {
           </div>
         </div>
       )}
+
+      <AttachmentPreviewModal
+        isOpen={Boolean(previewAttachment)}
+        attachment={previewAttachment}
+        onClose={handleClosePreview}
+        fetchPreviewBlob={fetchPreviewBlob}
+        onDownload={handleDownloadAttachment}
+      />
     </div>
   );
 };

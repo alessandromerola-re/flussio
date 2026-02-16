@@ -92,6 +92,10 @@ CREATE TABLE attachments (
   transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL,
   path TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  mime_type TEXT,
+  size INTEGER NOT NULL DEFAULT 0,
+  storage_path TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
