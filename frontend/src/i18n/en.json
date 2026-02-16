@@ -109,5 +109,13 @@
   "pages.movements.uploadError": "Attachment upload failed.",
   "errors.FILE_TOO_LARGE": "File too large (max 10MB).",
   "pages.movements.createSuccess": "Movement saved successfully.",
-  "pages.movements.createError": "Error while saving movement."
+  "pages.movements.createError": "Error while saving movement.",
+  "pages.registry.jobs": "Jobs",
+  "pages.registry.propertiesBeta": "Properties (beta)",
+  "pages.movements.job": "Job",
+  "errors.NO_FILE": "No file selected.",
+  "errors.UPLOAD_FAILED": "Attachment upload failed.",
+  "pages.movements.attachmentPreview": "Attachment preview",
+  "pages.movements.previewNotAvailable": "Preview is not available for this file type.",
+  "pages.movements.previewLoadError": "Unable to load preview."
 }

@@ -54,11 +54,15 @@ DEV seed stores password as bcrypt hash. Login uses bcrypt verification only.
 Init SQL runs only on first bootstrap of an empty Postgres volume (`database/init`).
 Incremental changes are SQL files in `database/migrations` and must be applied manually.
 
-Apply Phase 1 migrations:
+Apply migrations manually in order (existing installations):
 
 ```bash
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20260215__opening_balance_and_recalc.sql
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_20260215__hash_dev_seed_password.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_jobs_and_transactions_job_id.sql
+# optional but recommended if you used properties as jobs in phase 1
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_optional_migrate_properties_to_jobs.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/004_20260216__attachments_metadata.sql
 ```
 
 
@@ -72,6 +76,7 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 - `category_id=<number>`
 - `contact_id=<number>`
 - `property_id=<number>`
+- `job_id=<number>`
 - `q=<text search in description>`
 - `limit` (default `30`, max `200`)
 - `offset` (default `0`, max `5000`)
@@ -101,10 +106,13 @@ CSV columns:
 
 In movement details modal:
 - upload attachments (`pdf`, images, doc/docx, xls/xlsx)
+- preview images/PDF directly in modal
 - download attachments
 - delete attachments
 
 Upload size limit: 10MB per file.
+
+If you run frontend behind Nginx, configure `client_max_body_size` (e.g. `20M`) to avoid HTTP 413 before backend validation.
 
 ## Phase 1 smoke test checklist
 

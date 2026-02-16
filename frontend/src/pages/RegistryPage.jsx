@@ -18,18 +18,21 @@ const initialContact = {
   is_active: true,
 };
 const initialProperty = { name: '', notes: '', contact_id: '', is_active: true };
+const initialJob = { name: '', notes: '', contact_id: '', is_active: true };
 
 const RegistryPage = () => {
   const { t } = useTranslation();
-  const [tab, setTab] = useState('accounts');
+  const [tab, setTab] = useState('jobs');
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [accountForm, setAccountForm] = useState(initialAccount);
   const [categoryForm, setCategoryForm] = useState(initialCategory);
   const [contactForm, setContactForm] = useState(initialContact);
   const [propertyForm, setPropertyForm] = useState(initialProperty);
+  const [jobForm, setJobForm] = useState(initialJob);
   const [editingId, setEditingId] = useState(null);
   const [loadError, setLoadError] = useState('');
 
@@ -40,8 +43,9 @@ const RegistryPage = () => {
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
+      api.getJobs(),
     ]);
-    const [accountsResult, categoriesResult, contactsResult, propertiesResult] = results;
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
 
     if (accountsResult.status === 'fulfilled') {
       setAccounts(accountsResult.value);
@@ -54,6 +58,9 @@ const RegistryPage = () => {
     }
     if (propertiesResult.status === 'fulfilled') {
       setProperties(propertiesResult.value);
+    }
+    if (jobsResult.status === 'fulfilled') {
+      setJobs(jobsResult.value);
     }
 
     if (results.some((result) => result.status === 'rejected')) {
@@ -79,6 +86,7 @@ const RegistryPage = () => {
     setCategoryForm(initialCategory);
     setContactForm(initialContact);
     setPropertyForm(initialProperty);
+    setJobForm(initialJob);
     setEditingId(null);
   };
 
@@ -125,6 +133,23 @@ const RegistryPage = () => {
     setContacts(await api.getContacts());
   };
 
+
+
+  const handleJobSubmit = async (event) => {
+    event.preventDefault();
+    const payload = {
+      ...jobForm,
+      contact_id: jobForm.contact_id ? Number(jobForm.contact_id) : null,
+    };
+    if (editingId) {
+      await api.updateJob(editingId, payload);
+    } else {
+      await api.createJob(payload);
+    }
+    resetForms();
+    setJobs(await api.getJobs());
+  };
+
   const handlePropertySubmit = async (event) => {
     event.preventDefault();
     const payload = {
@@ -148,6 +173,7 @@ const RegistryPage = () => {
       accounts: () => api.deleteAccount(id),
       categories: () => api.deleteCategory(id),
       contacts: () => api.deleteContact(id),
+      jobs: () => api.deleteJob(id),
       properties: () => api.deleteProperty(id),
     };
     await actions[type]();
@@ -171,8 +197,11 @@ const RegistryPage = () => {
         <button type="button" className={tab === 'contacts' ? 'active' : ''} onClick={() => setTab('contacts')}>
           {t('pages.registry.contacts')}
         </button>
+        <button type="button" className={tab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>
+          {t('pages.registry.jobs')}
+        </button>
         <button type="button" className={tab === 'properties' ? 'active' : ''} onClick={() => setTab('properties')}>
-          {t('pages.registry.properties')}
+          {t('pages.registry.propertiesBeta')}
         </button>
       </div>
 
@@ -449,6 +478,81 @@ const RegistryPage = () => {
                       {t('buttons.edit')}
                     </button>
                     <button type="button" className="danger" onClick={() => handleDelete('contacts', contact.id)}>
+                      {t('buttons.delete')}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {tab === 'jobs' && (
+        <div className="grid-two">
+          <form className="card" onSubmit={handleJobSubmit}>
+            <h2>{t('pages.registry.jobs')}</h2>
+            <label>
+              {t('forms.name')}
+              <input
+                type="text"
+                value={jobForm.name}
+                onChange={(event) => setJobForm({ ...jobForm, name: event.target.value })}
+                required
+              />
+            </label>
+            <label>
+              {t('forms.notes')}
+              <input
+                type="text"
+                value={jobForm.notes}
+                onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.referenceContact')}
+              <select
+                value={jobForm.contact_id}
+                onChange={(event) => setJobForm({ ...jobForm, contact_id: event.target.value })}
+              >
+                <option value="">{t('common.none')}</option>
+                {contacts.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit">{t('buttons.save')}</button>
+          </form>
+          <div className="card">
+            <ul className="list">
+              {jobs.map((job) => (
+                <li key={job.id} className="list-item-row">
+                  <div>
+                    <strong>{job.name}</strong>
+                    <div className="muted">{job.notes || t('common.none')}</div>
+                    <div className="muted">
+                      {t('forms.referenceContact')}: {job.contact_name || t('common.none')}
+                    </div>
+                  </div>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setJobForm({
+                          name: job.name,
+                          notes: job.notes || '',
+                          contact_id: job.contact_id || '',
+                          is_active: job.is_active,
+                        });
+                        setEditingId(job.id);
+                      }}
+                    >
+                      {t('buttons.edit')}
+                    </button>
+                    <button type="button" className="danger" onClick={() => handleDelete('jobs', job.id)}>
                       {t('buttons.delete')}
                     </button>
                   </div>
