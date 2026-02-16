@@ -63,6 +63,7 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 # optional but recommended if you used properties as jobs in phase 1
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_optional_migrate_properties_to_jobs.sql
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/004_20260216__attachments_metadata.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/005_20260216__extend_jobs_and_reports_index.sql
 ```
 
 
@@ -153,3 +154,33 @@ DATABASE_URL=postgres://flussio:flussio@localhost:5432/flussio_test JWT_SECRET=t
 Test coverage includes:
 - auth login with bcrypt user
 - movement create/delete with balance update/revert checks
+
+
+## Sprint 1 – Job reports
+
+Apply the migration for extended jobs/report indexes:
+
+```bash
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/005_20260216__extend_jobs_and_reports_index.sql
+```
+
+Report endpoints:
+
+```bash
+# Summary JSON
+curl -H "Authorization: Bearer <TOKEN>" \
+  "http://localhost:4000/api/reports/job/1/summary?date_from=2026-01-01&date_to=2026-12-31"
+
+# CSV export for one job
+curl -L -H "Authorization: Bearer <TOKEN>" \
+  "http://localhost:4000/api/reports/job/1/export.csv?date_from=2026-01-01&date_to=2026-12-31" \
+  -o flussio_job_1.csv
+```
+
+Manual verification checklist:
+1. Create a job with code, budget, and dates.
+2. Create income/expense/transfer movements linked to that job.
+3. Open job detail: totals are correct (transfer excluded from margin).
+4. Verify category breakdown values.
+5. Click "Go to movements": movements page opens with job filter pre-selected.
+6. Export job CSV downloads correctly.

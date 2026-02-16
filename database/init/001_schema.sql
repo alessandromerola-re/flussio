@@ -59,9 +59,15 @@ CREATE TABLE jobs (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  title TEXT NOT NULL,
+  code TEXT,
   notes TEXT,
   contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
+  is_closed BOOLEAN NOT NULL DEFAULT false,
+  budget NUMERIC(12, 2),
+  start_date DATE,
+  end_date DATE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -105,6 +111,9 @@ CREATE INDEX idx_contacts_company ON contacts(company_id);
 CREATE INDEX idx_properties_company ON properties(company_id);
 CREATE INDEX idx_jobs_company ON jobs(company_id);
 CREATE INDEX idx_jobs_active ON jobs(company_id, is_active);
+CREATE INDEX idx_jobs_company_active ON jobs(company_id, is_active, is_closed);
+CREATE UNIQUE INDEX idx_jobs_company_code_unique ON jobs(company_id, code) WHERE code IS NOT NULL;
 CREATE INDEX idx_transactions_company ON transactions(company_id);
 CREATE INDEX idx_transactions_job ON transactions(company_id, job_id);
+CREATE INDEX idx_transactions_company_job_date ON transactions(company_id, job_id, date);
 CREATE INDEX idx_transaction_accounts_transaction ON transaction_accounts(transaction_id);

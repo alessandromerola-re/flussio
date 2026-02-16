@@ -98,10 +98,22 @@ export const api = {
   createProperty: (payload) => request('/properties', { method: 'POST', body: JSON.stringify(payload) }),
   updateProperty: (id, payload) => request(`/properties/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteProperty: (id) => request(`/properties/${id}`, { method: 'DELETE' }),
-  getJobs: () => request('/jobs'),
+  getJobs: (filters = {}) => {
+    const queryString = toQueryString(filters);
+    return request(`/jobs${queryString}`);
+  },
+  getJob: (id) => request(`/jobs/${id}`),
   createJob: (payload) => request('/jobs', { method: 'POST', body: JSON.stringify(payload) }),
   updateJob: (id, payload) => request(`/jobs/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteJob: (id) => request(`/jobs/${id}`, { method: 'DELETE' }),
+  getJobReportSummary: (jobId, filters = {}) => {
+    const queryString = toQueryString(filters);
+    return request(`/reports/job/${jobId}/summary${queryString}`);
+  },
+  exportJobReportCsv: (jobId, filters = {}) => {
+    const queryString = toQueryString(filters);
+    return request(`/reports/job/${jobId}/export.csv${queryString}`, { responseType: 'blob', includeHeaders: true });
+  },
   getTransactions: (input = 30) => {
     if (typeof input === 'number') {
       return request(`/transactions?limit=${input}`);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api.js';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
@@ -18,10 +19,21 @@ const initialContact = {
   is_active: true,
 };
 const initialProperty = { name: '', notes: '', contact_id: '', is_active: true };
-const initialJob = { name: '', notes: '', contact_id: '', is_active: true };
+const initialJob = {
+  code: '',
+  title: '',
+  notes: '',
+  contact_id: '',
+  is_closed: false,
+  is_active: true,
+  budget: '',
+  start_date: '',
+  end_date: '',
+};
 
 const RegistryPage = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('jobs');
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -43,7 +55,7 @@ const RegistryPage = () => {
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
-      api.getJobs(),
+      api.getJobs({ active: 0, include_closed: 1 }),
     ]);
     const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
 
@@ -138,16 +150,25 @@ const RegistryPage = () => {
   const handleJobSubmit = async (event) => {
     event.preventDefault();
     const payload = {
-      ...jobForm,
+      code: jobForm.code?.trim() || null,
+      title: jobForm.title?.trim(),
+      notes: jobForm.notes?.trim() || null,
       contact_id: jobForm.contact_id ? Number(jobForm.contact_id) : null,
+      is_closed: jobForm.is_closed,
+      is_active: jobForm.is_active,
+      budget: jobForm.budget === '' ? null : Number(jobForm.budget),
+      start_date: jobForm.start_date || null,
+      end_date: jobForm.end_date || null,
     };
+
     if (editingId) {
       await api.updateJob(editingId, payload);
     } else {
       await api.createJob(payload);
     }
+
     resetForms();
-    setJobs(await api.getJobs());
+    setJobs(await api.getJobs({ active: 0, include_closed: 1 }));
   };
 
   const handlePropertySubmit = async (event) => {
@@ -493,12 +514,56 @@ const RegistryPage = () => {
           <form className="card" onSubmit={handleJobSubmit}>
             <h2>{t('pages.registry.jobs')}</h2>
             <label>
-              {t('forms.name')}
+              {t('forms.jobCode')}
               <input
                 type="text"
-                value={jobForm.name}
-                onChange={(event) => setJobForm({ ...jobForm, name: event.target.value })}
+                value={jobForm.code}
+                onChange={(event) => setJobForm({ ...jobForm, code: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.jobTitle')}
+              <input
+                type="text"
+                value={jobForm.title}
+                onChange={(event) => setJobForm({ ...jobForm, title: event.target.value })}
                 required
+              />
+            </label>
+            <label>
+              {t('forms.jobStatus')}
+              <select
+                value={jobForm.is_closed ? 'closed' : 'open'}
+                onChange={(event) => setJobForm({ ...jobForm, is_closed: event.target.value === 'closed' })}
+              >
+                <option value="open">{t('labels.jobOpen')}</option>
+                <option value="closed">{t('labels.jobClosed')}</option>
+              </select>
+            </label>
+            <label>
+              {t('forms.jobBudget')}
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={jobForm.budget}
+                onChange={(event) => setJobForm({ ...jobForm, budget: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.jobStartDate')}
+              <input
+                type="date"
+                value={jobForm.start_date}
+                onChange={(event) => setJobForm({ ...jobForm, start_date: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.jobEndDate')}
+              <input
+                type="date"
+                value={jobForm.end_date}
+                onChange={(event) => setJobForm({ ...jobForm, end_date: event.target.value })}
               />
             </label>
             <label>
@@ -530,11 +595,17 @@ const RegistryPage = () => {
               {jobs.map((job) => (
                 <li key={job.id} className="list-item-row">
                   <div>
-                    <strong>{job.name}</strong>
-                    <div className="muted">{job.notes || t('common.none')}</div>
-                    <div className="muted">
-                      {t('forms.referenceContact')}: {job.contact_name || t('common.none')}
-                    </div>
+                    <button
+                      type="button"
+                      className="linklike"
+                      onClick={() => navigate(`/jobs/${job.id}`)}
+                    >
+                      <strong>{job.title}</strong>
+                    </button>
+                    <div className="muted">{t('forms.jobCode')}: {job.code || t('common.none')}</div>
+                    <div className="muted">{t('forms.jobStatus')}: {job.is_closed ? t('labels.jobClosed') : t('labels.jobOpen')}</div>
+                    <div className="muted">{t('forms.referenceContact')}: {job.contact_name || t('common.none')}</div>
+                    <div className="muted">{t('forms.jobBudget')}: {job.budget != null ? `€ ${Number(job.budget).toFixed(2)}` : t('common.none')}</div>
                   </div>
                   <div className="row-actions">
                     <button
@@ -542,15 +613,23 @@ const RegistryPage = () => {
                       className="ghost"
                       onClick={() => {
                         setJobForm({
-                          name: job.name,
+                          code: job.code || '',
+                          title: job.title || '',
                           notes: job.notes || '',
                           contact_id: job.contact_id || '',
                           is_active: job.is_active,
+                          is_closed: job.is_closed,
+                          budget: job.budget == null ? '' : String(job.budget),
+                          start_date: job.start_date ? String(job.start_date).slice(0, 10) : '',
+                          end_date: job.end_date ? String(job.end_date).slice(0, 10) : '',
                         });
                         setEditingId(job.id);
                       }}
                     >
                       {t('buttons.edit')}
+                    </button>
+                    <button type="button" className="ghost" onClick={() => navigate(`/jobs/${job.id}`)}>
+                      {t('buttons.open')}
                     </button>
                     <button type="button" className="danger" onClick={() => handleDelete('jobs', job.id)}>
                       {t('buttons.delete')}

@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import MovementsPage from './pages/MovementsPage.jsx';
 import RegistryPage from './pages/RegistryPage.jsx';
+import JobDetailPage from './pages/JobDetailPage.jsx';
 
 const routes = ({ setTokenState, token }) => [
   {
@@ -24,6 +25,10 @@ const routes = ({ setTokenState, token }) => [
   {
     path: '/registry',
     element: token ? <RegistryPage /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '/jobs/:id',
+    element: token ? <JobDetailPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/',

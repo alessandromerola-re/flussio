@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { formatDateIT } from '../utils/date.js';
@@ -33,6 +34,7 @@ const defaultFilters = {
 
 const MovementsPage = () => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState(emptyForm);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -95,12 +97,21 @@ const MovementsPage = () => {
   const loadData = async () => {
     setLoadError('');
     await loadLookupData();
-    await loadMovements(defaultFilters);
+
+    const deepLinkJobId = searchParams.get('job_id');
+    const nextFilters = {
+      ...defaultFilters,
+      job_id: deepLinkJobId || '',
+    };
+
+    setFilters(nextFilters);
+    setDraftFilters(nextFilters);
+    await loadMovements(nextFilters);
   };
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [searchParams.toString()]);
 
   const formatAccounts = (accountsList = []) => {
     const names = accountsList.map((account) => account?.account_name).filter(Boolean);

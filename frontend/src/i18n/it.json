@@ -117,5 +117,21 @@
   "errors.UPLOAD_FAILED": "Upload allegato non riuscito.",
   "pages.movements.attachmentPreview": "Anteprima allegato",
   "pages.movements.previewNotAvailable": "Anteprima non disponibile per questo tipo di file.",
-  "pages.movements.previewLoadError": "Impossibile caricare l’anteprima."
+  "pages.movements.previewLoadError": "Impossibile caricare l’anteprima.",
+  "forms.jobCode": "Codice commessa",
+  "forms.jobTitle": "Titolo commessa",
+  "forms.jobStatus": "Stato",
+  "forms.jobBudget": "Budget",
+  "forms.jobStartDate": "Data inizio",
+  "forms.jobEndDate": "Data fine",
+  "labels.jobOpen": "Attiva",
+  "labels.jobClosed": "Chiusa",
+  "buttons.open": "Apri",
+  "buttons.goToMovements": "Vai ai movimenti",
+  "buttons.exportJobCsv": "Esporta CSV commessa",
+  "pages.jobs.reportTitle": "Report commessa",
+  "pages.jobs.totalIncome": "Totale entrate",
+  "pages.jobs.totalExpense": "Totale uscite",
+  "pages.jobs.totalMargin": "Margine",
+  "pages.jobs.breakdownByCategory": "Breakdown per categoria"
 }
