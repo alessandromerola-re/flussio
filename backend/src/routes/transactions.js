@@ -132,6 +132,11 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
     c.name AS category_name,
     ct.name AS contact_name,
     p.name AS property_name,
+    (
+      SELECT COUNT(*)::int
+      FROM attachments att
+      WHERE att.transaction_id = t.id
+    ) AS attachment_count,
     COALESCE(
       json_agg(
         json_build_object(

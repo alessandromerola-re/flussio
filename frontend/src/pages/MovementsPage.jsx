@@ -555,7 +555,10 @@ const MovementsPage = () => {
 
           <h2>{t('pages.movements.latest')}</h2>
           <div className="list">
-            {movements.map((movement) => (
+            {movements.map((movement) => {
+              const attachmentCount = Number(movement.attachment_count || movement.attachments_count || 0);
+
+              return (
               <button key={movement.id} type="button" className="list-item" onClick={() => setSelected(movement)}>
                 <div>
                   <strong>{movement.description || movement.type}</strong>
@@ -566,12 +569,18 @@ const MovementsPage = () => {
                   {movement.property_name && (
                     <div className="muted">{t('pages.movements.property')}: {movement.property_name}</div>
                   )}
+                  {attachmentCount > 0 && (
+                    <div className="attachment-indicator" aria-label={`${attachmentCount} attachments`}>
+                      📎 {attachmentCount}
+                    </div>
+                  )}
                 </div>
                 <div className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>
                   € {Number(movement.amount_total).toFixed(2)}
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -601,7 +610,7 @@ const MovementsPage = () => {
                   </li>
                 ))}
               </ul>
-              <div className="row-actions">
+              <div className="attachment-upload">
                 <input
                   type="file"
                   accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
