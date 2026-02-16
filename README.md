@@ -77,6 +77,18 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 - `offset` (default `0`, max `5000`)
 
 Examples:
+<<<<<<< codex/stabilize-phase-1-mvp-features
+
+```bash
+curl "http://localhost:4000/api/transactions?limit=5"
+curl "http://localhost:4000/api/transactions?date_from=2026-01-01&date_to=2026-01-31&type=income"
+```
+
+## Movements CSV export
+
+Endpoint:
+- `GET /api/transactions/export` (same filters as `/api/transactions`)
+=======
 
 ```bash
 curl "http://localhost:4000/api/transactions?limit=5"
@@ -88,9 +100,57 @@ curl "http://localhost:4000/api/transactions?date_from=2026-01-01&date_to=2026-0
 Endpoint:
 - `GET /api/transactions/export` (same filters as `/api/transactions`)
 
-Example:
+Run locally:
 
 ```bash
+curl -L -H "Authorization: Bearer <TOKEN>"   "http://localhost:4000/api/transactions/export?date_from=2026-01-01&type=expense"   -o flussio_movimenti.csv
+```
+
+CSV columns:
+`date;type;amount_total;account_names;category;contact;commessa;description`
+
+## Attachments usage
+
+In movement details modal:
+- upload attachments (`pdf`, images, doc/docx, xls/xlsx)
+- download attachments
+- delete attachments
+
+Upload size limit: 10MB per file.
+
+## Phase 1 smoke test checklist
+
+1. Login with `dev@flussio.local / flussio123`
+2. Registry CRUD:
+   - accounts
+   - categories
+   - contacts
+   - properties
+3. Movements:
+   - create income/expense/transfer
+   - delete a movement
+   - verify account balances are coherent after create/delete
+4. Attachments in movement details (if enabled in UI):
+   - upload
+   - download
+   - delete
+
+## CI
+
+GitHub Actions workflow (`.github/workflows/docker-image.yml`) does:
+1. backend install + tests
+2. frontend install + build
+3. build/push multi-arch Docker images:
+   - `ghcr.io/<owner>/<repo>-backend`
+   - `ghcr.io/<owner>/<repo>-frontend`
+
+## Backend tests
+>>>>>>> main
+
+Run locally:
+
+```bash
+<<<<<<< codex/stabilize-phase-1-mvp-features
 curl -L -H "Authorization: Bearer <TOKEN>"   "http://localhost:4000/api/transactions/export?date_from=2026-01-01&type=expense"   -o flussio_movimenti.csv
 ```
 
@@ -137,6 +197,8 @@ GitHub Actions workflow (`.github/workflows/docker-image.yml`) does:
 Run locally:
 
 ```bash
+=======
+>>>>>>> main
 cd backend
 npm ci
 DATABASE_URL=postgres://flussio:flussio@localhost:5432/flussio_test JWT_SECRET=test_secret npm test
