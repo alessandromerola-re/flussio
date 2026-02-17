@@ -17,7 +17,7 @@ const LoginPage = ({ onLogin }) => {
     setLoading(true);
     try {
       const data = await api.login({ email, password });
-      setToken(data.token);
+      setToken(data.token, data.role);
       onLogin(data.token);
       navigate('/dashboard');
     } catch (err) {

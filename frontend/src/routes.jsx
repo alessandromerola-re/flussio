@@ -3,6 +3,10 @@ import LoginPage from './pages/LoginPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import MovementsPage from './pages/MovementsPage.jsx';
 import RegistryPage from './pages/RegistryPage.jsx';
+import JobDetailPage from './pages/JobDetailPage.jsx';
+import RecurringTemplatesPage from './pages/RecurringTemplatesPage.jsx';
+import UsersAdminPage from './pages/UsersAdminPage.jsx';
+import RoadmapPage from './pages/RoadmapPage.jsx';
 
 const routes = ({ setTokenState, token }) => [
   {
@@ -24,6 +28,22 @@ const routes = ({ setTokenState, token }) => [
   {
     path: '/registry',
     element: token ? <RegistryPage /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '/jobs/:id',
+    element: token ? <JobDetailPage /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '/recurring',
+    element: token ? <RecurringTemplatesPage /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '/users',
+    element: token ? <UsersAdminPage /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '/roadmap',
+    element: token ? <RoadmapPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/',
