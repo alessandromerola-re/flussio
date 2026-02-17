@@ -12,10 +12,7 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const result = await query(
-      'SELECT id, company_id, email, password_hash, role, is_active FROM users WHERE email = $1',
-      [email]
-    );
+    const result = await query('SELECT * FROM users WHERE email = $1', [email]);
 
     if (result.rowCount === 0) {
       return res.status(401).json({ error_code: 'AUTH_INVALID_CREDENTIALS' });
@@ -32,7 +29,12 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { user_id: user.id, company_id: user.company_id, email: user.email, role: user.role || 'admin' },
+      {
+        user_id: user.id,
+        company_id: user.company_id,
+        email: user.email,
+        role: user.role || 'admin',
+      },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
