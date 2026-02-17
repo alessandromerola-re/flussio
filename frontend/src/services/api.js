@@ -114,6 +114,13 @@ export const api = {
     const queryString = toQueryString(filters);
     return request(`/reports/job/${jobId}/export.csv${queryString}`, { responseType: 'blob', includeHeaders: true });
   },
+  getRecurringTemplates: () => request('/recurring-templates'),
+  getRecurringTemplate: (id) => request(`/recurring-templates/${id}`),
+  createRecurringTemplate: (payload) => request('/recurring-templates', { method: 'POST', body: JSON.stringify(payload) }),
+  updateRecurringTemplate: (id, payload) => request(`/recurring-templates/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteRecurringTemplate: (id) => request(`/recurring-templates/${id}`, { method: 'DELETE' }),
+  generateRecurringTemplateNow: (id) => request(`/recurring-templates/${id}/generate-now`, { method: 'POST' }),
+  generateRecurringDue: () => request('/recurring-templates/generate-due', { method: 'POST' }),
   getTransactions: (input = 30) => {
     if (typeof input === 'number') {
       return request(`/transactions?limit=${input}`);

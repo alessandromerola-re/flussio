@@ -698,6 +698,11 @@ const MovementsPage = () => {
                   <div className="muted">{t('pages.movements.account')}: {formatAccounts(movement.accounts)}</div>
                   <div className="muted">{t('pages.movements.category')}: {movement.category_name || t('common.none')}</div>
                   <div className="muted">{t('pages.movements.contact')}: {movement.contact_name || t('common.none')}</div>
+                  {movement.recurring_template_title && (
+                    <div className="muted">
+                      {t('pages.recurring.badge')}: <a href={`/recurring?template_id=${movement.recurring_template_id}`}>{movement.recurring_template_title}</a>
+                    </div>
+                  )}
                   {attachmentCount > 0 && (
                     <div className="attachment-indicator" aria-label={`${attachmentCount} attachments`}>
                       📎 {attachmentCount}
@@ -725,6 +730,9 @@ const MovementsPage = () => {
             <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.job')}:</strong> {selected.job_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
+            {selected.recurring_template_title && (
+              <p><strong>{t('pages.recurring.badge')}:</strong> <a href={`/recurring?template_id=${selected.recurring_template_id}`}>{selected.recurring_template_title}</a></p>
+            )}
             <div>
               <strong>{t('pages.movements.attachments')}:</strong>
               <ul>

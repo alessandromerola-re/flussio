@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import MovementsPage from './pages/MovementsPage.jsx';
 import RegistryPage from './pages/RegistryPage.jsx';
 import JobDetailPage from './pages/JobDetailPage.jsx';
+import RecurringTemplatesPage from './pages/RecurringTemplatesPage.jsx';
 
 const routes = ({ setTokenState, token }) => [
   {
@@ -29,6 +30,10 @@ const routes = ({ setTokenState, token }) => [
   {
     path: '/jobs/:id',
     element: token ? <JobDetailPage /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '/recurring',
+    element: token ? <RecurringTemplatesPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/',

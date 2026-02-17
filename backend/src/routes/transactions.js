@@ -142,6 +142,7 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
     ct.name AS contact_name,
     p.name AS property_name,
     j.name AS job_name,
+    rt.title AS recurring_template_title,
     (
       SELECT COUNT(*)::int
       FROM attachments att
@@ -163,10 +164,11 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
   LEFT JOIN contacts ct ON t.contact_id = ct.id
   LEFT JOIN properties p ON t.property_id = p.id
   LEFT JOIN jobs j ON t.job_id = j.id
+  LEFT JOIN recurring_templates rt ON t.recurring_template_id = rt.id
   LEFT JOIN transaction_accounts ta ON t.id = ta.transaction_id
   LEFT JOIN accounts a ON ta.account_id = a.id
   WHERE ${whereSql}
-  GROUP BY t.id, c.name, ct.name, p.name, j.name
+  GROUP BY t.id, c.name, ct.name, p.name, j.name, rt.title
   ORDER BY t.date DESC, t.id DESC
   ${includePagination ? `LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}` : ''}
 `;

@@ -64,6 +64,7 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_optional_migrate_properties_to_jobs.sql
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/004_20260216__attachments_metadata.sql
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/005_20260216__extend_jobs_and_reports_index.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/006_20260216__recurring_templates_and_runs.sql
 ```
 
 
@@ -162,6 +163,7 @@ Apply the migration for extended jobs/report indexes:
 
 ```bash
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/005_20260216__extend_jobs_and_reports_index.sql
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/006_20260216__recurring_templates_and_runs.sql
 ```
 
 Report endpoints:
@@ -184,3 +186,57 @@ Manual verification checklist:
 4. Verify category breakdown values.
 5. Click "Go to movements": movements page opens with job filter pre-selected.
 6. Export job CSV downloads correctly.
+
+
+## Recurring templates (Phase 2 PR#1)
+
+Environment flags:
+
+```bash
+RECURRING_GENERATOR_ENABLED=true
+RECURRING_GENERATOR_INTERVAL_MIN=5
+```
+
+Scheduling rules (Europe/Rome):
+- Monthly generation always runs on day 1 at 00:05.
+- If monthly `start_date` is day 1, first run is that date at 00:05.
+- Otherwise first monthly run is day 1 of next month at 00:05.
+
+Endpoints:
+
+```bash
+# list/create/update/delete templates
+GET    /api/recurring-templates
+POST   /api/recurring-templates
+GET    /api/recurring-templates/:id
+PUT    /api/recurring-templates/:id
+DELETE /api/recurring-templates/:id
+
+# generate one template now
+POST   /api/recurring-templates/:id/generate-now
+
+# generate all due templates
+POST   /api/recurring-templates/generate-due
+```
+
+Quick curl checks:
+
+```bash
+curl -X POST -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Canone mensile","frequency":"monthly","interval":1,"amount":850,"movement_type":"income"}' \
+  http://localhost:4000/api/recurring-templates
+
+curl -X POST -H "Authorization: Bearer <TOKEN>" \
+  http://localhost:4000/api/recurring-templates/1/generate-now
+
+curl -X POST -H "Authorization: Bearer <TOKEN>" \
+  http://localhost:4000/api/recurring-templates/generate-due
+```
+
+Manual QA checklist:
+1. Create a monthly template and generate now.
+2. Trigger generate-now twice in same cycle and verify second call is skipped.
+3. Verify generated movement has recurring badge in Movements list/detail.
+4. Test yearly template with 29/02 anchor and verify fallback to 28/02 in non-leap year.
+5. Set end_date in the past and verify template stops generating.

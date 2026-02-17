@@ -11,6 +11,7 @@ import transactionsRoutes from './routes/transactions.js';
 import attachmentsRoutes from './routes/attachments.js';
 import dashboardRoutes from './routes/dashboard.js';
 import reportsRoutes from './routes/reports.js';
+import recurringTemplatesRoutes from './routes/recurringTemplates.js';
 import { authMiddleware } from './middleware/auth.js';
 
 dotenv.config();
@@ -51,6 +52,7 @@ app.use('/api/transactions', authMiddleware, transactionsRoutes);
 app.use('/api/attachments', authMiddleware, attachmentsRoutes);
 app.use('/api/dashboard', authMiddleware, dashboardRoutes);
 app.use('/api/reports', authMiddleware, reportsRoutes);
+app.use('/api/recurring-templates', authMiddleware, recurringTemplatesRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error_code: 'NOT_FOUND' });
