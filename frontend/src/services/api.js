@@ -189,3 +189,12 @@ export const can = (action, resource = null) => {
   const permission = actionToPermission[action] || action;
   return canPermission(permission);
 };
+
+const rolePermissions = {
+  viewer: { read: true, write: false, delete_sensitive: false, export: false, users_manage: false },
+  operatore: { read: true, write: true, delete_sensitive: false, export: false, users_manage: false },
+  editor: { read: true, write: true, delete_sensitive: true, export: true, users_manage: false },
+  admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
+};
+
+export const canPermission = (permission) => Boolean(rolePermissions[getRole()]?.[permission]);

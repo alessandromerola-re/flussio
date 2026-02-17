@@ -116,6 +116,8 @@ Upload size limit: 20MB per file (configurable with `ATTACHMENT_MAX_MB`, default
 
 If you run frontend behind Nginx, configure `client_max_body_size` (e.g. `20M`) to avoid HTTP 413 before backend validation.
 
+If you run frontend behind Nginx, configure `client_max_body_size` (e.g. `20M`) to avoid HTTP 413 before backend validation.
+
 ## Phase 1 smoke test checklist
 
 1. Login with `dev@flussio.local / flussio123`
