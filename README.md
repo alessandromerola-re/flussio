@@ -240,3 +240,44 @@ Manual QA checklist:
 3. Verify generated movement has recurring badge in Movements list/detail.
 4. Test yearly template with 29/02 anchor and verify fallback to 28/02 in non-leap year.
 5. Set end_date in the past and verify template stops generating.
+
+
+## Roles and audit (Phase 2 PR#2)
+
+Roles supported:
+- `admin`
+- `editor`
+- `operatore`
+- `viewer`
+
+Permission model (enforced backend):
+- viewer: read only
+- operatore: read + write, no sensitive delete, no exports
+- editor: read + write + sensitive delete + exports
+- admin: all + users management
+
+Audit log:
+- table: `audit_log`
+- tracks create/update/delete on movements/jobs/recurring_templates/attachments
+
+Migration:
+
+```bash
+psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/007_20260216__roles_audit_and_scaffolding.sql
+```
+
+## PR#3 scaffolding
+
+Enabled scaffolding includes:
+- Admin users API (`/api/users`)
+- Password reset token scaffold (`/api/users/:id/reset-password-token`)
+- Roadmap scaffold endpoint (`/api/scaffolding/roadmap`)
+- Placeholder DB schema for contracts and reset tokens
+
+Env:
+
+```bash
+RESET_EMAIL_ENABLED=false
+```
+
+If `RESET_EMAIL_ENABLED=false`, admin reset endpoint returns token for dev/manual flow.

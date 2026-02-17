@@ -1,13 +1,18 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const getToken = () => localStorage.getItem('flussio_token');
+export const getRole = () => localStorage.getItem('flussio_role') || 'admin';
 
-export const setToken = (token) => {
+export const setToken = (token, role = null) => {
   localStorage.setItem('flussio_token', token);
+  if (role) {
+    localStorage.setItem('flussio_role', role);
+  }
 };
 
 export const clearToken = () => {
   localStorage.removeItem('flussio_token');
+  localStorage.removeItem('flussio_role');
 };
 
 const toQueryString = (params = {}) => {
@@ -147,4 +152,18 @@ export const api = {
   getSummary: (period) => request(`/dashboard/summary?period=${period}`),
   getCashflow: (period) => request(`/dashboard/cashflow?period=${period}`),
   getTopCategories: (period, direction) => request(`/dashboard/top-categories?period=${period}&direction=${direction}`),
+  getUsers: () => request('/users'),
+  createUser: (payload) => request('/users', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (id, payload) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  createResetToken: (id) => request(`/users/${id}/reset-password-token`, { method: 'POST' }),
+  getScaffoldingRoadmap: () => request('/scaffolding/roadmap'),
 };
+
+const rolePermissions = {
+  viewer: { read: true, write: false, delete_sensitive: false, export: false, users_manage: false },
+  operatore: { read: true, write: true, delete_sensitive: false, export: false, users_manage: false },
+  editor: { read: true, write: true, delete_sensitive: true, export: true, users_manage: false },
+  admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
+};
+
+export const canPermission = (permission) => Boolean(rolePermissions[getRole()]?.[permission]);

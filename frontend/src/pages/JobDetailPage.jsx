@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api } from '../services/api.js';
+import { api, canPermission } from '../services/api.js';
 
 const defaultFilters = {
   date_from: '',
@@ -111,7 +111,7 @@ const JobDetailPage = () => {
             </div>
             <div className="row-actions">
               <button type="button" onClick={handleApplyFilters}>{t('buttons.apply')}</button>
-              <button type="button" className="ghost" onClick={handleExport}>{t('buttons.exportJobCsv')}</button>
+              {canPermission('export') && <button type="button" className="ghost" onClick={handleExport}>{t('buttons.exportJobCsv')}</button>}
             </div>
           </div>
 

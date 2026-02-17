@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import express from 'express';
 import { getClient, query } from '../db/index.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const router = express.Router();
 const uploadsRoot = path.resolve(process.cwd(), 'uploads');
@@ -203,6 +204,7 @@ const uploadAttachmentHandler = async (req, res) => {
     );
 
     await client.query('COMMIT');
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'create', entityType: 'attachments', entityId: insertResult.rows[0].id, meta: { transaction_id: transaction.id } });
     return res.status(201).json(insertResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -249,6 +251,7 @@ router.delete('/:id', async (req, res) => {
       }
     });
 
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'attachments', entityId: id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     await client.query('ROLLBACK');

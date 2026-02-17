@@ -1,5 +1,6 @@
 import express from 'express';
 import { getClient, query } from '../db/index.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const router = express.Router();
 
@@ -410,6 +411,7 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'create', entityType: 'movements', entityId: transaction.id, meta: { type: transaction.type } });
     return res.status(201).json(transaction);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -568,6 +570,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'update', entityType: 'movements', entityId: id, meta: { type } });
     return res.json(updatedResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -627,6 +630,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'movements', entityId: id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     await client.query('ROLLBACK');

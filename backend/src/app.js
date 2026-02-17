@@ -12,7 +12,10 @@ import attachmentsRoutes from './routes/attachments.js';
 import dashboardRoutes from './routes/dashboard.js';
 import reportsRoutes from './routes/reports.js';
 import recurringTemplatesRoutes from './routes/recurringTemplates.js';
+import usersRoutes from './routes/users.js';
+import scaffoldingRoutes from './routes/scaffolding.js';
 import { authMiddleware } from './middleware/auth.js';
+import { requireMethodPermission } from './middleware/permissions.js';
 
 dotenv.config();
 
@@ -43,16 +46,18 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 
-app.use('/api/accounts', authMiddleware, accountsRoutes);
-app.use('/api/categories', authMiddleware, categoriesRoutes);
-app.use('/api/contacts', authMiddleware, contactsRoutes);
-app.use('/api/properties', authMiddleware, propertiesRoutes);
-app.use('/api/jobs', authMiddleware, jobsRoutes);
-app.use('/api/transactions', authMiddleware, transactionsRoutes);
-app.use('/api/attachments', authMiddleware, attachmentsRoutes);
-app.use('/api/dashboard', authMiddleware, dashboardRoutes);
-app.use('/api/reports', authMiddleware, reportsRoutes);
-app.use('/api/recurring-templates', authMiddleware, recurringTemplatesRoutes);
+app.use('/api/accounts', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), accountsRoutes);
+app.use('/api/categories', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), categoriesRoutes);
+app.use('/api/contacts', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), contactsRoutes);
+app.use('/api/properties', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), propertiesRoutes);
+app.use('/api/jobs', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), jobsRoutes);
+app.use('/api/transactions', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), transactionsRoutes);
+app.use('/api/attachments', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', DELETE: 'delete_sensitive' }), attachmentsRoutes);
+app.use('/api/dashboard', authMiddleware, requireMethodPermission({ GET: 'read' }), dashboardRoutes);
+app.use('/api/reports', authMiddleware, requireMethodPermission({ GET: 'read' }), reportsRoutes);
+app.use('/api/recurring-templates', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), recurringTemplatesRoutes);
+app.use('/api/users', authMiddleware, usersRoutes);
+app.use('/api/scaffolding', authMiddleware, requireMethodPermission({ GET: 'read' }), scaffoldingRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error_code: 'NOT_FOUND' });

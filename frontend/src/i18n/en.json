@@ -157,5 +157,13 @@
   "pages.recurring.saveSuccess": "Recurring template saved.",
   "pages.recurring.movementLinks": "Recurring movements",
   "pages.recurring.movementLinksHint": "Generated movements show a badge and link to template.",
-  "pages.recurring.accountsLoaded": "Accounts loaded"
+  "pages.recurring.accountsLoaded": "Accounts loaded",
+  "nav.users": "Users",
+  "nav.roadmap": "Roadmap",
+  "forms.role": "Role",
+  "errors.FORBIDDEN": "Operation not allowed.",
+  "pages.users.title": "Users management",
+  "pages.users.generateReset": "Generate password reset",
+  "pages.users.resetToken": "Reset token (dev)",
+  "pages.users.resetByEmail": "Reset sent by email"
 }

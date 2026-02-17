@@ -1,5 +1,6 @@
 import express from 'express';
 import { query } from '../db/index.js';
+import { requirePermission } from '../middleware/permissions.js';
 
 const router = express.Router();
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -120,7 +121,7 @@ router.get('/job/:jobId/summary', async (req, res) => {
   }
 });
 
-router.get('/job/:jobId/export.csv', async (req, res) => {
+router.get('/job/:jobId/export.csv', requirePermission('export'), async (req, res) => {
   const jobId = Number(req.params.jobId);
   if (!Number.isInteger(jobId)) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });

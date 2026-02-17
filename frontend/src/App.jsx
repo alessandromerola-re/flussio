@@ -23,6 +23,8 @@ const App = () => {
       { path: '/movements', label: t('nav.movements') },
       { path: '/registry', label: t('nav.registry') },
       { path: '/recurring', label: t('nav.recurring') },
+      { path: '/users', label: t('nav.users') },
+      { path: '/roadmap', label: t('nav.roadmap') },
     ],
     [t]
   );

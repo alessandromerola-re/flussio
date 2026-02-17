@@ -157,5 +157,13 @@
   "pages.recurring.saveSuccess": "Template ricorrente salvato.",
   "pages.recurring.movementLinks": "Movimenti ricorrenti",
   "pages.recurring.movementLinksHint": "I movimenti generati mostreranno badge e link al template.",
-  "pages.recurring.accountsLoaded": "Conti caricati"
+  "pages.recurring.accountsLoaded": "Conti caricati",
+  "nav.users": "Utenti",
+  "nav.roadmap": "Roadmap",
+  "forms.role": "Ruolo",
+  "errors.FORBIDDEN": "Operazione non consentita.",
+  "pages.users.title": "Gestione utenti",
+  "pages.users.generateReset": "Genera reset password",
+  "pages.users.resetToken": "Token reset (dev)",
+  "pages.users.resetByEmail": "Reset inviato via email"
 }

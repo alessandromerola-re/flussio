@@ -1,6 +1,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { computeNextRunAtForTemplate, generateDueTemplates, generateTemplateNow } from '../services/recurring.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const router = express.Router();
 const validFrequencies = ['weekly', 'monthly', 'yearly'];
@@ -129,6 +130,7 @@ router.get('/:id', async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'update', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -177,6 +179,7 @@ router.post('/', async (req, res) => {
       ]
     );
 
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'create', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
     return res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -260,6 +263,7 @@ router.delete('/:id', async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     console.error(error);
@@ -278,6 +282,7 @@ router.post('/:id/generate-now', async (req, res) => {
       return res.json({ status: 'skipped', reason: result.reason });
     }
 
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'generate', entityType: 'recurring_templates', entityId: req.params.id, meta: result });
     return res.json({ status: 'created', ...result });
   } catch (error) {
     console.error(error);

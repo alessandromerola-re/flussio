@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { api } from '../services/api.js';
+import { api, canPermission } from '../services/api.js';
 
 const initialForm = {
   title: '',
@@ -127,7 +127,7 @@ const RecurringTemplatesPage = () => {
       {error && <div className="error">{error}</div>}
 
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
-        <button type="button" onClick={handleGenerateDue}>{t('buttons.generateDue')}</button>
+        {canPermission('write') && <button type="button" onClick={handleGenerateDue}>{t('buttons.generateDue')}</button>}
       </div>
 
       <div className="grid-two">
@@ -177,7 +177,7 @@ const RecurringTemplatesPage = () => {
           <label>{t('pages.registry.propertiesBeta')}<select value={form.property_id} onChange={(event) => setForm((prev) => ({ ...prev, property_id: event.target.value }))}><option value="">{t('common.none')}</option>{properties.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.job')}<select value={form.job_id} onChange={(event) => setForm((prev) => ({ ...prev, job_id: event.target.value }))}><option value="">{t('common.none')}</option>{jobs.map((x)=><option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>
           <label>{t('forms.notes')}<input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} /></label>
-          <button type="submit">{t('buttons.save')}</button>
+          {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
         </form>
 
         <div className="card">
@@ -193,7 +193,7 @@ const RecurringTemplatesPage = () => {
                   {template.recurring_template_id && <div className="muted">#{template.recurring_template_id}</div>}
                 </div>
                 <div className="row-actions">
-                  <button
+                  {canPermission('write') && <button
                     type="button"
                     className="ghost"
                     onClick={() => {
@@ -219,12 +219,12 @@ const RecurringTemplatesPage = () => {
                     }}
                   >
                     {t('buttons.edit')}
-                  </button>
-                  <button type="button" className="ghost" onClick={() => handleGenerateNow(template.id)}>{t('buttons.generateNow')}</button>
-                  <button type="button" className="danger" onClick={async () => {
+                  </button>}
+                  {canPermission('write') && <button type="button" className="ghost" onClick={() => handleGenerateNow(template.id)}>{t('buttons.generateNow')}</button>}
+                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={async () => {
                     await api.deleteRecurringTemplate(template.id);
                     await loadData();
-                  }}>{template.is_active ? t('buttons.deactivate') : t('buttons.activate')}</button>
+                  }}>{template.is_active ? t('buttons.deactivate') : t('buttons.activate')}</button>}
                 </div>
               </li>
             ))}

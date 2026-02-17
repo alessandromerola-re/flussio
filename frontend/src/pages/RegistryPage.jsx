@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../services/api.js';
+import { api, canPermission } from '../services/api.js';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = {
@@ -261,7 +261,7 @@ const RegistryPage = () => {
                 }
               />
             </label>
-            <button type="submit">{t('buttons.save')}</button>
+            {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
           </form>
           <div className="card">
             <ul className="list">
@@ -274,7 +274,7 @@ const RegistryPage = () => {
                     <div className="muted">{t('forms.currentBalance')}: € {Number(account.balance).toFixed(2)}</div>
                   </div>
                   <div className="row-actions">
-                    <button
+                    {canPermission('write') && <button
                       type="button"
                       className="ghost"
                       onClick={() => {
@@ -288,10 +288,10 @@ const RegistryPage = () => {
                       }}
                     >
                       {t('buttons.edit')}
-                    </button>
-                    <button type="button" className="danger" onClick={() => handleDelete('accounts', account.id)}>
+                    </button>}
+                    {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('accounts', account.id)}>
                       {t('buttons.delete')}
-                    </button>
+                    </button>}
                   </div>
                 </li>
               ))}
@@ -349,7 +349,7 @@ const RegistryPage = () => {
                 onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })}
               />
             </label>
-            <button type="submit">{t('buttons.save')}</button>
+            {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
           </form>
           <div className="card">
             <ul className="list">
@@ -361,25 +361,29 @@ const RegistryPage = () => {
                       <strong>{category.name}</strong>
                     </div>
                     <div className="row-actions">
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() => {
-                          setCategoryForm({
-                            name: category.name,
-                            direction: category.direction,
-                            parent_id: category.parent_id || '',
-                            color: category.color || '#2ecc71',
-                            is_active: category.is_active,
-                          });
-                          setEditingId(category.id);
-                        }}
-                      >
-                        {t('buttons.edit')}
-                      </button>
-                      <button type="button" className="danger" onClick={() => handleDelete('categories', category.id)}>
-                        {t('buttons.delete')}
-                      </button>
+                      {canPermission('write') && (
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => {
+                            setCategoryForm({
+                              name: category.name,
+                              direction: category.direction,
+                              parent_id: category.parent_id || '',
+                              color: category.color || '#2ecc71',
+                              is_active: category.is_active,
+                            });
+                            setEditingId(category.id);
+                          }}
+                        >
+                          {t('buttons.edit')}
+                        </button>
+                      )}
+                      {canPermission('delete_sensitive') && (
+                        <button type="button" className="danger" onClick={() => handleDelete('categories', category.id)}>
+                          {t('buttons.delete')}
+                        </button>
+                      )}
                     </div>
                   </div>
                   {category.children.length > 0 && (
@@ -391,29 +395,33 @@ const RegistryPage = () => {
                             {child.name}
                           </div>
                           <div className="row-actions">
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={() => {
-                                setCategoryForm({
-                                  name: child.name,
-                                  direction: child.direction,
-                                  parent_id: child.parent_id || '',
-                                  color: child.color || '#2ecc71',
-                                  is_active: child.is_active,
-                                });
-                                setEditingId(child.id);
-                              }}
-                            >
-                              {t('buttons.edit')}
-                            </button>
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() => handleDelete('categories', child.id)}
-                            >
-                              {t('buttons.delete')}
-                            </button>
+                            {canPermission('write') && (
+                              <button
+                                type="button"
+                                className="ghost"
+                                onClick={() => {
+                                  setCategoryForm({
+                                    name: child.name,
+                                    direction: child.direction,
+                                    parent_id: child.parent_id || '',
+                                    color: child.color || '#2ecc71',
+                                    is_active: child.is_active,
+                                  });
+                                  setEditingId(child.id);
+                                }}
+                              >
+                                {t('buttons.edit')}
+                              </button>
+                            )}
+                            {canPermission('delete_sensitive') && (
+                              <button
+                                type="button"
+                                className="danger"
+                                onClick={() => handleDelete('categories', child.id)}
+                              >
+                                {t('buttons.delete')}
+                              </button>
+                            )}
                           </div>
                         </li>
                       ))}
@@ -471,7 +479,7 @@ const RegistryPage = () => {
                 ))}
               </select>
             </label>
-            <button type="submit">{t('buttons.save')}</button>
+            {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
           </form>
           <div className="card">
             <ul className="list">
@@ -482,7 +490,7 @@ const RegistryPage = () => {
                     <div className="muted">{contact.email || t('common.none')}</div>
                   </div>
                   <div className="row-actions">
-                    <button
+                    {canPermission('write') && <button
                       type="button"
                       className="ghost"
                       onClick={() => {
@@ -497,10 +505,143 @@ const RegistryPage = () => {
                       }}
                     >
                       {t('buttons.edit')}
-                    </button>
-                    <button type="button" className="danger" onClick={() => handleDelete('contacts', contact.id)}>
+                    </button>}
+                    {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('contacts', contact.id)}>
                       {t('buttons.delete')}
+                    </button>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {tab === 'jobs' && (
+        <div className="grid-two">
+          <form className="card" onSubmit={handleJobSubmit}>
+            <h2>{t('pages.registry.jobs')}</h2>
+            <label>
+              {t('forms.jobCode')}
+              <input
+                type="text"
+                value={jobForm.code}
+                onChange={(event) => setJobForm({ ...jobForm, code: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.jobTitle')}
+              <input
+                type="text"
+                value={jobForm.title}
+                onChange={(event) => setJobForm({ ...jobForm, title: event.target.value })}
+                required
+              />
+            </label>
+            <label>
+              {t('forms.jobStatus')}
+              <select
+                value={jobForm.is_closed ? 'closed' : 'open'}
+                onChange={(event) => setJobForm({ ...jobForm, is_closed: event.target.value === 'closed' })}
+              >
+                <option value="open">{t('labels.jobOpen')}</option>
+                <option value="closed">{t('labels.jobClosed')}</option>
+              </select>
+            </label>
+            <label>
+              {t('forms.jobBudget')}
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={jobForm.budget}
+                onChange={(event) => setJobForm({ ...jobForm, budget: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.jobStartDate')}
+              <input
+                type="date"
+                value={jobForm.start_date}
+                onChange={(event) => setJobForm({ ...jobForm, start_date: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.jobEndDate')}
+              <input
+                type="date"
+                value={jobForm.end_date}
+                onChange={(event) => setJobForm({ ...jobForm, end_date: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.notes')}
+              <input
+                type="text"
+                value={jobForm.notes}
+                onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('forms.referenceContact')}
+              <select
+                value={jobForm.contact_id}
+                onChange={(event) => setJobForm({ ...jobForm, contact_id: event.target.value })}
+              >
+                <option value="">{t('common.none')}</option>
+                {contacts.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
+          </form>
+          <div className="card">
+            <ul className="list">
+              {jobs.map((job) => (
+                <li key={job.id} className="list-item-row">
+                  <div>
+                    <button
+                      type="button"
+                      className="linklike"
+                      onClick={() => navigate(`/jobs/${job.id}`)}
+                    >
+                      <strong>{job.title}</strong>
                     </button>
+                    <div className="muted">{t('forms.jobCode')}: {job.code || t('common.none')}</div>
+                    <div className="muted">{t('forms.jobStatus')}: {job.is_closed ? t('labels.jobClosed') : t('labels.jobOpen')}</div>
+                    <div className="muted">{t('forms.referenceContact')}: {job.contact_name || t('common.none')}</div>
+                    <div className="muted">{t('forms.jobBudget')}: {job.budget != null ? `€ ${Number(job.budget).toFixed(2)}` : t('common.none')}</div>
+                  </div>
+                  <div className="row-actions">
+                    {canPermission('write') && <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setJobForm({
+                          code: job.code || '',
+                          title: job.title || '',
+                          notes: job.notes || '',
+                          contact_id: job.contact_id || '',
+                          is_active: job.is_active,
+                          is_closed: job.is_closed,
+                          budget: job.budget == null ? '' : String(job.budget),
+                          start_date: job.start_date ? String(job.start_date).slice(0, 10) : '',
+                          end_date: job.end_date ? String(job.end_date).slice(0, 10) : '',
+                        });
+                        setEditingId(job.id);
+                      }}
+                    >
+                      {t('buttons.edit')}
+                    </button>}
+                    <button type="button" className="ghost" onClick={() => navigate(`/jobs/${job.id}`)}>
+                      {t('buttons.open')}
+                    </button>
+                    {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('jobs', job.id)}>
+                      {t('buttons.delete')}
+                    </button>}
                   </div>
                 </li>
               ))}
@@ -677,7 +818,7 @@ const RegistryPage = () => {
                 ))}
               </select>
             </label>
-            <button type="submit">{t('buttons.save')}</button>
+            {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
           </form>
           <div className="card">
             <ul className="list">
@@ -691,7 +832,7 @@ const RegistryPage = () => {
                     </div>
                   </div>
                   <div className="row-actions">
-                    <button
+                    {canPermission('write') && <button
                       type="button"
                       className="ghost"
                       onClick={() => {
@@ -705,10 +846,10 @@ const RegistryPage = () => {
                       }}
                     >
                       {t('buttons.edit')}
-                    </button>
-                    <button type="button" className="danger" onClick={() => handleDelete('properties', property.id)}>
+                    </button>}
+                    {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('properties', property.id)}>
                       {t('buttons.delete')}
-                    </button>
+                    </button>}
                   </div>
                 </li>
               ))}

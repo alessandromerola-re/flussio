@@ -1,5 +1,6 @@
 import express from 'express';
 import { query } from '../db/index.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const router = express.Router();
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -179,6 +180,14 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
 
+    await writeAuditLog({
+      companyId: req.user.company_id,
+      userId: req.user.user_id,
+      action: 'update',
+      entityType: 'jobs',
+      entityId: result.rows[0].id,
+      meta: { title: result.rows[0].title },
+    });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -227,6 +236,14 @@ router.post('/', async (req, res) => {
         payload.end_date,
       ]
     );
+    await writeAuditLog({
+      companyId: req.user.company_id,
+      userId: req.user.user_id,
+      action: 'create',
+      entityType: 'jobs',
+      entityId: result.rows[0].id,
+      meta: { title: result.rows[0].title },
+    });
     return res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -282,6 +299,14 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
 
+    await writeAuditLog({
+      companyId: req.user.company_id,
+      userId: req.user.user_id,
+      action: 'update',
+      entityType: 'jobs',
+      entityId: result.rows[0].id,
+      meta: { title: result.rows[0].title },
+    });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -307,6 +332,14 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
 
+    await writeAuditLog({
+      companyId: req.user.company_id,
+      userId: req.user.user_id,
+      action: 'delete',
+      entityType: 'jobs',
+      entityId: id,
+      meta: {},
+    });
     return res.status(204).send();
   } catch (error) {
     console.error(error);

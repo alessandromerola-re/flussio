@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api } from '../services/api.js';
+import { api, canPermission } from '../services/api.js';
 import { formatDateIT } from '../utils/date.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
 
@@ -559,7 +559,7 @@ const MovementsPage = () => {
           {error && <div className="error">{error}</div>}
           {submitMessage && <div className={error ? 'error' : 'success'}>{submitMessage}</div>}
           <div className="row-actions">
-            <button type="submit">{editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>
+            {canPermission('write') && <button type="submit">{editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>}
             {editingMovementId && (
               <button
                 type="button"
@@ -774,7 +774,7 @@ const MovementsPage = () => {
               {uploadError && <div className="error">{uploadError}</div>}
             </div>
             <div className="modal-actions">
-              <button type="button" onClick={handleStartEdit}>{t('buttons.edit')}</button>
+              {canPermission('write') && <button type="button" onClick={handleStartEdit}>{t('buttons.edit')}</button>}
               <button
                 type="button"
                 className="ghost"
@@ -788,7 +788,7 @@ const MovementsPage = () => {
               >
                 {t('buttons.close')}
               </button>
-              <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>
+              {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>}
             </div>
           </div>
         </div>
