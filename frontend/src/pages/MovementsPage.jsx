@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, canPermission } from '../services/api.js';
+import { getErrorMessage } from '../utils/errorMessages.js';
 import { formatDateIT } from '../utils/date.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
 
@@ -81,7 +82,7 @@ const MovementsPage = () => {
     if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value);
 
     if (results.some((result) => result.status === 'rejected')) {
-      setLoadError(t('errors.SERVER_ERROR'));
+      setLoadError(getErrorMessage(t, null));
     }
   };
 
@@ -90,7 +91,7 @@ const MovementsPage = () => {
       const data = await api.getTransactions(activeFilters);
       setMovements(data);
     } catch (loadMovementsError) {
-      setLoadError(t('errors.SERVER_ERROR'));
+      setLoadError(getErrorMessage(t, null));
     }
   };
 

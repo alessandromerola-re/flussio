@@ -1,7 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const getToken = () => localStorage.getItem('flussio_token');
-export const getRole = () => localStorage.getItem('flussio_role') || 'admin';
+export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
 
 export const setToken = (token, role = null) => {
   localStorage.setItem('flussio_token', token);
@@ -77,8 +77,11 @@ const request = async (path, options = {}) => {
   }
 
   if (!response.ok) {
-    const error = new Error(data?.message || response.statusText || 'Request failed');
-    error.code = data?.error_code || (response.status === 413 ? 'FILE_TOO_LARGE' : 'SERVER_ERROR');
+    const errorBody = data?.error || null;
+    const error = new Error(errorBody?.message || data?.message || response.statusText || 'Request failed');
+    error.code = errorBody?.code || data?.error_code || (response.status === 413 ? 'FILE_TOO_LARGE' : 'SERVER_ERROR');
+    error.field = errorBody?.field;
+    error.details = errorBody?.details || data?.details;
     throw error;
   }
 
@@ -157,6 +160,34 @@ export const api = {
   updateUser: (id, payload) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   createResetToken: (id) => request(`/users/${id}/reset-password-token`, { method: 'POST' }),
   getScaffoldingRoadmap: () => request('/scaffolding/roadmap'),
+};
+
+export const isRoadmapEnabled = () => String(import.meta.env.VITE_SHOW_ROADMAP || 'false').toLowerCase() === 'true';
+
+const rolePermissions = {
+  viewer: { read: true, write: false, delete_sensitive: false, export: false, users_manage: false },
+  operatore: { read: true, write: true, delete_sensitive: false, export: false, users_manage: false },
+  editor: { read: true, write: true, delete_sensitive: true, export: true, users_manage: false },
+  admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
+};
+
+export const canPermission = (permission) => Boolean(rolePermissions[getRole()]?.[permission]);
+
+const actionToPermission = {
+  read: 'read',
+  create: 'write',
+  update: 'write',
+  delete: 'delete_sensitive',
+  export: 'export',
+  manage_users: 'users_manage',
+};
+
+export const can = (action, resource = null) => {
+  if (resource === 'roadmap') {
+    return canPermission('users_manage') && isRoadmapEnabled();
+  }
+  const permission = actionToPermission[action] || action;
+  return canPermission(permission);
 };
 
 const rolePermissions = {

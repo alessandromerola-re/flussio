@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Route, Routes, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import routes from './routes.jsx';
-import { clearToken, getToken } from './services/api.js';
+import { can, clearToken, getToken } from './services/api.js';
 import { setLanguage } from './i18n/index.js';
 
 const App = () => {
@@ -23,8 +23,8 @@ const App = () => {
       { path: '/movements', label: t('nav.movements') },
       { path: '/registry', label: t('nav.registry') },
       { path: '/recurring', label: t('nav.recurring') },
-      { path: '/users', label: t('nav.users') },
-      { path: '/roadmap', label: t('nav.roadmap') },
+      ...(can('manage_users') ? [{ path: '/users', label: t('nav.users') }] : []),
+      ...(can('read', 'roadmap') ? [{ path: '/roadmap', label: t('nav.roadmap') }] : []),
     ],
     [t]
   );

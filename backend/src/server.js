@@ -4,6 +4,7 @@ import { query } from './db/index.js';
 import { generateDueTemplates } from './services/recurring.js';
 
 const port = process.env.PORT || 4000;
+const shouldAutoPatchSchema = String(process.env.DEV_SCHEMA_AUTO_PATCH || 'false').toLowerCase() === 'true';
 
 const ensureDevUser = async () => {
   const devEmail = process.env.DEV_USER_EMAIL || 'dev@flussio.local';
@@ -237,12 +238,18 @@ const startRecurringScheduler = () => {
 };
 
 const bootstrap = async () => {
-  await ensurePhase2Schema();
-  await ensureAttachmentsSchema();
-  await ensurePhase3Schema();
+  if (shouldAutoPatchSchema) {
+    await ensurePhase2Schema();
+    await ensureAttachmentsSchema();
+    await ensurePhase3Schema();
+  }
+
   await ensureDevUser();
 
   app.listen(port, () => {
+    if (!shouldAutoPatchSchema) {
+      console.log('Runtime schema auto patch disabled (DEV_SCHEMA_AUTO_PATCH=false). Use migrations for schema changes.');
+    }
     console.log(`Flussio backend running on port ${port}`);
     startRecurringScheduler();
   });

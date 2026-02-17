@@ -1,3 +1,5 @@
+import { sendError } from '../utils/httpErrors.js';
+
 const levels = {
   viewer: 1,
   operatore: 2,
@@ -18,7 +20,7 @@ export const requirePermission = (permission) => (req, res, next) => {
   const role = getRole(req);
   const allowed = rolePermissions[role]?.[permission] === true;
   if (!allowed) {
-    return res.status(403).json({ error_code: 'FORBIDDEN' });
+    return sendError(res, 403, 'FORBIDDEN', 'You do not have permission to perform this action.');
   }
   return next();
 };

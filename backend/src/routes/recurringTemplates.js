@@ -2,6 +2,7 @@ import express from 'express';
 import { query } from '../db/index.js';
 import { computeNextRunAtForTemplate, generateDueTemplates, generateTemplateNow } from '../services/recurring.js';
 import { writeAuditLog } from '../services/audit.js';
+import { sendError } from '../utils/httpErrors.js';
 
 const router = express.Router();
 const validFrequencies = ['weekly', 'monthly', 'yearly'];
@@ -43,27 +44,31 @@ const normalizeTemplatePayload = (payload = {}) => ({
 
 const validateReference = async (table, id, companyId) => {
   if (id == null) {
-    return true;
+    return { valid: true };
   }
   const result = await query(`SELECT id FROM ${table} WHERE id = $1 AND company_id = $2`, [id, companyId]);
   return result.rowCount > 0;
 };
 
 const validatePayload = async (payload, companyId) => {
-  if (!payload.title || !validFrequencies.includes(payload.frequency)) {
-    return false;
+  if (!payload.title) {
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'title' };
+  }
+
+  if (!validFrequencies.includes(payload.frequency)) {
+    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_FREQUENCY', field: 'frequency' };
   }
 
   if (!Number.isInteger(payload.interval) || payload.interval < 1) {
-    return false;
+    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_FREQUENCY', field: 'frequency' };
   }
 
   if (!(payload.amount > 0) || !['income', 'expense'].includes(payload.movement_type)) {
-    return false;
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
   }
 
   if (payload.start_date && payload.end_date && payload.end_date < payload.start_date) {
-    return false;
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
   }
 
   const refs = await Promise.all([
@@ -74,25 +79,25 @@ const validatePayload = async (payload, companyId) => {
   ]);
 
   if (refs.some((refOk) => !refOk)) {
-    return false;
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
   }
 
   if (payload.frequency === 'weekly') {
     if (payload.weekly_anchor_dow != null && (payload.weekly_anchor_dow < 1 || payload.weekly_anchor_dow > 7)) {
-      return false;
+      return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
     }
   }
 
   if (payload.frequency === 'yearly') {
     if (payload.yearly_anchor_mm != null && (payload.yearly_anchor_mm < 1 || payload.yearly_anchor_mm > 12)) {
-      return false;
+      return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
     }
     if (payload.yearly_anchor_dd != null && (payload.yearly_anchor_dd < 1 || payload.yearly_anchor_dd > 31)) {
-      return false;
+      return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
     }
   }
 
-  return true;
+  return { valid: true };
 };
 
 router.get('/', async (req, res) => {
@@ -117,7 +122,7 @@ router.get('/', async (req, res) => {
     return res.json(result.rows);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -128,20 +133,20 @@ router.get('/:id', async (req, res) => {
       [req.params.id, req.user.company_id]
     );
     if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'update', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
 router.post('/', async (req, res) => {
   const payload = normalizeTemplatePayload(req.body);
-  if (!(await validatePayload(payload, req.user.company_id))) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  const validation = await validatePayload(payload, req.user.company_id);
+  if (!validation.valid) {
+    return sendError(res, validation.status || 400, validation.errorCode, 'Template ricorrente non valido.', { field: validation.field });
   }
 
   const nextRunAt = computeNextRunAtForTemplate(payload);
@@ -183,14 +188,15 @@ router.post('/', async (req, res) => {
     return res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
 router.put('/:id', async (req, res) => {
   const payload = normalizeTemplatePayload(req.body);
-  if (!(await validatePayload(payload, req.user.company_id))) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  const validation = await validatePayload(payload, req.user.company_id);
+  if (!validation.valid) {
+    return sendError(res, validation.status || 400, validation.errorCode, 'Template ricorrente non valido.', { field: validation.field });
   }
 
   const nextRunAt = computeNextRunAtForTemplate(payload);
@@ -244,13 +250,13 @@ router.put('/:id', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
 
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -261,13 +267,13 @@ router.delete('/:id', async (req, res) => {
       [req.params.id, req.user.company_id]
     );
     if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
     await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -275,18 +281,18 @@ router.post('/:id/generate-now', async (req, res) => {
   try {
     const result = await generateTemplateNow(Number(req.params.id), req.user.company_id);
     if (result.notFound) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
 
     if (result.status === 'skipped') {
-      return res.json({ status: 'skipped', reason: result.reason });
+      return res.json({ status: 'skipped', code: 'RECURRING_ALREADY_GENERATED', reason: result.reason });
     }
 
     await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'generate', entityType: 'recurring_templates', entityId: req.params.id, meta: result });
     return res.json({ status: 'created', ...result });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -296,7 +302,7 @@ router.post('/generate-due', async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 

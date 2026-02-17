@@ -1,8 +1,14 @@
 import express from 'express';
+import { requirePermission } from '../middleware/permissions.js';
+import { sendError } from '../utils/httpErrors.js';
 
 const router = express.Router();
 
-router.get('/roadmap', async (req, res) => {
+router.get('/roadmap', requirePermission('users_manage'), async (req, res) => {
+  const showRoadmap = String(process.env.SHOW_ROADMAP || 'false').toLowerCase() === 'true';
+  if (!showRoadmap) {
+    return sendError(res, 404, 'NOT_FOUND', 'Roadmap non disponibile.');
+  }
   return res.json({
     users: {
       registration: 'feature-flagged',

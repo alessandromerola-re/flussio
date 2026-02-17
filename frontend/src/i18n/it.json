@@ -107,7 +107,7 @@
   "common.all": "Tutti",
   "pages.movements.uploadSuccess": "Caricato",
   "pages.movements.uploadError": "Errore durante il caricamento allegato.",
-  "errors.FILE_TOO_LARGE": "File troppo grande (max 10MB).",
+  "errors.FILE_TOO_LARGE": "File troppo grande. Dimensione massima: {{maxMb}} MB.",
   "pages.movements.createSuccess": "Movimento salvato con successo.",
   "pages.movements.createError": "Errore durante il salvataggio del movimento.",
   "pages.registry.jobs": "Commesse",
@@ -165,5 +165,10 @@
   "pages.users.title": "Gestione utenti",
   "pages.users.generateReset": "Genera reset password",
   "pages.users.resetToken": "Token reset (dev)",
-  "pages.users.resetByEmail": "Reset inviato via email"
+  "pages.users.resetByEmail": "Reset inviato via email",
+  "errors.JOB_CODE_ALREADY_EXISTS": "Codice commessa già usato.",
+  "errors.JOB_NOT_FOUND": "Commessa non trovata.",
+  "errors.VALIDATION_INVALID_DATE_RANGE": "Intervallo date non valido.",
+  "errors.RECURRING_INVALID_FREQUENCY": "Frequenza ricorrente non valida.",
+  "pages.roadmap.title": "Roadmap prodotto"
 }

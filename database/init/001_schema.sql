@@ -133,8 +133,6 @@ CREATE TABLE attachments (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-
-
 CREATE TABLE recurring_runs (
   id SERIAL PRIMARY KEY,
   template_id INTEGER NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
@@ -145,7 +143,6 @@ CREATE TABLE recurring_runs (
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   UNIQUE (template_id, cycle_key)
 );
-
 
 CREATE TABLE audit_log (
   id SERIAL PRIMARY KEY,
@@ -164,6 +161,19 @@ CREATE TABLE password_reset_tokens (
   token TEXT NOT NULL UNIQUE,
   expires_at TIMESTAMP NOT NULL,
   used_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE contracts (
+  id SERIAL PRIMARY KEY,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL,
+  tenant_contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+  start_date DATE,
+  end_date DATE,
+  monthly_rent NUMERIC(12, 2),
+  deposit NUMERIC(12, 2),
+  notes TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 

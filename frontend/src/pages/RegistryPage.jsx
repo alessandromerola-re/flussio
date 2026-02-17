@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, canPermission } from '../services/api.js';
+import { getErrorMessage } from '../utils/errorMessages.js';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = {
@@ -76,7 +77,7 @@ const RegistryPage = () => {
     }
 
     if (results.some((result) => result.status === 'rejected')) {
-      setLoadError(t('errors.SERVER_ERROR'));
+      setLoadError(getErrorMessage(t, null));
     }
   };
 

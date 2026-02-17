@@ -107,7 +107,7 @@
   "common.all": "All",
   "pages.movements.uploadSuccess": "Uploaded",
   "pages.movements.uploadError": "Attachment upload failed.",
-  "errors.FILE_TOO_LARGE": "File too large (max 10MB).",
+  "errors.FILE_TOO_LARGE": "File too large. Maximum size: {{maxMb}} MB.",
   "pages.movements.createSuccess": "Movement saved successfully.",
   "pages.movements.createError": "Error while saving movement.",
   "pages.registry.jobs": "Jobs",
@@ -165,5 +165,10 @@
   "pages.users.title": "Users management",
   "pages.users.generateReset": "Generate password reset",
   "pages.users.resetToken": "Reset token (dev)",
-  "pages.users.resetByEmail": "Reset sent by email"
+  "pages.users.resetByEmail": "Reset sent by email",
+  "errors.JOB_CODE_ALREADY_EXISTS": "Job code already in use.",
+  "errors.JOB_NOT_FOUND": "Job not found.",
+  "errors.VALIDATION_INVALID_DATE_RANGE": "Invalid date range.",
+  "errors.RECURRING_INVALID_FREQUENCY": "Invalid recurring frequency.",
+  "pages.roadmap.title": "Product roadmap"
 }

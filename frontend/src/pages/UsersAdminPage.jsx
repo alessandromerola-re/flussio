@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, canPermission } from '../services/api.js';
+import { getErrorMessage } from '../utils/errorMessages.js';
 
 const initialForm = { email: '', password: '', role: 'viewer' };
 
@@ -16,7 +17,7 @@ const UsersAdminPage = () => {
   };
 
   useEffect(() => {
-    loadUsers().catch(() => setMessage(t('errors.SERVER_ERROR')));
+    loadUsers().catch(() => setMessage(getErrorMessage(t, null)));
   }, []);
 
   if (!canPermission('users_manage')) {

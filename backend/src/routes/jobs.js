@@ -1,6 +1,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
+import { sendError } from '../utils/httpErrors.js';
 
 const router = express.Router();
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -54,23 +55,23 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
   } = payload;
 
   if (!title || typeof isActive !== 'boolean' || typeof isClosed !== 'boolean') {
-    return { valid: false, errorCode: 'VALIDATION_MISSING_FIELDS' };
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
   }
 
   if (budget != null && budget < 0) {
-    return { valid: false, errorCode: 'VALIDATION_MISSING_FIELDS' };
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'budget' };
   }
 
   if (startDate && !isoDateRegex.test(startDate)) {
-    return { valid: false, errorCode: 'VALIDATION_MISSING_FIELDS' };
+    return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'start_date' };
   }
 
   if (endDate && !isoDateRegex.test(endDate)) {
-    return { valid: false, errorCode: 'VALIDATION_MISSING_FIELDS' };
+    return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'end_date' };
   }
 
   if (startDate && endDate && endDate < startDate) {
-    return { valid: false, errorCode: 'VALIDATION_MISSING_FIELDS' };
+    return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'end_date' };
   }
 
   if (contactId != null) {
@@ -79,7 +80,7 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
       companyId,
     ]);
     if (contactResult.rowCount === 0) {
-      return { valid: false, errorCode: 'VALIDATION_MISSING_FIELDS' };
+      return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'contact_id' };
     }
   }
 
@@ -97,7 +98,7 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
     );
 
     if (duplicateResult.rowCount > 0) {
-      return { valid: false, errorCode: 'VALIDATION_MISSING_FIELDS' };
+      return { valid: false, status: 409, errorCode: 'JOB_CODE_ALREADY_EXISTS', field: 'code' };
     }
   }
 
@@ -144,7 +145,7 @@ router.get('/', async (req, res) => {
     return res.json(result.rows);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -177,21 +178,13 @@ router.get('/:id', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
 
-    await writeAuditLog({
-      companyId: req.user.company_id,
-      userId: req.user.user_id,
-      action: 'update',
-      entityType: 'jobs',
-      entityId: result.rows[0].id,
-      meta: { title: result.rows[0].title },
-    });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -200,7 +193,7 @@ router.post('/', async (req, res) => {
   const validation = await validateJobPayload(payload, req.user.company_id);
 
   if (!validation.valid) {
-    return res.status(400).json({ error_code: validation.errorCode });
+    return sendError(res, validation.status || 400, validation.errorCode, 'Dati commessa non validi.', { field: validation.field });
   }
 
   try {
@@ -247,7 +240,7 @@ router.post('/', async (req, res) => {
     return res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -257,7 +250,7 @@ router.put('/:id', async (req, res) => {
   const validation = await validateJobPayload(payload, req.user.company_id, Number(id));
 
   if (!validation.valid) {
-    return res.status(400).json({ error_code: validation.errorCode });
+    return sendError(res, validation.status || 400, validation.errorCode, 'Dati commessa non validi.', { field: validation.field });
   }
 
   try {
@@ -296,21 +289,13 @@ router.put('/:id', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
 
-    await writeAuditLog({
-      companyId: req.user.company_id,
-      userId: req.user.user_id,
-      action: 'update',
-      entityType: 'jobs',
-      entityId: result.rows[0].id,
-      meta: { title: result.rows[0].title },
-    });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -329,7 +314,7 @@ router.delete('/:id', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
 
     await writeAuditLog({
@@ -343,7 +328,7 @@ router.delete('/:id', async (req, res) => {
     return res.status(204).send();
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 

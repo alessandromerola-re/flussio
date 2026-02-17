@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api, canPermission } from '../services/api.js';
+import { getErrorMessage } from '../utils/errorMessages.js';
 
 const initialForm = {
   title: '',
@@ -89,7 +90,7 @@ const RecurringTemplatesPage = () => {
       resetForm();
       setMessage(t('pages.recurring.saveSuccess'));
     } catch (saveError) {
-      setError(t(`errors.${saveError.code || 'SERVER_ERROR'}`));
+      setError(getErrorMessage(t, saveError));
     }
   };
 
@@ -103,7 +104,7 @@ const RecurringTemplatesPage = () => {
       }
       await loadData();
     } catch (generateError) {
-      setError(t(`errors.${generateError.code || 'SERVER_ERROR'}`));
+      setError(getErrorMessage(t, generateError));
     }
   };
 
@@ -113,7 +114,7 @@ const RecurringTemplatesPage = () => {
       setMessage(`${t('pages.recurring.generatedDue')}: ${result.created_count} / ${result.skipped_count}`);
       await loadData();
     } catch (generateError) {
-      setError(t(`errors.${generateError.code || 'SERVER_ERROR'}`));
+      setError(getErrorMessage(t, generateError));
     }
   };
 

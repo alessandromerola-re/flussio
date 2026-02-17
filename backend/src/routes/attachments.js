@@ -4,10 +4,12 @@ import path from 'path';
 import express from 'express';
 import { getClient, query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
+import { sendError } from '../utils/httpErrors.js';
 
 const router = express.Router();
 const uploadsRoot = path.resolve(process.cwd(), 'uploads');
-const uploadLimitBytes = 10 * 1024 * 1024;
+const attachmentMaxMb = Number(process.env.ATTACHMENT_MAX_MB || 20);
+const uploadLimitBytes = Math.max(1, attachmentMaxMb) * 1024 * 1024;
 const rawUpload = express.raw({ type: 'multipart/form-data', limit: `${uploadLimitBytes}b` });
 
 const safeFileName = (name) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -87,7 +89,7 @@ router.get('/file/:id', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Risorsa non trovata.');
     }
 
     const attachment = result.rows[0];
@@ -101,9 +103,9 @@ router.get('/file/:id', async (req, res) => {
   } catch (error) {
     console.error(error);
     if (error.code === 'ENOENT') {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Risorsa non trovata.');
     }
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -130,7 +132,7 @@ router.get('/:transactionId', async (req, res) => {
     return res.json(result.rows);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
@@ -138,16 +140,16 @@ const uploadAttachmentHandler = async (req, res) => {
   const { transactionId } = req.params;
 
   if (!(req.headers['content-type'] || '').includes('multipart/form-data')) {
-    return res.status(400).json({ error_code: 'NO_FILE' });
+    return sendError(res, 400, 'NO_FILE', 'Nessun file selezionato.');
   }
 
   const parsedFile = parseMultipartFile(req);
   if (!parsedFile || !parsedFile.originalName || parsedFile.size === 0) {
-    return res.status(400).json({ error_code: 'NO_FILE' });
+    return sendError(res, 400, 'NO_FILE', 'Nessun file selezionato.');
   }
 
   if (parsedFile.size > uploadLimitBytes) {
-    return res.status(413).json({ error_code: 'FILE_TOO_LARGE', message: 'Max 10MB' });
+    return sendError(res, 413, 'FILE_TOO_LARGE', 'File troppo grande.', { details: { max_mb: attachmentMaxMb } });
   }
 
   const client = await getClient();
@@ -157,7 +159,7 @@ const uploadAttachmentHandler = async (req, res) => {
     const transaction = await getTransactionForCompany(client, transactionId, req.user.company_id);
     if (!transaction) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Risorsa non trovata.');
     }
 
     const relativeDir = path.join(`company_${req.user.company_id}`, `tx_${transaction.id}`);
@@ -209,7 +211,7 @@ const uploadAttachmentHandler = async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(error);
-    return res.status(500).json({ error_code: 'UPLOAD_FAILED' });
+    return sendError(res, 500, 'UPLOAD_FAILED', 'Caricamento allegato non riuscito.');
   } finally {
     client.release();
   }
@@ -237,7 +239,7 @@ router.delete('/:id', async (req, res) => {
 
     if (result.rowCount === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'NOT_FOUND', 'Risorsa non trovata.');
     }
 
     const attachment = result.rows[0];
@@ -256,7 +258,7 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   } finally {
     client.release();
   }
@@ -264,10 +266,10 @@ router.delete('/:id', async (req, res) => {
 
 router.use((error, req, res, next) => {
   if (error?.type === 'entity.too.large' || error?.status === 413) {
-    return res.status(413).json({ error_code: 'FILE_TOO_LARGE', message: 'Max 10MB' });
+    return sendError(res, 413, 'FILE_TOO_LARGE', 'File troppo grande.', { details: { max_mb: attachmentMaxMb } });
   }
   console.error(error);
-  return res.status(500).json({ error_code: 'UPLOAD_FAILED' });
+  return sendError(res, 500, 'UPLOAD_FAILED', 'Caricamento allegato non riuscito.');
 });
 
 export default router;

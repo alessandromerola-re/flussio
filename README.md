@@ -112,7 +112,9 @@ In movement details modal:
 - download attachments
 - delete attachments
 
-Upload size limit: 10MB per file.
+Upload size limit: 20MB per file (configurable with `ATTACHMENT_MAX_MB`, default `20`).
+
+If you run frontend behind Nginx, configure `client_max_body_size` (e.g. `20M`) to avoid HTTP 413 before backend validation.
 
 If you run frontend behind Nginx, configure `client_max_body_size` (e.g. `20M`) to avoid HTTP 413 before backend validation.
 
@@ -278,6 +280,10 @@ Env:
 
 ```bash
 RESET_EMAIL_ENABLED=false
+ATTACHMENT_MAX_MB=20
+SHOW_ROADMAP=false
+DEV_SCHEMA_AUTO_PATCH=false
+VITE_SHOW_ROADMAP=false
 ```
 
 If `RESET_EMAIL_ENABLED=false`, admin reset endpoint returns token for dev/manual flow.
