@@ -180,6 +180,19 @@ CREATE TABLE contracts (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+
+
+CREATE TABLE recurring_runs (
+  id SERIAL PRIMARY KEY,
+  template_id INTEGER NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+  cycle_key TEXT NOT NULL,
+  run_at TIMESTAMP NOT NULL,
+  run_type TEXT NOT NULL CHECK (run_type IN ('auto', 'manual')),
+  generated_movement_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (template_id, cycle_key)
+);
+
 CREATE INDEX idx_accounts_company ON accounts(company_id);
 CREATE INDEX idx_categories_company ON categories(company_id);
 CREATE INDEX idx_contacts_company ON contacts(company_id);
