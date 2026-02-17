@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { formatDateIT } from '../utils/date.js';
+import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -13,6 +15,7 @@ const emptyForm = {
   category_id: '',
   contact_id: '',
   property_id: '',
+  job_id: '',
 };
 
 const defaultFilters = {
@@ -23,6 +26,7 @@ const defaultFilters = {
   category_id: '',
   contact_id: '',
   property_id: '',
+  job_id: '',
   q: '',
   limit: 30,
   offset: 0,
@@ -30,11 +34,13 @@ const defaultFilters = {
 
 const MovementsPage = () => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState(emptyForm);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [movements, setMovements] = useState([]);
   const [selected, setSelected] = useState(null);
   const [attachments, setAttachments] = useState([]);
@@ -50,6 +56,7 @@ const MovementsPage = () => {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [previewAttachment, setPreviewAttachment] = useState(null);
   const [filters, setFilters] = useState(defaultFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
   const [filterContactSearch, setFilterContactSearch] = useState('');
@@ -62,14 +69,16 @@ const MovementsPage = () => {
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
+      api.getJobs(),
     ]);
 
-    const [accountsResult, categoriesResult, contactsResult, propertiesResult] = results;
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
 
     if (accountsResult.status === 'fulfilled') setAccounts(accountsResult.value);
     if (categoriesResult.status === 'fulfilled') setCategories(categoriesResult.value);
     if (contactsResult.status === 'fulfilled') setContacts(contactsResult.value);
     if (propertiesResult.status === 'fulfilled') setProperties(propertiesResult.value);
+    if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value);
 
     if (results.some((result) => result.status === 'rejected')) {
       setLoadError(t('errors.SERVER_ERROR'));
@@ -88,12 +97,21 @@ const MovementsPage = () => {
   const loadData = async () => {
     setLoadError('');
     await loadLookupData();
-    await loadMovements(defaultFilters);
+
+    const deepLinkJobId = searchParams.get('job_id');
+    const nextFilters = {
+      ...defaultFilters,
+      job_id: deepLinkJobId || '',
+    };
+
+    setFilters(nextFilters);
+    setDraftFilters(nextFilters);
+    await loadMovements(nextFilters);
   };
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [searchParams.toString()]);
 
   const formatAccounts = (accountsList = []) => {
     const names = accountsList.map((account) => account?.account_name).filter(Boolean);
@@ -277,6 +295,7 @@ const MovementsPage = () => {
         category_id: form.category_id ? Number(form.category_id) : null,
         contact_id: form.contact_id ? Number(form.contact_id) : null,
         property_id: form.property_id ? Number(form.property_id) : null,
+        job_id: form.job_id ? Number(form.job_id) : null,
         accounts: accountsPayload,
       };
 
@@ -329,6 +348,7 @@ const MovementsPage = () => {
       category_id: selected.category_id ? String(selected.category_id) : '',
       contact_id: selected.contact_id ? String(selected.contact_id) : '',
       property_id: selected.property_id ? String(selected.property_id) : '',
+      job_id: selected.job_id ? String(selected.job_id) : '',
     });
 
     setContactSearch(selected.contact_name || '');
@@ -354,8 +374,8 @@ const MovementsPage = () => {
       setAttachments(await api.getAttachments(selected.id));
       setUploadMessage(t('pages.movements.uploadSuccess'));
     } catch (uploadAttachmentError) {
-      const messageKey = uploadAttachmentError.code === 'FILE_TOO_LARGE'
-        ? 'errors.FILE_TOO_LARGE'
+      const messageKey = uploadAttachmentError.code
+        ? `errors.${uploadAttachmentError.code}`
         : 'pages.movements.uploadError';
       setUploadError(t(messageKey));
     } finally {
@@ -381,6 +401,28 @@ const MovementsPage = () => {
       return;
     }
     setAttachments(await api.getAttachments(selected.id));
+  };
+
+
+  const getAttachmentTypeLabel = (attachment) => {
+    const mime = (attachment?.mime_type || '').toLowerCase();
+    if (mime.startsWith('image/')) {
+      return 'image';
+    }
+    if (mime === 'application/pdf') {
+      return 'pdf';
+    }
+    return 'other';
+  };
+
+  const fetchPreviewBlob = async (attachment) => api.downloadAttachment(attachment.id);
+
+  const handleOpenPreview = (attachment) => {
+    setPreviewAttachment(attachment);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewAttachment(null);
   };
 
   const handleDelete = async (id) => {
@@ -488,11 +530,11 @@ const MovementsPage = () => {
               </label>
             )}
             <label>
-              {t('pages.movements.property')}
-              <select value={form.property_id} onChange={(event) => handleChange('property_id', event.target.value)}>
+              {t('pages.movements.job')}
+              <select value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
-                {properties.map((property) => (
-                  <option key={property.id} value={property.id}>{property.name}</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>{job.name}</option>
                 ))}
               </select>
             </label>
@@ -613,14 +655,14 @@ const MovementsPage = () => {
               )}
             </label>
             <label>
-              {t('pages.movements.property')}
+              {t('pages.movements.job')}
               <select
-                value={draftFilters.property_id}
-                onChange={(event) => setDraftFilters((prev) => ({ ...prev, property_id: event.target.value }))}
+                value={draftFilters.job_id}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, job_id: event.target.value }))}
               >
                 <option value="">{t('common.all')}</option>
-                {properties.map((property) => (
-                  <option key={property.id} value={property.id}>{property.name}</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>{job.name}</option>
                 ))}
               </select>
             </label>
@@ -650,12 +692,17 @@ const MovementsPage = () => {
                 <div>
                   <strong className="movement-title-badge">{movement.description || movement.type}</strong>
                   <div className="muted">{formatDateIT(movement.date)}</div>
-                  {movement.property_name && (
-                    <div className="muted">{t('pages.movements.property')}: {movement.property_name}</div>
+                  {movement.job_name && (
+                    <div className="muted">{t('pages.movements.job')}: {movement.job_name}</div>
                   )}
                   <div className="muted">{t('pages.movements.account')}: {formatAccounts(movement.accounts)}</div>
                   <div className="muted">{t('pages.movements.category')}: {movement.category_name || t('common.none')}</div>
                   <div className="muted">{t('pages.movements.contact')}: {movement.contact_name || t('common.none')}</div>
+                  {movement.recurring_template_title && (
+                    <div className="muted">
+                      {t('pages.recurring.badge')}: <a href={`/recurring?template_id=${movement.recurring_template_id}`}>{movement.recurring_template_title}</a>
+                    </div>
+                  )}
                   {attachmentCount > 0 && (
                     <div className="attachment-indicator" aria-label={`${attachmentCount} attachments`}>
                       📎 {attachmentCount}
@@ -681,15 +728,27 @@ const MovementsPage = () => {
             <p><strong>{t('pages.movements.amount')}:</strong> € {Number(selected.amount_total).toFixed(2)}</p>
             <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
-            <p><strong>{t('pages.movements.property')}:</strong> {selected.property_name || t('common.none')}</p>
+            <p><strong>{t('pages.movements.job')}:</strong> {selected.job_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
+            {selected.recurring_template_title && (
+              <p><strong>{t('pages.recurring.badge')}:</strong> <a href={`/recurring?template_id=${selected.recurring_template_id}`}>{selected.recurring_template_title}</a></p>
+            )}
             <div>
               <strong>{t('pages.movements.attachments')}:</strong>
               <ul>
                 {attachments.length === 0 && <li className="muted">{t('pages.movements.noAttachments')}</li>}
                 {attachments.map((item) => (
                   <li key={item.id} className="list-item-row">
-                    <span>{item.file_name}</span>
+                    <div className="attachment-name-row">
+                      <button
+                        type="button"
+                        className="linklike"
+                        onClick={() => handleOpenPreview(item)}
+                      >
+                        {item.original_name || item.file_name}
+                      </button>
+                      <span className="muted attachment-type">[{getAttachmentTypeLabel(item)}]</span>
+                    </div>
                     <div className="row-actions">
                       <button type="button" className="ghost" onClick={() => handleDownloadAttachment(item)}>{t('buttons.download')}</button>
                       <button type="button" className="danger" onClick={() => handleDeleteAttachment(item.id)}>{t('buttons.delete')}</button>
@@ -724,6 +783,7 @@ const MovementsPage = () => {
                   setUploadError('');
                   setUploadMessage('');
                   setAttachmentFile(null);
+                  setPreviewAttachment(null);
                 }}
               >
                 {t('buttons.close')}
@@ -733,6 +793,14 @@ const MovementsPage = () => {
           </div>
         </div>
       )}
+
+      <AttachmentPreviewModal
+        isOpen={Boolean(previewAttachment)}
+        attachment={previewAttachment}
+        onClose={handleClosePreview}
+        fetchPreviewBlob={fetchPreviewBlob}
+        onDownload={handleDownloadAttachment}
+      />
     </div>
   );
 };
