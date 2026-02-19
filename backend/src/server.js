@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs';
 import app from './app.js';
 import { query } from './db/index.js';
+import { generateDueTemplates } from './services/recurring.js';
 
 const port = process.env.PORT || 4000;
+const shouldAutoPatchSchema = String(process.env.DEV_SCHEMA_AUTO_PATCH || 'false').toLowerCase() === 'true';
 
 const ensureDevUser = async () => {
   const devEmail = process.env.DEV_USER_EMAIL || 'dev@flussio.local';
@@ -36,7 +38,221 @@ Is the database initialized?`, error);
 
 };
 
-app.listen(port, () => {
-  console.log(`Flussio backend running on port ${port}`);
-  ensureDevUser();
-});
+const ensurePhase2Schema = async () => {
+  try {
+    await query(
+      `
+      CREATE TABLE IF NOT EXISTS jobs (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        notes TEXT,
+        contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+      `
+    );
+
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS title TEXT');
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS code TEXT');
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_closed BOOLEAN NOT NULL DEFAULT false');
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS budget NUMERIC(12, 2)');
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS start_date DATE');
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS end_date DATE');
+    await query('UPDATE jobs SET title = COALESCE(title, name) WHERE title IS NULL');
+    await query('ALTER TABLE jobs ALTER COLUMN title SET NOT NULL');
+
+    await query('CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_jobs_active ON jobs(company_id, is_active)');
+    await query('CREATE INDEX IF NOT EXISTS idx_jobs_company_active ON jobs(company_id, is_active, is_closed)');
+    await query('CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_company_code_unique ON jobs(company_id, code) WHERE code IS NOT NULL');
+
+    await query(
+      'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL'
+    );
+    await query('CREATE INDEX IF NOT EXISTS idx_transactions_job ON transactions(company_id, job_id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_transactions_company_job_date ON transactions(company_id, job_id, date)');
+
+    await query(
+      `
+      CREATE TABLE IF NOT EXISTS recurring_templates (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
+        interval INTEGER NOT NULL DEFAULT 1,
+        start_date DATE,
+        end_date DATE,
+        next_run_at TIMESTAMP NOT NULL,
+        last_run_at TIMESTAMP,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        amount NUMERIC(12, 2) NOT NULL,
+        movement_type TEXT NOT NULL CHECK (movement_type IN ('income', 'expense')),
+        category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+        contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+        property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL,
+        job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+        notes TEXT,
+        weekly_anchor_dow INTEGER,
+        yearly_anchor_mm INTEGER,
+        yearly_anchor_dd INTEGER,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+      `
+    );
+
+    await query(
+      `
+      CREATE TABLE IF NOT EXISTS recurring_runs (
+        id SERIAL PRIMARY KEY,
+        template_id INTEGER NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+        cycle_key TEXT NOT NULL,
+        run_at TIMESTAMP NOT NULL,
+        run_type TEXT NOT NULL CHECK (run_type IN ('auto', 'manual')),
+        generated_movement_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (template_id, cycle_key)
+      )
+      `
+    );
+
+    await query(
+      'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS recurring_template_id INTEGER REFERENCES recurring_templates(id) ON DELETE SET NULL'
+    );
+    await query('CREATE INDEX IF NOT EXISTS idx_recurring_templates_due ON recurring_templates(is_active, next_run_at)');
+    await query('CREATE INDEX IF NOT EXISTS idx_recurring_runs_template_cycle ON recurring_runs(template_id, cycle_key)');
+  } catch (error) {
+    console.error('Failed to ensure Phase 2 schema', error);
+  }
+};
+
+
+
+
+const ensurePhase3Schema = async () => {
+  try {
+    await query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin'");
+    await query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true');
+
+    await query(
+      `
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        meta JSONB,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+      `
+    );
+
+    await query(
+      `
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMP NOT NULL,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+      `
+    );
+
+    await query(
+      `
+      CREATE TABLE IF NOT EXISTS contracts (
+        id SERIAL PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL,
+        tenant_contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+        start_date DATE,
+        end_date DATE,
+        monthly_rent NUMERIC(12, 2),
+        deposit NUMERIC(12, 2),
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+      `
+    );
+
+    await query('CREATE INDEX IF NOT EXISTS idx_audit_company_created ON audit_log(company_id, created_at DESC)');
+    await query('CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id, created_at DESC)');
+    await query('CREATE INDEX IF NOT EXISTS idx_contracts_company_property ON contracts(company_id, property_id)');
+  } catch (error) {
+    console.error('Failed to ensure Phase 3 schema', error);
+  }
+};
+
+const ensureAttachmentsSchema = async () => {
+  try {
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS original_name TEXT');
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS mime_type TEXT');
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS size INTEGER NOT NULL DEFAULT 0');
+    await query('ALTER TABLE attachments ADD COLUMN IF NOT EXISTS storage_path TEXT');
+    await query(
+      `
+      UPDATE attachments
+      SET original_name = COALESCE(original_name, file_name),
+          storage_path = COALESCE(storage_path, path)
+      WHERE original_name IS NULL OR storage_path IS NULL
+      `
+    );
+    await query('ALTER TABLE attachments ALTER COLUMN original_name SET NOT NULL');
+    await query('ALTER TABLE attachments ALTER COLUMN storage_path SET NOT NULL');
+  } catch (error) {
+    console.error('Failed to ensure attachments schema', error);
+  }
+};
+
+
+
+const startRecurringScheduler = () => {
+  const enabledRaw = process.env.RECURRING_GENERATOR_ENABLED;
+  const enabled = enabledRaw == null ? true : String(enabledRaw).toLowerCase() === 'true';
+  const intervalMinutes = Number(process.env.RECURRING_GENERATOR_INTERVAL_MIN || 5);
+
+  if (!enabled) {
+    console.log('Recurring generator disabled by env');
+    return;
+  }
+
+  const run = async () => {
+    try {
+      const result = await generateDueTemplates({ runType: 'auto' });
+      if (result.created_count > 0 || result.skipped_count > 0) {
+        console.log('Recurring generator run', result);
+      }
+    } catch (error) {
+      console.error('Recurring generator failed', error);
+    }
+  };
+
+  run();
+  setInterval(run, Math.max(intervalMinutes, 1) * 60 * 1000);
+};
+
+const bootstrap = async () => {
+  if (shouldAutoPatchSchema) {
+    await ensurePhase2Schema();
+    await ensureAttachmentsSchema();
+    await ensurePhase3Schema();
+  }
+
+  await ensureDevUser();
+
+  app.listen(port, () => {
+    if (!shouldAutoPatchSchema) {
+      console.log('Runtime schema auto patch disabled (DEV_SCHEMA_AUTO_PATCH=false). Use migrations for schema changes.');
+    }
+    console.log(`Flussio backend running on port ${port}`);
+    startRecurringScheduler();
+  });
+};
+
+bootstrap();
