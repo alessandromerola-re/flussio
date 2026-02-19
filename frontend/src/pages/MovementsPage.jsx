@@ -528,7 +528,14 @@ const MovementsPage = () => {
       {loadError && <div className="error">{loadError}</div>}
 
       <div className="row-actions movements-toolbar">
-        {canPermission('write') && <button type="button" className="primary" onClick={openNewMovementModal}>{t('pages.movements.new')}</button>}
+        <button
+          type="button"
+          className="primary"
+          onClick={openNewMovementModal}
+          disabled={!canPermission('write')}
+        >
+          {t('pages.movements.new')}
+        </button>
         <button type="button" className="ghost" onClick={() => setFiltersOpen((v) => !v)}>{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
         {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
       </div>

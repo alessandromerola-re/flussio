@@ -91,7 +91,7 @@ const App = () => {
       { path: '/registry', label: t('nav.registry') },
       { path: '/recurring', label: t('nav.recurring') },
       ...(can('manage_users') ? [{ path: '/users', label: t('nav.users') }] : []),
-      ...(can('manage_users') ? [{ path: '/settings', label: t('nav.settings') }] : []),
+      { path: '/settings', label: t('nav.settings') },
       ...(can('read', 'roadmap') ? [{ path: '/roadmap', label: t('nav.roadmap') }] : []),
     ],
     [t]
