@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Route, Routes, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import routes from './routes.jsx';
-import { can, clearToken, getToken } from './services/api.js';
+import { clearToken, getToken } from './services/api.js';
+import { can } from './utils/permissions.js';
 import { setLanguage } from './i18n/index.js';
 
 const App = () => {
