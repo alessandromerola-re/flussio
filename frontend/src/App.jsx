@@ -3,6 +3,7 @@ import { Route, Routes, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import routes from './routes.jsx';
 import { clearToken, getToken } from './services/api.js';
+import { can } from './utils/permissions.js';
 import { setLanguage } from './i18n/index.js';
 
 const App = () => {
@@ -22,6 +23,9 @@ const App = () => {
       { path: '/dashboard', label: t('nav.dashboard') },
       { path: '/movements', label: t('nav.movements') },
       { path: '/registry', label: t('nav.registry') },
+      { path: '/recurring', label: t('nav.recurring') },
+      ...(can('manage_users') ? [{ path: '/users', label: t('nav.users') }] : []),
+      ...(can('read', 'roadmap') ? [{ path: '/roadmap', label: t('nav.roadmap') }] : []),
     ],
     [t]
   );
