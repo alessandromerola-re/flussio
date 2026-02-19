@@ -21,6 +21,8 @@ const emptyForm = {
   job_id: '',
 };
 
+const maxAttachmentMb = 20;
+
 const defaultFilters = {
   date_from: '',
   date_to: '',
@@ -336,6 +338,13 @@ const MovementsPage = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (newAttachmentFile && newAttachmentFile.size > maxAttachmentMb * 1024 * 1024) {
+      setError(t('errors.FILE_TOO_LARGE', { maxMb: maxAttachmentMb }));
+      setSubmitMessage('');
+      return;
+    }
+
     const validationError = validate();
     if (validationError) {
       setError(validationError);
@@ -434,6 +443,12 @@ const MovementsPage = () => {
       return;
     }
 
+    if (attachmentFile.size > maxAttachmentMb * 1024 * 1024) {
+      setUploadError(t('errors.FILE_TOO_LARGE', { maxMb: maxAttachmentMb }));
+      setUploadMessage('');
+      return;
+    }
+
     setUploadLoading(true);
     setUploadError('');
     setUploadMessage('');
@@ -513,7 +528,7 @@ const MovementsPage = () => {
       {loadError && <div className="error">{loadError}</div>}
 
       <div className="row-actions movements-toolbar">
-        {canPermission('write') && <button type="button" onClick={openNewMovementModal}>{t('pages.movements.new')}</button>}
+        {canPermission('write') && <button type="button" className="primary" onClick={openNewMovementModal}>{t('pages.movements.new')}</button>}
         <button type="button" className="ghost" onClick={() => setFiltersOpen((v) => !v)}>{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
         {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
       </div>
@@ -528,11 +543,11 @@ const MovementsPage = () => {
         </div>
       )}
 
-      <div className="grid-two">
-        <Modal isOpen={movementModalOpen} onClose={closeMovementModal}>
-        <form className="card" onSubmit={handleSubmit}>
-          <h2>{editingMovementId ? `${t('buttons.edit')} #${editingMovementId}` : t('pages.movements.new')}</h2>
-          <div className="form-grid">
+      <Modal isOpen={movementModalOpen} onClose={closeMovementModal}>
+        <div className="modal-content">
+          <form onSubmit={handleSubmit}>
+            <h2>{editingMovementId ? `${t('buttons.edit')} #${editingMovementId}` : t('pages.movements.new')}</h2>
+            <div className="form-grid">
             <label>
               {t('pages.movements.date')}
               <input type="date" value={form.date} onChange={(event) => handleChange('date', event.target.value)} required />
@@ -645,15 +660,17 @@ const MovementsPage = () => {
           </div>
           {error && <div className="error">{error}</div>}
           {submitMessage && <div className={error ? 'error' : 'success'}>{submitMessage}</div>}
-          <div className="row-actions">
-            {canPermission('write') && <button type="submit">{editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>}
-            <button type="button" className="ghost" onClick={closeMovementModal}>
-              {t('buttons.cancel')}
-            </button>
-          </div>
-        </form>
-        </Modal>
+            <div className="modal-actions">
+              {canPermission('write') && <button type="submit">{editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>}
+              <button type="button" className="ghost" onClick={closeMovementModal}>
+                {t('buttons.cancel')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
 
+      <div className="grid-two">
         <div className="card">
           <h2>{t('pages.movements.filters')}</h2>
           {hasActiveFilters && <div className="muted">{t('pages.movements.activeFilters')}</div>}
@@ -816,7 +833,7 @@ const MovementsPage = () => {
           setAttachmentFile(null);
           setPreviewAttachment(null);
         }}>
-
+          <div className="modal-content">
             <h2>{t('pages.movements.details')}</h2>
             <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
             <p><strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}</p>
@@ -885,6 +902,7 @@ const MovementsPage = () => {
               </button>
               {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>}
             </div>
+          </div>
         </Modal>
       )}
 
