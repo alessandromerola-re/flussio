@@ -1,6 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const getToken = () => localStorage.getItem('flussio_token');
+export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
 
 export const setToken = (token, role = null) => {
   localStorage.setItem('flussio_token', token);
