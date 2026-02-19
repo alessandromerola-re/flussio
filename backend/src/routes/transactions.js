@@ -1,5 +1,6 @@
 import express from 'express';
 import { getClient, query } from '../db/index.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const router = express.Router();
 
@@ -100,6 +101,15 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
     where.push(`t.property_id = $${params.length}`);
   }
 
+  const jobId = parseInteger(filters.job_id);
+  if (filters.job_id != null && filters.job_id !== '' && jobId == null) {
+    return { error: true };
+  }
+  if (jobId != null) {
+    params.push(jobId);
+    where.push(`t.job_id = $${params.length}`);
+  }
+
   if (filters.q != null && filters.q !== '') {
     if (typeof filters.q !== 'string') {
       return { error: true };
@@ -132,6 +142,8 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
     c.name AS category_name,
     ct.name AS contact_name,
     p.name AS property_name,
+    j.name AS job_name,
+    rt.title AS recurring_template_title,
     (
       SELECT COUNT(*)::int
       FROM attachments att
@@ -152,10 +164,12 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
   LEFT JOIN categories c ON t.category_id = c.id
   LEFT JOIN contacts ct ON t.contact_id = ct.id
   LEFT JOIN properties p ON t.property_id = p.id
+  LEFT JOIN jobs j ON t.job_id = j.id
+  LEFT JOIN recurring_templates rt ON t.recurring_template_id = rt.id
   LEFT JOIN transaction_accounts ta ON t.id = ta.transaction_id
   LEFT JOIN accounts a ON ta.account_id = a.id
   WHERE ${whereSql}
-  GROUP BY t.id, c.name, ct.name, p.name
+  GROUP BY t.id, c.name, ct.name, p.name, j.name, rt.title
   ORDER BY t.date DESC, t.id DESC
   ${includePagination ? `LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}` : ''}
 `;
@@ -192,11 +206,12 @@ const lockCompanyAccounts = async (client, companyId, accountIds) => {
   }
 };
 
-const validateTransactionRefs = async (client, companyId, { category_id, contact_id, property_id }) => {
+const validateTransactionRefs = async (client, companyId, { category_id, contact_id, property_id, job_id }) => {
   const checks = [
     { key: 'category_id', value: category_id, table: 'categories' },
     { key: 'contact_id', value: contact_id, table: 'contacts' },
     { key: 'property_id', value: property_id, table: 'properties' },
+    { key: 'job_id', value: job_id, table: 'jobs' },
   ];
 
   for (const check of checks) {
@@ -253,7 +268,7 @@ router.get('/export', async (req, res) => {
         csvEscape(accountNames),
         csvEscape(movement.category_name),
         csvEscape(movement.contact_name),
-        csvEscape(movement.property_name),
+        csvEscape(movement.job_name),
         csvEscape(movement.description),
       ].join(';');
     });
@@ -303,6 +318,7 @@ router.post('/', async (req, res) => {
     category_id = null,
     contact_id = null,
     property_id = null,
+    job_id = null,
     accounts = [],
   } = req.body;
 
@@ -350,13 +366,14 @@ router.post('/', async (req, res) => {
       category_id,
       contact_id,
       property_id,
+      job_id,
     });
     await lockCompanyAccounts(client, req.user.company_id, uniqueAccountIds);
 
     const transactionResult = await client.query(
       `
-      INSERT INTO transactions (company_id, date, type, amount_total, description, category_id, contact_id, property_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO transactions (company_id, date, type, amount_total, description, category_id, contact_id, property_id, job_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
       `,
       [
@@ -368,6 +385,7 @@ router.post('/', async (req, res) => {
         category_id,
         contact_id,
         property_id,
+        job_id,
       ]
     );
 
@@ -393,6 +411,7 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'create', entityType: 'movements', entityId: transaction.id, meta: { type: transaction.type } });
     return res.status(201).json(transaction);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -417,6 +436,7 @@ router.put('/:id', async (req, res) => {
     category_id = null,
     contact_id = null,
     property_id = null,
+    job_id = null,
     accounts = [],
   } = req.body;
 
@@ -485,6 +505,7 @@ router.put('/:id', async (req, res) => {
       category_id,
       contact_id,
       property_id,
+      job_id,
     });
     await lockCompanyAccounts(client, req.user.company_id, allAccountIds);
 
@@ -508,8 +529,9 @@ router.put('/:id', async (req, res) => {
           description = $4,
           category_id = $5,
           contact_id = $6,
-          property_id = $7
-      WHERE id = $8 AND company_id = $9
+          property_id = $7,
+          job_id = $8
+      WHERE id = $9 AND company_id = $10
       RETURNING *
       `,
       [
@@ -520,6 +542,7 @@ router.put('/:id', async (req, res) => {
         category_id,
         contact_id,
         property_id,
+        job_id,
         id,
         req.user.company_id,
       ]
@@ -547,6 +570,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'update', entityType: 'movements', entityId: id, meta: { type } });
     return res.json(updatedResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -606,6 +630,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'movements', entityId: id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     await client.query('ROLLBACK');
