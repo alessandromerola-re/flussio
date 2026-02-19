@@ -7,9 +7,10 @@ import JobDetailPage from './pages/JobDetailPage.jsx';
 import RecurringTemplatesPage from './pages/RecurringTemplatesPage.jsx';
 import UsersAdminPage from './pages/UsersAdminPage.jsx';
 import RoadmapPage from './pages/RoadmapPage.jsx';
+import SettingsAdminPage from './pages/SettingsAdminPage.jsx';
 import { can } from './utils/permissions.js';
 
-const routes = ({ setTokenState, token }) => [
+const routes = ({ setTokenState, token, onBrandingChanged }) => [
   {
     path: '/login',
     element: token ? (
@@ -45,6 +46,11 @@ const routes = ({ setTokenState, token }) => [
   {
     path: '/roadmap',
     element: token ? (can('read', 'roadmap') ? <RoadmapPage /> : <Navigate to="/dashboard" replace />) : <Navigate to="/login" replace />,
+  },
+
+  {
+    path: '/settings',
+    element: token ? (can('manage_users') ? <SettingsAdminPage onBrandingChanged={onBrandingChanged} /> : <Navigate to="/dashboard" replace />) : <Navigate to="/login" replace />,
   },
   {
     path: '/',

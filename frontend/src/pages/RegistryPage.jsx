@@ -49,6 +49,7 @@ const RegistryPage = () => {
   const [jobForm, setJobForm] = useState(initialJob);
   const [editingId, setEditingId] = useState(null);
   const [loadError, setLoadError] = useState('');
+  const [jobFormError, setJobFormError] = useState('');
 
   const loadData = async () => {
     setLoadError('');
@@ -102,6 +103,7 @@ const RegistryPage = () => {
     setPropertyForm(initialProperty);
     setJobForm(initialJob);
     setEditingId(null);
+    setJobFormError('');
   };
 
   const handleAccountSubmit = async (event) => {
@@ -163,14 +165,19 @@ const RegistryPage = () => {
       end_date: jobForm.end_date || null,
     };
 
-    if (editingId) {
-      await api.updateJob(editingId, payload);
-    } else {
-      await api.createJob(payload);
-    }
+    try {
+      if (editingId) {
+        await api.updateJob(editingId, payload);
+      } else {
+        await api.createJob(payload);
+      }
 
-    resetForms();
-    setJobs(await api.getJobs({ active: 0, include_closed: 1 }));
+      setJobFormError('');
+      resetForms();
+      setJobs(await api.getJobs({ active: 0, include_closed: 1 }));
+    } catch (submitError) {
+      setJobFormError(getErrorMessage(t, submitError));
+    }
   };
 
   const handlePropertySubmit = async (event) => {
@@ -531,6 +538,7 @@ const RegistryPage = () => {
                 onChange={(event) => setJobForm({ ...jobForm, code: event.target.value })}
               />
             </label>
+            {jobFormError && <div className="error">{jobFormError}</div>}
             <label>
               {t('forms.jobTitle')}
               <input

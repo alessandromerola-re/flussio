@@ -14,6 +14,7 @@ import reportsRoutes from './routes/reports.js';
 import recurringTemplatesRoutes from './routes/recurringTemplates.js';
 import usersRoutes from './routes/users.js';
 import scaffoldingRoutes from './routes/scaffolding.js';
+import settingsRoutes from './routes/settings.js';
 import { authMiddleware } from './middleware/auth.js';
 import { requireMethodPermission } from './middleware/permissions.js';
 
@@ -58,6 +59,7 @@ app.use('/api/reports', authMiddleware, requireMethodPermission({ GET: 'read' })
 app.use('/api/recurring-templates', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), recurringTemplatesRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
 app.use('/api/scaffolding', authMiddleware, requireMethodPermission({ GET: 'read' }), scaffoldingRoutes);
+app.use('/api/settings', authMiddleware, requireMethodPermission({ GET: 'read' }), settingsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error_code: 'NOT_FOUND' });

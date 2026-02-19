@@ -160,6 +160,15 @@ export const api = {
   updateUser: (id, payload) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   createResetToken: (id) => request(`/users/${id}/reset-password-token`, { method: 'POST' }),
   getScaffoldingRoadmap: () => request('/scaffolding/roadmap'),
+
+  getBranding: () => request('/settings/branding'),
+  downloadBrandLogo: () => request('/settings/branding/logo', { responseType: 'blob' }),
+  uploadBrandLogo: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request('/settings/branding/logo', { method: 'POST', body: formData });
+  },
+  deleteBrandLogo: () => request('/settings/branding/logo', { method: 'DELETE' }),
 };
 
 export { can, canPermission, getRole, isRoadmapEnabled } from '../utils/permissions.js';

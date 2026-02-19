@@ -60,15 +60,19 @@ const validatePayload = async (payload, companyId) => {
   }
 
   if (!Number.isInteger(payload.interval) || payload.interval < 1) {
-    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_FREQUENCY', field: 'frequency' };
+    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_INTERVAL', field: 'interval' };
   }
 
-  if (!(payload.amount > 0) || !['income', 'expense'].includes(payload.movement_type)) {
-    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
+  if (!(payload.amount > 0)) {
+    return { valid: false, status: 400, errorCode: 'RECURRING_MISSING_AMOUNT', field: 'amount' };
+  }
+
+  if (!['income', 'expense'].includes(payload.movement_type)) {
+    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_MOVEMENT_TYPE', field: 'movement_type' };
   }
 
   if (payload.start_date && payload.end_date && payload.end_date < payload.start_date) {
-    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
+    return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'end_date' };
   }
 
   const refs = await Promise.all([
@@ -79,21 +83,21 @@ const validatePayload = async (payload, companyId) => {
   ]);
 
   if (refs.some((refOk) => !refOk)) {
-    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
+    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_REFERENCE' };
   }
 
   if (payload.frequency === 'weekly') {
     if (payload.weekly_anchor_dow != null && (payload.weekly_anchor_dow < 1 || payload.weekly_anchor_dow > 7)) {
-      return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
+      return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_ANCHOR' };
     }
   }
 
   if (payload.frequency === 'yearly') {
     if (payload.yearly_anchor_mm != null && (payload.yearly_anchor_mm < 1 || payload.yearly_anchor_mm > 12)) {
-      return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
+      return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_ANCHOR' };
     }
     if (payload.yearly_anchor_dd != null && (payload.yearly_anchor_dd < 1 || payload.yearly_anchor_dd > 31)) {
-      return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
+      return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_ANCHOR' };
     }
   }
 
@@ -146,7 +150,17 @@ router.post('/', async (req, res) => {
   const payload = normalizeTemplatePayload(req.body);
   const validation = await validatePayload(payload, req.user.company_id);
   if (!validation.valid) {
-    return sendError(res, validation.status || 400, validation.errorCode, 'Template ricorrente non valido.', { field: validation.field });
+    const messageByCode = {
+      RECURRING_INVALID_FREQUENCY: 'Frequenza ricorrenza non valida.',
+      RECURRING_INVALID_INTERVAL: 'Intervallo ricorrenza non valido.',
+      RECURRING_MISSING_AMOUNT: 'Importo ricorrente mancante o non valido.',
+      RECURRING_INVALID_MOVEMENT_TYPE: 'Tipo movimento ricorrente non valido.',
+      RECURRING_INVALID_REFERENCE: 'Riferimenti ricorrenti non validi.',
+      RECURRING_INVALID_ANCHOR: 'Parametri di ancoraggio ricorrenza non validi.',
+      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
+      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
+    };
+    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Template ricorrente non valido.', { field: validation.field });
   }
 
   const nextRunAt = computeNextRunAtForTemplate(payload);
@@ -196,7 +210,17 @@ router.put('/:id', async (req, res) => {
   const payload = normalizeTemplatePayload(req.body);
   const validation = await validatePayload(payload, req.user.company_id);
   if (!validation.valid) {
-    return sendError(res, validation.status || 400, validation.errorCode, 'Template ricorrente non valido.', { field: validation.field });
+    const messageByCode = {
+      RECURRING_INVALID_FREQUENCY: 'Frequenza ricorrenza non valida.',
+      RECURRING_INVALID_INTERVAL: 'Intervallo ricorrenza non valido.',
+      RECURRING_MISSING_AMOUNT: 'Importo ricorrente mancante o non valido.',
+      RECURRING_INVALID_MOVEMENT_TYPE: 'Tipo movimento ricorrente non valido.',
+      RECURRING_INVALID_REFERENCE: 'Riferimenti ricorrenti non validi.',
+      RECURRING_INVALID_ANCHOR: 'Parametri di ancoraggio ricorrenza non validi.',
+      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
+      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
+    };
+    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Template ricorrente non valido.', { field: validation.field });
   }
 
   const nextRunAt = computeNextRunAtForTemplate(payload);
@@ -253,6 +277,7 @@ router.put('/:id', async (req, res) => {
       return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
 
+    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'update', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);

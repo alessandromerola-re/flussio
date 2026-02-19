@@ -1,6 +1,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
+import { sendError } from '../utils/httpErrors.js';
 
 const router = express.Router();
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -19,7 +20,7 @@ const buildDateFilters = (dateFrom, dateTo) => {
 
   if (dateFrom) {
     if (!isoDateRegex.test(dateFrom)) {
-      return { error: true };
+      return { error: { code: 'VALIDATION_INVALID_DATE_FORMAT', field: 'date_from' } };
     }
     params.push(dateFrom);
     clauses.push(`t.date >= $${params.length + 2}`);
@@ -27,10 +28,14 @@ const buildDateFilters = (dateFrom, dateTo) => {
 
   if (dateTo) {
     if (!isoDateRegex.test(dateTo)) {
-      return { error: true };
+      return { error: { code: 'VALIDATION_INVALID_DATE_FORMAT', field: 'date_to' } };
     }
     params.push(dateTo);
     clauses.push(`t.date <= $${params.length + 2}`);
+  }
+
+  if (dateFrom && dateTo && dateTo < dateFrom) {
+    return { error: { code: 'VALIDATION_INVALID_DATE_RANGE', field: 'date_to' } };
   }
 
   return { clauses, params };
@@ -54,18 +59,18 @@ const getJobForCompany = async (jobId, companyId) => {
 router.get('/job/:jobId/summary', async (req, res) => {
   const jobId = Number(req.params.jobId);
   if (!Number.isInteger(jobId)) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+    return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Parametri report non validi.');
   }
 
   const dateFilters = buildDateFilters(req.query.date_from, req.query.date_to);
   if (dateFilters.error) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+    return sendError(res, 400, dateFilters.error.code, 'Filtro date non valido.', { field: dateFilters.error.field });
   }
 
   try {
     const job = await getJobForCompany(jobId, req.user.company_id);
     if (!job) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
 
     const whereDateSql = dateFilters.clauses.length ? ` AND ${dateFilters.clauses.join(' AND ')}` : '';
@@ -117,25 +122,25 @@ router.get('/job/:jobId/summary', async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
 router.get('/job/:jobId/export.csv', requirePermission('export'), async (req, res) => {
   const jobId = Number(req.params.jobId);
   if (!Number.isInteger(jobId)) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+    return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Parametri report non validi.');
   }
 
   const dateFilters = buildDateFilters(req.query.date_from, req.query.date_to);
   if (dateFilters.error) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+    return sendError(res, 400, dateFilters.error.code, 'Filtro date non valido.', { field: dateFilters.error.field });
   }
 
   try {
     const job = await getJobForCompany(jobId, req.user.company_id);
     if (!job) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
+      return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
 
     const whereDateSql = dateFilters.clauses.length ? ` AND ${dateFilters.clauses.join(' AND ')}` : '';
@@ -197,7 +202,7 @@ router.get('/job/:jobId/export.csv', requirePermission('export'), async (req, re
     return res.status(200).send(csvContent);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 

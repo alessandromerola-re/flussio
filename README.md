@@ -114,7 +114,11 @@ In movement details modal:
 
 Upload size limit: 20MB per file (configurable with `ATTACHMENT_MAX_MB`, default `20`).
 
-If you run frontend behind Nginx, configure `client_max_body_size` (e.g. `20M`) to avoid HTTP 413 before backend validation.
+Nginx and backend are aligned by default:
+- Nginx: `client_max_body_size 20M`
+- Backend: `ATTACHMENT_MAX_MB=20`
+
+This ensures uploads up to ~19MB are accepted, while oversize files are rejected with `FILE_TOO_LARGE` and `max_mb` details.
 
 ## Phase 1 smoke test checklist
 
@@ -285,3 +289,14 @@ VITE_SHOW_ROADMAP=false
 ```
 
 If `RESET_EMAIL_ENABLED=false`, admin reset endpoint returns token for dev/manual flow.
+
+
+## Branding logo (admin)
+
+- Endpoint read metadata: `GET /api/settings/branding`
+- Endpoint read logo blob: `GET /api/settings/branding/logo`
+- Endpoint upload logo (admin): `POST /api/settings/branding/logo` (`multipart/form-data`, field `file`)
+- Endpoint delete logo (admin): `DELETE /api/settings/branding/logo`
+
+Accepted logo formats: PNG/JPG/WEBP.
+Maximum size is aligned with attachments (`ATTACHMENT_MAX_MB`, default `20`).

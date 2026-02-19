@@ -181,6 +181,7 @@ router.get('/:id', async (req, res) => {
       return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
 
+
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -193,7 +194,12 @@ router.post('/', async (req, res) => {
   const validation = await validateJobPayload(payload, req.user.company_id);
 
   if (!validation.valid) {
-    return sendError(res, validation.status || 400, validation.errorCode, 'Dati commessa non validi.', { field: validation.field });
+    const messageByCode = {
+      JOB_CODE_ALREADY_EXISTS: 'Codice commessa già usato.',
+      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
+      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
+    };
+    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Dati commessa non validi.', { field: validation.field });
   }
 
   try {
@@ -250,7 +256,12 @@ router.put('/:id', async (req, res) => {
   const validation = await validateJobPayload(payload, req.user.company_id, Number(id));
 
   if (!validation.valid) {
-    return sendError(res, validation.status || 400, validation.errorCode, 'Dati commessa non validi.', { field: validation.field });
+    const messageByCode = {
+      JOB_CODE_ALREADY_EXISTS: 'Codice commessa già usato.',
+      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
+      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
+    };
+    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Dati commessa non validi.', { field: validation.field });
   }
 
   try {
@@ -291,6 +302,15 @@ router.put('/:id', async (req, res) => {
     if (result.rowCount === 0) {
       return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
+
+    await writeAuditLog({
+      companyId: req.user.company_id,
+      userId: req.user.user_id,
+      action: 'update',
+      entityType: 'jobs',
+      entityId: result.rows[0].id,
+      meta: { title: result.rows[0].title },
+    });
 
     return res.json(result.rows[0]);
   } catch (error) {

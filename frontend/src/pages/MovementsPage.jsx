@@ -6,6 +6,7 @@ import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import { formatDateIT } from '../utils/date.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
+import Modal from '../components/Modal.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -64,6 +65,8 @@ const MovementsPage = () => {
   const [filterContactSearch, setFilterContactSearch] = useState('');
   const [filterContactResults, setFilterContactResults] = useState([]);
   const [showFilterContactResults, setShowFilterContactResults] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [movementModalOpen, setMovementModalOpen] = useState(false);
 
   const loadLookupData = async () => {
     const results = await Promise.allSettled([
@@ -232,6 +235,49 @@ const MovementsPage = () => {
     [filters]
   );
 
+
+
+  const activeFilterChips = useMemo(() => {
+    const labels = [];
+
+    if (filters.date_from) labels.push({ key: 'date_from', label: `${t('pages.movements.dateFrom')}: ${filters.date_from}` });
+    if (filters.date_to) labels.push({ key: 'date_to', label: `${t('pages.movements.dateTo')}: ${filters.date_to}` });
+    if (filters.type) labels.push({ key: 'type', label: `${t('pages.movements.type')}: ${t(`pages.movements.${filters.type}`)}` });
+
+    const account = accounts.find((a) => String(a.id) === String(filters.account_id));
+    if (filters.account_id && account) labels.push({ key: 'account_id', label: `${t('pages.movements.account')}: ${account.name}` });
+
+    const category = categories.find((c) => String(c.id) === String(filters.category_id));
+    if (filters.category_id && category) labels.push({ key: 'category_id', label: `${t('pages.movements.category')}: ${category.name}` });
+
+    const contact = contacts.find((c) => String(c.id) === String(filters.contact_id));
+    if (filters.contact_id && contact) labels.push({ key: 'contact_id', label: `${t('pages.movements.contact')}: ${contact.name}` });
+
+    const property = properties.find((p) => String(p.id) === String(filters.property_id));
+    if (filters.property_id && property) labels.push({ key: 'property_id', label: `${t('pages.movements.property')}: ${property.name}` });
+
+    const job = jobs.find((j) => String(j.id) === String(filters.job_id));
+    if (filters.job_id && job) labels.push({ key: 'job_id', label: `${t('pages.movements.job')}: ${job.name || job.title}` });
+
+    if (filters.q) labels.push({ key: 'q', label: `${t('pages.movements.searchText')}: ${filters.q}` });
+
+    return labels;
+  }, [filters, accounts, categories, contacts, properties, jobs, t]);
+
+  const clearFilterChip = async (key) => {
+    const nextFilters = { ...filters, [key]: defaultFilters[key], offset: 0 };
+    setFilters(nextFilters);
+    setDraftFilters(nextFilters);
+
+    if (key === 'contact_id') {
+      setFilterContactSearch('');
+      setFilterContactResults([]);
+      setShowFilterContactResults(false);
+    }
+
+    await loadMovements(nextFilters);
+  };
+
   const applyFilters = async () => {
     const nextFilters = {
       ...draftFilters,
@@ -248,6 +294,28 @@ const MovementsPage = () => {
     setFilterContactResults([]);
     setShowFilterContactResults(false);
     await loadMovements(defaultFilters);
+  };
+
+
+
+  const closeMovementModal = () => {
+    setMovementModalOpen(false);
+    setEditingMovementId(null);
+    setForm(emptyForm);
+    setContactSearch('');
+    setNewAttachmentFile(null);
+    setError('');
+    setSubmitMessage('');
+  };
+
+  const openNewMovementModal = () => {
+    setEditingMovementId(null);
+    setForm(emptyForm);
+    setContactSearch('');
+    setNewAttachmentFile(null);
+    setError('');
+    setSubmitMessage('');
+    setMovementModalOpen(true);
   };
 
   const handleExportCsv = async () => {
@@ -319,10 +387,9 @@ const MovementsPage = () => {
       await loadMovements(filters);
       setAccounts(await api.getAccounts());
       setSubmitMessage(t('pages.movements.createSuccess'));
+      setMovementModalOpen(false);
     } catch (submitError) {
-      const messageKey = submitError.code ? `errors.${submitError.code}` : null;
-      const fallback = submitError.message || t('errors.SERVER_ERROR');
-      setError(messageKey ? t(messageKey) : fallback);
+      setError(getErrorMessage(t, submitError));
       setSubmitMessage(t('pages.movements.createError'));
     }
   };
@@ -356,6 +423,7 @@ const MovementsPage = () => {
     setContactSearch(selected.contact_name || '');
     setEditingMovementId(selected.id);
     setNewAttachmentFile(null);
+    setMovementModalOpen(true);
     setSelected(null);
     setError('');
     setSubmitMessage('');
@@ -444,7 +512,24 @@ const MovementsPage = () => {
       </div>
       {loadError && <div className="error">{loadError}</div>}
 
+      <div className="row-actions movements-toolbar">
+        {canPermission('write') && <button type="button" onClick={openNewMovementModal}>{t('pages.movements.new')}</button>}
+        <button type="button" className="ghost" onClick={() => setFiltersOpen((v) => !v)}>{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
+        {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
+      </div>
+
+      {!filtersOpen && hasActiveFilters && (
+        <div className="filter-chip-list">
+          {activeFilterChips.map((chip) => (
+            <button key={chip.key} type="button" className="filter-chip" onClick={() => clearFilterChip(chip.key)} title={t('buttons.reset')}>
+              {chip.label} ✕
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="grid-two">
+        <Modal isOpen={movementModalOpen} onClose={closeMovementModal}>
         <form className="card" onSubmit={handleSubmit}>
           <h2>{editingMovementId ? `${t('buttons.edit')} #${editingMovementId}` : t('pages.movements.new')}</h2>
           <div className="form-grid">
@@ -562,29 +647,19 @@ const MovementsPage = () => {
           {submitMessage && <div className={error ? 'error' : 'success'}>{submitMessage}</div>}
           <div className="row-actions">
             {canPermission('write') && <button type="submit">{editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>}
-            {editingMovementId && (
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  setEditingMovementId(null);
-                  setForm(emptyForm);
-                  setContactSearch('');
-                  setNewAttachmentFile(null);
-                  setError('');
-                  setSubmitMessage('');
-                }}
-              >
-                {t('buttons.cancel')}
-              </button>
-            )}
+            <button type="button" className="ghost" onClick={closeMovementModal}>
+              {t('buttons.cancel')}
+            </button>
           </div>
         </form>
+        </Modal>
 
         <div className="card">
           <h2>{t('pages.movements.filters')}</h2>
           {hasActiveFilters && <div className="muted">{t('pages.movements.activeFilters')}</div>}
-          <div className="form-grid">
+          {filtersOpen && (
+            <>
+<div className="form-grid">
             <label>
               {t('pages.movements.dateFrom')}
               <input
@@ -677,12 +752,24 @@ const MovementsPage = () => {
                 placeholder={t('pages.movements.searchText')}
               />
             </label>
-          </div>
-          <div className="row-actions">
-            <button type="button" onClick={applyFilters}>{t('buttons.apply')}</button>
-            <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>
-            <button type="button" className="ghost" onClick={handleExportCsv}>{t('buttons.exportCsv')}</button>
-          </div>
+              </div>
+              <div className="row-actions">
+                <button type="button" onClick={applyFilters}>{t('buttons.apply')}</button>
+                <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>
+                <button type="button" className="ghost" onClick={handleExportCsv}>{t('buttons.exportCsv')}</button>
+              </div>
+
+              {hasActiveFilters && (
+                <div className="filter-chip-list">
+                  {activeFilterChips.map((chip) => (
+                    <button key={chip.key} type="button" className="filter-chip" onClick={() => clearFilterChip(chip.key)} title={t('buttons.reset')}>
+                      {chip.label} ✕
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
           <h2>{t('pages.movements.latest')}</h2>
           <div className="list">
@@ -722,8 +809,14 @@ const MovementsPage = () => {
       </div>
 
       {selected && (
-        <div className="modal">
-          <div className="modal-content">
+        <Modal isOpen={Boolean(selected)} onClose={() => {
+          setSelected(null);
+          setUploadError('');
+          setUploadMessage('');
+          setAttachmentFile(null);
+          setPreviewAttachment(null);
+        }}>
+
             <h2>{t('pages.movements.details')}</h2>
             <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
             <p><strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}</p>
@@ -792,8 +885,7 @@ const MovementsPage = () => {
               </button>
               {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       <AttachmentPreviewModal
