@@ -171,4 +171,3 @@ export const api = {
   deleteBrandLogo: () => request('/settings/branding/logo', { method: 'DELETE' }),
 };
 
-export { can, canPermission, getRole, isRoadmapEnabled } from '../utils/permissions.js';
