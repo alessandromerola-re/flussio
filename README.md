@@ -80,6 +80,8 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 - `property_id=<number>`
 - `job_id=<number>`
 - `q=<text search in description>`
+- `is_recurring=1|0`
+- `has_attachments=1|0`
 - `limit` (default `30`, max `200`)
 - `offset` (default `0`, max `5000`)
 
