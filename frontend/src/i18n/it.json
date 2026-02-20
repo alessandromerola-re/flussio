@@ -231,5 +231,11 @@
   "pages.reportsAdvanced.columns.job": "Commessa",
   "pages.reportsAdvanced.columns.property": "Immobile",
   "pages.reportsAdvanced.columns.type": "Tipo",
-  "pages.reportsAdvanced.columns.recurring": "Ricorrente"
+  "pages.reportsAdvanced.columns.recurring": "Ricorrente",
+  "pages.reportsAdvanced.datePresets.currentMonth": "Mese corrente",
+  "pages.reportsAdvanced.datePresets.last30Days": "Ultimi 30 giorni",
+  "pages.reportsAdvanced.datePresets.currentYear": "Anno corrente",
+  "pages.reportsAdvanced.includeCategoryChildren": "Includi sottocategorie",
+  "pages.reportsAdvanced.recurring": "Ricorrente",
+  "pages.reportsAdvanced.hasAttachments": "Con allegati"
 }

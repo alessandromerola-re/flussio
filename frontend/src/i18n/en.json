@@ -231,5 +231,11 @@
   "pages.reportsAdvanced.columns.job": "Job",
   "pages.reportsAdvanced.columns.property": "Property",
   "pages.reportsAdvanced.columns.type": "Type",
-  "pages.reportsAdvanced.columns.recurring": "Recurring"
+  "pages.reportsAdvanced.columns.recurring": "Recurring",
+  "pages.reportsAdvanced.datePresets.currentMonth": "Current month",
+  "pages.reportsAdvanced.datePresets.last30Days": "Last 30 days",
+  "pages.reportsAdvanced.datePresets.currentYear": "Current year",
+  "pages.reportsAdvanced.includeCategoryChildren": "Include child categories",
+  "pages.reportsAdvanced.recurring": "Recurring",
+  "pages.reportsAdvanced.hasAttachments": "Has attachments"
 }
