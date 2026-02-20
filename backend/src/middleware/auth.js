@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { sendError } from '../utils/httpErrors.js';
 
 export const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization ?? '';
@@ -7,7 +8,7 @@ export const authMiddleware = (req, res, next) => {
     : '';
 
   if (!token) {
-    return res.status(401).json({ error_code: 'UNAUTHORIZED' });
+    return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required.');
   }
 
   try {
@@ -15,6 +16,6 @@ export const authMiddleware = (req, res, next) => {
     req.user = payload;
     return next();
   } catch (error) {
-    return res.status(401).json({ error_code: 'UNAUTHORIZED' });
+    return sendError(res, 401, 'UNAUTHORIZED', 'Authentication required.');
   }
 };
