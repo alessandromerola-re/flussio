@@ -850,6 +850,7 @@ const MovementsPage = () => {
             <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.job')}:</strong> {selected.job_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
+            <p><strong>{t('pages.movements.createdBy')}:</strong> {selected.created_by_name || t('common.none')}</p>
             {selected.recurring_template_title && (
               <p><strong>{t('pages.recurring.badge')}:</strong> <a href={`/recurring?template_id=${selected.recurring_template_id}`}>{selected.recurring_template_title}</a></p>
             )}

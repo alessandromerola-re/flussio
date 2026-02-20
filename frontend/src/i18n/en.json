@@ -113,6 +113,7 @@
   "pages.registry.jobs": "Jobs",
   "pages.registry.propertiesBeta": "Properties (beta)",
   "pages.movements.job": "Job",
+  "pages.movements.createdBy": "Created by",
   "errors.NO_FILE": "No file selected.",
   "errors.UPLOAD_FAILED": "Attachment upload failed.",
   "pages.movements.attachmentPreview": "Attachment preview",

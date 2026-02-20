@@ -113,6 +113,7 @@
   "pages.registry.jobs": "Commesse",
   "pages.registry.propertiesBeta": "Immobili (beta)",
   "pages.movements.job": "Commessa",
+  "pages.movements.createdBy": "Inserito da",
   "errors.NO_FILE": "Nessun file selezionato.",
   "errors.UPLOAD_FAILED": "Upload allegato non riuscito.",
   "pages.movements.attachmentPreview": "Anteprima allegato",

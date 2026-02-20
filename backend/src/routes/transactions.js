@@ -145,6 +145,17 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
     j.name AS job_name,
     rt.title AS recurring_template_title,
     (
+      SELECT COALESCE(u.name, u.email)
+      FROM audit_log al
+      LEFT JOIN users u ON u.id = al.user_id
+      WHERE al.company_id = t.company_id
+        AND al.entity_type = 'movements'
+        AND al.action = 'create'
+        AND al.entity_id = t.id::text
+      ORDER BY al.created_at ASC
+      LIMIT 1
+    ) AS created_by_name,
+    (
       SELECT COUNT(*)::int
       FROM attachments att
       WHERE att.transaction_id = t.id
