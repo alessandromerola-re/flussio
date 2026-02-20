@@ -98,20 +98,23 @@ const AdvancedReportsPage = () => {
 
   const loadSaved = async () => {
     const list = await api.listSavedReports();
-    setSavedReports(list);
+    setSavedReports(Array.isArray(list) ? list : []);
   };
 
   useEffect(() => {
     const init = async () => {
-      try {
-        await loadLookups();
-        await loadSaved();
-      } catch {
+      const [lookupsResult, savedResult] = await Promise.allSettled([loadLookups(), loadSaved()]);
+
+      if (lookupsResult.status === 'rejected') {
         setError(t('errors.SERVER_ERROR'));
+      }
+
+      if (savedResult.status === 'rejected') {
+        console.error(savedResult.reason);
       }
     };
     init();
-  }, []);
+  }, [t]);
 
   const runReport = async (nextSpec = spec) => {
     setError('');

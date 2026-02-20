@@ -6,6 +6,9 @@ import { buildAdvancedReportQuery, buildTotalsQuery, toCsv, validateAndNormalize
 
 const router = express.Router();
 
+
+const isSavedReportsTableMissing = (error) => error?.code === '42P01';
+
 router.post('/run', async (req, res) => {
   const normalized = validateAndNormalizeSpec(req.body, req.user.company_id);
   if (normalized.error) {
@@ -70,6 +73,9 @@ router.get('/saved', async (req, res) => {
     );
     return res.json(result.rows);
   } catch (error) {
+    if (isSavedReportsTableMissing(error)) {
+      return res.json([]);
+    }
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
@@ -93,6 +99,9 @@ router.post('/saved', requirePermission('export'), async (req, res) => {
     );
     return res.status(201).json(result.rows[0]);
   } catch (error) {
+    if (isSavedReportsTableMissing(error)) {
+      return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Migrazione report salvati non applicata.');
+    }
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
@@ -137,6 +146,9 @@ router.put('/saved/:id', requirePermission('export'), async (req, res) => {
 
     return res.json(result.rows[0]);
   } catch (error) {
+    if (isSavedReportsTableMissing(error)) {
+      return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Migrazione report salvati non applicata.');
+    }
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
@@ -167,6 +179,9 @@ router.delete('/saved/:id', requirePermission('export'), async (req, res) => {
     await query('DELETE FROM saved_reports WHERE id = $1 AND company_id = $2', [id, req.user.company_id]);
     return res.status(204).send();
   } catch (error) {
+    if (isSavedReportsTableMissing(error)) {
+      return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Migrazione report salvati non applicata.');
+    }
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
