@@ -8,6 +8,7 @@ import RecurringTemplatesPage from './pages/RecurringTemplatesPage.jsx';
 import UsersAdminPage from './pages/UsersAdminPage.jsx';
 import RoadmapPage from './pages/RoadmapPage.jsx';
 import SettingsAdminPage from './pages/SettingsAdminPage.jsx';
+import AdvancedReportsPage from './pages/AdvancedReportsPage.jsx';
 import { can } from './utils/permissions.js';
 
 const routes = ({ setTokenState, token, onBrandingChanged }) => [
@@ -38,6 +39,11 @@ const routes = ({ setTokenState, token, onBrandingChanged }) => [
   {
     path: '/recurring',
     element: token ? <RecurringTemplatesPage /> : <Navigate to="/login" replace />,
+  },
+
+  {
+    path: '/reports/advanced',
+    element: token ? <AdvancedReportsPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/users',
