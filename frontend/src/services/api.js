@@ -122,6 +122,13 @@ export const api = {
     const queryString = toQueryString(filters);
     return request(`/reports/job/${jobId}/export.csv${queryString}`, { responseType: 'blob', includeHeaders: true });
   },
+
+  runAdvancedReport: (spec) => request('/reports/advanced/run', { method: 'POST', body: JSON.stringify(spec) }),
+  exportAdvancedReportCsv: (spec) => request('/reports/advanced/export.csv', { method: 'POST', body: JSON.stringify(spec), responseType: 'blob', includeHeaders: true }),
+  listSavedReports: () => request('/reports/advanced/saved'),
+  createSavedReport: (payload) => request('/reports/advanced/saved', { method: 'POST', body: JSON.stringify(payload) }),
+  updateSavedReport: (id, payload) => request(`/reports/advanced/saved/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteSavedReport: (id) => request(`/reports/advanced/saved/${id}`, { method: 'DELETE' }),
   getRecurringTemplates: () => request('/recurring-templates'),
   getRecurringTemplate: (id) => request(`/recurring-templates/${id}`),
   createRecurringTemplate: (payload) => request('/recurring-templates', { method: 'POST', body: JSON.stringify(payload) }),
