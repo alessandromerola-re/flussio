@@ -12,6 +12,9 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [csvFile, setCsvFile] = useState(null);
+  const [csvMessage, setCsvMessage] = useState('');
+  const [csvError, setCsvError] = useState('');
 
   const loadBranding = async () => {
     const data = await api.getBranding();
@@ -64,6 +67,31 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
     }
   };
 
+
+  const handleImportCsv = async (event) => {
+    event.preventDefault();
+    setCsvError('');
+    setCsvMessage('');
+
+    if (!csvFile) {
+      setCsvError(t('errors.NO_FILE'));
+      return;
+    }
+
+    if (csvFile.size > maxMb * 1024 * 1024) {
+      setCsvError(t('errors.FILE_TOO_LARGE', { maxMb }));
+      return;
+    }
+
+    try {
+      const result = await api.importMovementsCsv(csvFile);
+      setCsvFile(null);
+      setCsvMessage(t('pages.settings.importResult', { imported: result.imported || 0, skipped: result.skipped || 0 }));
+    } catch (importError) {
+      setCsvError(getErrorMessage(t, importError));
+    }
+  };
+
   const handleDelete = async () => {
     setError('');
     setMessage('');
@@ -104,6 +132,23 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
         {message && <div className="success">{message}</div>}
         {error && <div className="error">{error}</div>}
       </div>
+
+      <div className="card" style={{ maxWidth: 680, marginTop: '1rem' }}>
+        <h2>{t('pages.settings.importMovements')}</h2>
+        <p className="muted">{t('pages.settings.importHint')}</p>
+        <form onSubmit={handleImportCsv}>
+          <label>
+            CSV
+            <input type="file" accept=".csv,text/csv" onChange={(event) => setCsvFile(event.target.files?.[0] || null)} />
+          </label>
+          <div className="row-actions">
+            <button type="submit">{t('pages.settings.importButton')}</button>
+          </div>
+        </form>
+        {csvMessage && <div className="success">{csvMessage}</div>}
+        {csvError && <div className="error">{csvError}</div>}
+      </div>
+
     </div>
   );
 };

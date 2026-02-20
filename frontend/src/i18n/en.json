@@ -186,6 +186,11 @@
   "pages.settings.logoHint": "PNG/JPG/WEBP, max 20MB",
   "pages.settings.saved": "Logo updated.",
   "pages.settings.deleted": "Logo removed.",
+  "pages.settings.importMovements": "Import movements from CSV",
+  "pages.settings.importHint": "Use a CSV exported from Flussio (UTF-8).",
+  "pages.settings.importButton": "Import CSV",
+  "pages.settings.importResult": "Import completed: {{imported}} imported, {{skipped}} skipped.",
   "errors.VALIDATION_INVALID_FILE_TYPE": "Unsupported file type.",
-  "errors.BRANDING_UPLOAD_FAILED": "Logo upload failed."
+  "errors.BRANDING_UPLOAD_FAILED": "Logo upload failed.",
+  "errors.MOVEMENTS_IMPORT_FAILED": "Movements CSV import failed."
 }

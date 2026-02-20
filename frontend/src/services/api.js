@@ -169,5 +169,10 @@ export const api = {
     return request('/settings/branding/logo', { method: 'POST', body: formData });
   },
   deleteBrandLogo: () => request('/settings/branding/logo', { method: 'DELETE' }),
+  importMovementsCsv: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request('/settings/movements/import-csv', { method: 'POST', body: formData });
+  },
 };
 

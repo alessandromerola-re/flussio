@@ -284,7 +284,7 @@ router.get('/export', async (req, res) => {
       ].join(';');
     });
 
-    const csv = `${header}\n${rows.join('\n')}`;
+    const csv = `\uFEFF${header}\n${rows.join('\n')}`;
     const datePart = new Date().toISOString().slice(0, 10);
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
