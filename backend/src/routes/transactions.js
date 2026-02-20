@@ -145,7 +145,7 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
     j.name AS job_name,
     rt.title AS recurring_template_title,
     (
-      SELECT COALESCE(u.name, u.email)
+      SELECT u.email
       FROM audit_log al
       LEFT JOIN users u ON u.id = al.user_id
       WHERE al.company_id = t.company_id
