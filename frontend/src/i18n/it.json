@@ -192,5 +192,16 @@
   "pages.settings.importResult": "Import completato: {{imported}} importati, {{skipped}} saltati.",
   "errors.VALIDATION_INVALID_FILE_TYPE": "Tipo file non supportato.",
   "errors.BRANDING_UPLOAD_FAILED": "Upload logo non riuscito.",
-  "errors.MOVEMENTS_IMPORT_FAILED": "Import CSV movimenti non riuscito."
+  "errors.MOVEMENTS_IMPORT_FAILED": "Import CSV movimenti non riuscito.",
+  "nav.reportsAdvanced": "Report avanzati",
+  "pages.reportsAdvanced.title": "Report avanzati",
+  "pages.reportsAdvanced.templates": "Template",
+  "pages.reportsAdvanced.results": "Risultati",
+  "pages.reportsAdvanced.savedReports": "Report salvati",
+  "pages.reportsAdvanced.savedName": "Nome report",
+  "pages.reportsAdvanced.shared": "Condividi in azienda",
+  "pages.reportsAdvanced.groupBy1": "Raggruppa per (livello 1)",
+  "pages.reportsAdvanced.groupBy2": "Raggruppa per (livello 2)",
+  "buttons.runReport": "Esegui report",
+  "buttons.saveReport": "Salva report"
 }

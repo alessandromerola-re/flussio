@@ -11,6 +11,7 @@ import transactionsRoutes from './routes/transactions.js';
 import attachmentsRoutes from './routes/attachments.js';
 import dashboardRoutes from './routes/dashboard.js';
 import reportsRoutes from './routes/reports.js';
+import advancedReportsRoutes from './routes/advancedReports.js';
 import recurringTemplatesRoutes from './routes/recurringTemplates.js';
 import usersRoutes from './routes/users.js';
 import scaffoldingRoutes from './routes/scaffolding.js';
@@ -56,6 +57,7 @@ app.use('/api/transactions', authMiddleware, requireMethodPermission({ GET: 'rea
 app.use('/api/attachments', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', DELETE: 'delete_sensitive' }), attachmentsRoutes);
 app.use('/api/dashboard', authMiddleware, requireMethodPermission({ GET: 'read' }), dashboardRoutes);
 app.use('/api/reports', authMiddleware, requireMethodPermission({ GET: 'read' }), reportsRoutes);
+app.use('/api/reports/advanced', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'read' }), advancedReportsRoutes);
 app.use('/api/recurring-templates', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), recurringTemplatesRoutes);
 app.use('/api/users', authMiddleware, usersRoutes);
 app.use('/api/scaffolding', authMiddleware, requireMethodPermission({ GET: 'read' }), scaffoldingRoutes);

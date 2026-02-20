@@ -192,5 +192,16 @@
   "pages.settings.importResult": "Import completed: {{imported}} imported, {{skipped}} skipped.",
   "errors.VALIDATION_INVALID_FILE_TYPE": "Unsupported file type.",
   "errors.BRANDING_UPLOAD_FAILED": "Logo upload failed.",
-  "errors.MOVEMENTS_IMPORT_FAILED": "Movements CSV import failed."
+  "errors.MOVEMENTS_IMPORT_FAILED": "Movements CSV import failed.",
+  "nav.reportsAdvanced": "Advanced reports",
+  "pages.reportsAdvanced.title": "Advanced reports",
+  "pages.reportsAdvanced.templates": "Templates",
+  "pages.reportsAdvanced.results": "Results",
+  "pages.reportsAdvanced.savedReports": "Saved reports",
+  "pages.reportsAdvanced.savedName": "Report name",
+  "pages.reportsAdvanced.shared": "Share with company",
+  "pages.reportsAdvanced.groupBy1": "Group by (level 1)",
+  "pages.reportsAdvanced.groupBy2": "Group by (level 2)",
+  "buttons.runReport": "Run report",
+  "buttons.saveReport": "Save report"
 }
