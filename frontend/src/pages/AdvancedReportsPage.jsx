@@ -16,7 +16,7 @@ const groupOptions = ['month', 'day', 'week', 'quarter', 'year', 'category', 'ac
 
 const templates = {
   pnl: {
-    name: 'P&L Netto (Entrate/Uscite/Netto)',
+    nameKey: 'pages.reportsAdvanced.templatesList.pnl',
     spec: {
       groupBy: ['month'],
       metrics: ['income_sum_cents', 'expense_sum_cents', 'net_sum_cents', 'count'],
@@ -24,7 +24,7 @@ const templates = {
     },
   },
   income: {
-    name: 'Solo Entrate',
+    nameKey: 'pages.reportsAdvanced.templatesList.income',
     spec: {
       groupBy: ['month'],
       metrics: ['income_sum_cents', 'count'],
@@ -32,7 +32,7 @@ const templates = {
     },
   },
   expense: {
-    name: 'Solo Uscite',
+    nameKey: 'pages.reportsAdvanced.templatesList.expense',
     spec: {
       groupBy: ['month'],
       metrics: ['expense_sum_cents', 'count'],
@@ -68,6 +68,17 @@ const baseSpec = {
 };
 
 const formatEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
+
+const dimensionLabelKey = {
+  bucket: 'pages.reportsAdvanced.columns.bucket',
+  category_name: 'pages.reportsAdvanced.columns.category',
+  account_name: 'pages.reportsAdvanced.columns.account',
+  contact_name: 'pages.reportsAdvanced.columns.contact',
+  job_title: 'pages.reportsAdvanced.columns.job',
+  property_name: 'pages.reportsAdvanced.columns.property',
+  type: 'pages.reportsAdvanced.columns.type',
+  recurring: 'pages.reportsAdvanced.columns.recurring',
+};
 
 const AdvancedReportsPage = () => {
   const { t } = useTranslation();
@@ -229,6 +240,15 @@ const AdvancedReportsPage = () => {
     return [...dims, ...spec.metrics];
   }, [rows, spec.metrics]);
 
+  const renderGroupOptionLabel = (value) => t(`pages.reportsAdvanced.groupOptions.${value}`, value);
+  const renderMetricLabel = (value) => t(`pages.reportsAdvanced.metrics.${value}`, value);
+  const renderColumnLabel = (value) => {
+    if (value.includes('cents') || value === 'count') {
+      return renderMetricLabel(value);
+    }
+    return t(dimensionLabelKey[value] || value, value);
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -240,7 +260,7 @@ const AdvancedReportsPage = () => {
         <h2>{t('pages.reportsAdvanced.templates')}</h2>
         <div className="row-actions">
           {Object.entries(templates).map(([key, tpl]) => (
-            <button key={key} type="button" className="ghost" onClick={() => applyTemplate(key)}>{tpl.name}</button>
+            <button key={key} type="button" className="ghost" onClick={() => applyTemplate(key)}>{t(tpl.nameKey)}</button>
           ))}
         </div>
       </div>
@@ -292,13 +312,13 @@ const AdvancedReportsPage = () => {
           <label>{t('pages.reportsAdvanced.groupBy1')}
             <select value={spec.groupBy[0] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [e.target.value || '', p.groupBy[1]].filter(Boolean) }))}>
               <option value="">{t('common.none')}</option>
-              {groupOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              {groupOptions.map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}
             </select>
           </label>
           <label>{t('pages.reportsAdvanced.groupBy2')}
             <select value={spec.groupBy[1] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [p.groupBy[0], e.target.value || ''].filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i) }))}>
               <option value="">{t('common.none')}</option>
-              {groupOptions.filter((opt) => opt !== spec.groupBy[0]).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              {groupOptions.filter((opt) => opt !== spec.groupBy[0]).map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}
             </select>
           </label>
         </div>
@@ -306,7 +326,7 @@ const AdvancedReportsPage = () => {
         <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>
           {metricOptions.map((metric) => (
             <label key={metric} style={{ margin: 0 }}>
-              <input type="checkbox" checked={spec.metrics.includes(metric)} onChange={() => handleMetricToggle(metric)} /> {metric}
+              <input type="checkbox" checked={spec.metrics.includes(metric)} onChange={() => handleMetricToggle(metric)} /> {renderMetricLabel(metric)}
             </label>
           ))}
         </div>
@@ -347,13 +367,13 @@ const AdvancedReportsPage = () => {
               <span>{t('pages.dashboard.income')}: {formatEuro(totals.income_sum_cents)}</span>
               <span>{t('pages.dashboard.expense')}: {formatEuro(totals.expense_sum_cents)}</span>
               <span>{t('pages.dashboard.net')}: {formatEuro(totals.net_sum_cents)}</span>
-              <span>Count: {totals.count}</span>
+              <span>{t('pages.reportsAdvanced.metrics.count')}: {totals.count}</span>
             </div>
           )}
 
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col}</th>)}</tr>
+              <tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}</tr>
             </thead>
             <tbody>
               {rows.map((row, idx) => (
