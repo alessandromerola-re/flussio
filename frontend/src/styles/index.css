@@ -527,6 +527,7 @@ button.danger {
 
 .shell {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
@@ -605,6 +606,17 @@ button.danger {
   display: none;
 }
 
+.desktop-topbar {
+  display: flex;
+}
+
+.nav-link.active {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eef2ff;
+}
+
+
 .drawer-overlay {
   position: fixed;
   inset: 0;
@@ -637,7 +649,7 @@ button.danger {
 }
 
 @media (max-width: 768px) {
-  .sidebar {
+  .desktop-topbar {
     display: none;
   }
 

@@ -185,5 +185,6 @@
   "pages.settings.logoHint": "PNG/JPG/WEBP, max 20MB",
   "pages.settings.saved": "Logo updated.",
   "pages.settings.deleted": "Logo removed.",
-  "errors.VALIDATION_INVALID_FILE_TYPE": "Unsupported file type."
+  "errors.VALIDATION_INVALID_FILE_TYPE": "Unsupported file type.",
+  "errors.BRANDING_UPLOAD_FAILED": "Logo upload failed."
 }

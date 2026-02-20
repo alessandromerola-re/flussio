@@ -109,22 +109,16 @@ const App = () => {
     <div className="app">
       {token ? (
         <div className="shell">
-          <aside className="sidebar">
-            <Link to="/dashboard" className="sidebar-brand">
-              {brandNode}
-            </Link>
-            <nav className="sidebar-nav">
+          <header className="topbar desktop-topbar">
+            <Link to="/dashboard" className="brand">{brandNode}</Link>
+            <nav className="nav">
               {navItems.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`.trim()}
-                >
+                <NavLink key={item.path} to={item.path} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`.trim()}>
                   {item.label}
                 </NavLink>
               ))}
             </nav>
-            <div className="sidebar-footer">
+            <div className="actions">
               <label>
                 {t('common.language')}
                 <select value={language} onChange={handleLanguageChange}>
@@ -134,13 +128,13 @@ const App = () => {
               </label>
               <button type="button" onClick={handleLogout}>{t('nav.logout')}</button>
             </div>
-          </aside>
+          </header>
 
-          <div className="mobile-topbar">
+          <header className="mobile-topbar">
             <button type="button" className="ghost hamburger" onClick={() => setDrawerOpen(true)} aria-label="Open menu">☰</button>
             <Link to="/dashboard" className="sidebar-brand">{brandNode}</Link>
             <div />
-          </div>
+          </header>
 
           {drawerOpen && <div className="drawer-overlay" onClick={() => setDrawerOpen(false)} />}
           <aside className={`drawer ${drawerOpen ? 'open' : ''}`}>

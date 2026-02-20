@@ -178,7 +178,7 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
     return res.status(201).json({ status: 'saved', updated_at: metadata.updated_at });
   } catch (error) {
     console.error(error);
-    return sendError(res, 500, 'UPLOAD_FAILED', 'Upload logo non riuscito.');
+    return sendError(res, 500, 'BRANDING_UPLOAD_FAILED', 'Upload logo non riuscito.');
   }
 });
 
@@ -210,7 +210,7 @@ router.use((error, req, res, next) => {
     return sendError(res, 413, 'FILE_TOO_LARGE', 'File troppo grande.', { details: { max_mb: attachmentMaxMb } });
   }
   console.error(error);
-  return sendError(res, 500, 'UPLOAD_FAILED', 'Upload logo non riuscito.');
+  return sendError(res, 500, 'BRANDING_UPLOAD_FAILED', 'Upload logo non riuscito.');
 });
 
 export default router;
