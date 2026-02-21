@@ -284,6 +284,9 @@ const RegistryPage = () => {
         <button type="button" className={tab === 'properties' ? 'active' : ''} onClick={() => handleTabChange('properties')}>
           {t('pages.registry.propertiesBeta')}
         </button>
+        {canPermission('write') && (
+          <button type="button" onClick={() => openCreateModal(tab)}>{t('buttons.new')}</button>
+        )}
       </div>
 
       {tab === 'accounts' && (
