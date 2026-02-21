@@ -96,6 +96,25 @@ const RegistryPage = () => {
     }));
   }, [categories]);
 
+  const categoryParentOptions = useMemo(() => {
+    const byId = new Map(categories.map((cat) => [cat.id, cat]));
+    const getDepth = (cat) => {
+      let depth = 0;
+      let cursor = cat;
+      while (cursor?.parent_id) {
+        cursor = byId.get(cursor.parent_id);
+        depth += 1;
+        if (depth > 10) break;
+      }
+      return depth;
+    };
+
+    return categories
+      .filter((cat) => cat.direction === categoryForm.direction)
+      .filter((cat) => (editingId ? String(cat.id) !== String(editingId) : true))
+      .map((cat) => ({ ...cat, depth: getDepth(cat) }));
+  }, [categories, categoryForm.direction, editingId]);
+
   const resetForms = () => {
     setAccountForm(initialAccount);
     setCategoryForm(initialCategory);
@@ -104,6 +123,11 @@ const RegistryPage = () => {
     setJobForm(initialJob);
     setEditingId(null);
     setJobFormError('');
+  };
+
+  const handleTabChange = (nextTab) => {
+    resetForms();
+    setTab(nextTab);
   };
 
   const handleAccountSubmit = async (event) => {
@@ -218,19 +242,19 @@ const RegistryPage = () => {
       </div>
       {loadError && <div className="error">{loadError}</div>}
       <div className="tabs">
-        <button type="button" className={tab === 'accounts' ? 'active' : ''} onClick={() => setTab('accounts')}>
+        <button type="button" className={tab === 'accounts' ? 'active' : ''} onClick={() => handleTabChange('accounts')}>
           {t('pages.registry.accounts')}
         </button>
-        <button type="button" className={tab === 'categories' ? 'active' : ''} onClick={() => setTab('categories')}>
+        <button type="button" className={tab === 'categories' ? 'active' : ''} onClick={() => handleTabChange('categories')}>
           {t('pages.registry.categories')}
         </button>
-        <button type="button" className={tab === 'contacts' ? 'active' : ''} onClick={() => setTab('contacts')}>
+        <button type="button" className={tab === 'contacts' ? 'active' : ''} onClick={() => handleTabChange('contacts')}>
           {t('pages.registry.contacts')}
         </button>
-        <button type="button" className={tab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>
+        <button type="button" className={tab === 'jobs' ? 'active' : ''} onClick={() => handleTabChange('jobs')}>
           {t('pages.registry.jobs')}
         </button>
-        <button type="button" className={tab === 'properties' ? 'active' : ''} onClick={() => setTab('properties')}>
+        <button type="button" className={tab === 'properties' ? 'active' : ''} onClick={() => handleTabChange('properties')}>
           {t('pages.registry.propertiesBeta')}
         </button>
       </div>
@@ -341,22 +365,26 @@ const RegistryPage = () => {
                 onChange={(event) => setCategoryForm({ ...categoryForm, parent_id: event.target.value })}
               >
                 <option value="">{t('common.none')}</option>
-                {categories
-                  .filter((cat) => !cat.parent_id && cat.direction === categoryForm.direction)
-                  .map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
+                {categoryParentOptions.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {`${'— '.repeat(cat.depth)}${cat.name}`}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
               {t('forms.color')}
-              <input
-                type="color"
-                value={categoryForm.color || '#2ecc71'}
-                onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <input
+                  type="color"
+                  value={categoryForm.color || '#2ecc71'}
+                  onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })}
+                />
+                <span
+                  aria-label={t('forms.color')}
+                  style={{ width: 24, height: 24, borderRadius: 4, border: '1px solid #d1d5db', background: categoryForm.color || '#2ecc71' }}
+                />
+              </div>
             </label>
             {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
           </form>
@@ -483,7 +511,7 @@ const RegistryPage = () => {
                 <option value="">{t('common.none')}</option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.direction})
+                    {cat.name} ({t(`pages.movements.${cat.direction}`)})
                   </option>
                 ))}
               </select>
