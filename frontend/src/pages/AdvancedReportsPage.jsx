@@ -154,18 +154,6 @@ const AdvancedReportsPage = () => {
     await runReport(nextSpec);
   };
 
-  const applyDatePreset = (preset) => {
-    if (preset === 'month') {
-      setSpec((prev) => ({ ...prev, ...getCurrentMonthRange() }));
-      return;
-    }
-    if (preset === 'year') {
-      setSpec((prev) => ({ ...prev, ...getCurrentYearRange() }));
-      return;
-    }
-    setSpec((prev) => ({ ...prev, ...getLast30Range() }));
-  };
-
   const handleMetricToggle = (metric) => {
     setSpec((prev) => {
       const has = prev.metrics.includes(metric);

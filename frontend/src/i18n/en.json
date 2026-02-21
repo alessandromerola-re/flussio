@@ -274,5 +274,15 @@
   "reportsTemplates.yoyMonthlyNet.title": "YoY comparison – Monthly net",
   "reportsTemplates.yoyMonthlyNet.desc": "Baseline for year-over-year monthly net comparison.",
   "reportsTemplates.momMonthlyExpenses.title": "MoM comparison – Monthly expenses",
-  "reportsTemplates.momMonthlyExpenses.desc": "Baseline for month-over-month expense comparison."
+  "reportsTemplates.momMonthlyExpenses.desc": "Baseline for month-over-month expense comparison.",
+  "pages.dashboard.trendIncomeExpense": "Income vs expense trend",
+  "pages.dashboard.pieIncomeBy": "Income by",
+  "pages.dashboard.pieExpenseBy": "Expense by",
+  "pages.dashboard.dim.category": "Categories",
+  "pages.dashboard.dim.contact": "Contacts",
+  "pages.dashboard.dim.account": "Accounts",
+  "pages.dashboard.dim.job": "Jobs",
+  "pages.dashboard.other": "Other",
+  "pages.dashboard.topExpensesByCategory": "Top 10 expenses by category",
+  "pages.dashboard.netMonthlyTrend": "Monthly net trend"
 }

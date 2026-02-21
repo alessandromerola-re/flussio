@@ -274,5 +274,15 @@
   "reportsTemplates.yoyMonthlyNet.title": "Confronto YoY – Netto mensile",
   "reportsTemplates.yoyMonthlyNet.desc": "Base per confronto anno su anno del netto mensile.",
   "reportsTemplates.momMonthlyExpenses.title": "Confronto MoM – Spese mensili",
-  "reportsTemplates.momMonthlyExpenses.desc": "Base per confronto mese su mese delle spese."
+  "reportsTemplates.momMonthlyExpenses.desc": "Base per confronto mese su mese delle spese.",
+  "pages.dashboard.trendIncomeExpense": "Andamento Entrate vs Uscite",
+  "pages.dashboard.pieIncomeBy": "Entrate per",
+  "pages.dashboard.pieExpenseBy": "Uscite per",
+  "pages.dashboard.dim.category": "Categorie",
+  "pages.dashboard.dim.contact": "Contatti",
+  "pages.dashboard.dim.account": "Conti",
+  "pages.dashboard.dim.job": "Commesse",
+  "pages.dashboard.other": "Altro",
+  "pages.dashboard.topExpensesByCategory": "Top 10 spese per categoria",
+  "pages.dashboard.netMonthlyTrend": "Netto mensile"
 }
