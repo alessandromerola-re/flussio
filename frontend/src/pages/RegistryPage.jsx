@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
+import Modal from '../components/Modal.jsx';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = {
@@ -50,6 +51,7 @@ const RegistryPage = () => {
   const [editingId, setEditingId] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [jobFormError, setJobFormError] = useState('');
+  const [createModalTab, setCreateModalTab] = useState('');
 
   const loadData = async () => {
     setLoadError('');
@@ -235,6 +237,17 @@ const RegistryPage = () => {
     loadData();
   };
 
+  const openCreateModal = (targetTab) => {
+    resetForms();
+    setTab(targetTab);
+    setCreateModalTab(targetTab);
+  };
+
+  const closeCreateModal = () => {
+    setCreateModalTab('');
+    resetForms();
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -257,6 +270,9 @@ const RegistryPage = () => {
         <button type="button" className={tab === 'properties' ? 'active' : ''} onClick={() => handleTabChange('properties')}>
           {t('pages.registry.propertiesBeta')}
         </button>
+        {canPermission('write') && (
+          <button type="button" onClick={() => openCreateModal(tab)}>{t('buttons.new')}</button>
+        )}
       </div>
 
       {tab === 'accounts' && (
@@ -762,6 +778,60 @@ const RegistryPage = () => {
           </div>
         </div>
       )}
+
+      <Modal isOpen={Boolean(createModalTab)} onClose={closeCreateModal}>
+        {createModalTab === 'accounts' && (
+          <form onSubmit={async (event) => { await handleAccountSubmit(event); closeCreateModal(); }}>
+            <h2>{t('pages.registry.accounts')}</h2>
+            <label>{t('forms.name')}<input type="text" value={accountForm.name} onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} required /></label>
+            <label>{t('forms.type')}<select value={accountForm.type} onChange={(event) => setAccountForm({ ...accountForm, type: event.target.value })}><option value="cash">{t('labels.cash')}</option><option value="bank">{t('labels.bank')}</option><option value="card">{t('labels.card')}</option></select></label>
+            <label>{t('forms.openingBalance')}<input type="number" step="0.01" value={accountForm.opening_balance} onChange={(event) => setAccountForm({ ...accountForm, opening_balance: event.target.value })} /></label>
+            <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
+          </form>
+        )}
+
+        {createModalTab === 'categories' && (
+          <form onSubmit={async (event) => { await handleCategorySubmit(event); closeCreateModal(); }}>
+            <h2>{t('pages.registry.categories')}</h2>
+            <label>{t('forms.name')}<input type="text" value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} required /></label>
+            <label>{t('forms.direction')}<select value={categoryForm.direction} onChange={(event) => setCategoryForm({ ...categoryForm, direction: event.target.value, parent_id: '' })}><option value="income">{t('pages.movements.income')}</option><option value="expense">{t('pages.movements.expense')}</option></select></label>
+            <label>{t('forms.parentCategory')}<select value={categoryForm.parent_id} onChange={(event) => setCategoryForm({ ...categoryForm, parent_id: event.target.value })}><option value="">{t('common.none')}</option>{categoryParentOptions.map((cat) => <option key={cat.id} value={cat.id}>{`${'— '.repeat(cat.depth)}${cat.name}`}</option>)}</select></label>
+            <label>{t('forms.color')}<div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><input type="color" value={categoryForm.color || '#2ecc71'} onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })} /><span style={{ width: 24, height: 24, borderRadius: 4, border: '1px solid #d1d5db', background: categoryForm.color || '#2ecc71' }} /></div></label>
+            <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
+          </form>
+        )}
+
+        {createModalTab === 'contacts' && (
+          <form onSubmit={async (event) => { await handleContactSubmit(event); closeCreateModal(); }}>
+            <h2>{t('pages.registry.contacts')}</h2>
+            <label>{t('forms.name')}<input type="text" value={contactForm.name} onChange={(event) => setContactForm({ ...contactForm, name: event.target.value })} required /></label>
+            <label>{t('forms.email')}<input type="email" value={contactForm.email} onChange={(event) => setContactForm({ ...contactForm, email: event.target.value })} /></label>
+            <label>{t('forms.phone')}<input type="text" value={contactForm.phone} onChange={(event) => setContactForm({ ...contactForm, phone: event.target.value })} /></label>
+            <label>{t('forms.defaultCategory')}<select value={contactForm.default_category_id} onChange={(event) => setContactForm({ ...contactForm, default_category_id: event.target.value })}><option value="">{t('common.none')}</option>{categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name} ({t(`pages.movements.${cat.direction}`)})</option>)}</select></label>
+            <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
+          </form>
+        )}
+
+        {createModalTab === 'jobs' && (
+          <form onSubmit={async (event) => { await handleJobSubmit(event); closeCreateModal(); }}>
+            <h2>{t('pages.registry.jobs')}</h2>
+            <label>{t('forms.jobTitle')}<input type="text" value={jobForm.title} onChange={(event) => setJobForm({ ...jobForm, title: event.target.value })} required /></label>
+            <label>{t('forms.jobCode')}<input type="text" value={jobForm.code} onChange={(event) => setJobForm({ ...jobForm, code: event.target.value })} /></label>
+            <label>{t('forms.jobBudget')}<input type="number" step="0.01" value={jobForm.budget} onChange={(event) => setJobForm({ ...jobForm, budget: event.target.value })} /></label>
+            <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
+          </form>
+        )}
+
+        {createModalTab === 'properties' && (
+          <form onSubmit={async (event) => { await handlePropertySubmit(event); closeCreateModal(); }}>
+            <h2>{t('pages.registry.propertiesBeta')}</h2>
+            <label>{t('forms.name')}<input type="text" value={propertyForm.name} onChange={(event) => setPropertyForm({ ...propertyForm, name: event.target.value })} required /></label>
+            <label>{t('forms.referenceContact')}<select value={propertyForm.contact_id} onChange={(event) => setPropertyForm({ ...propertyForm, contact_id: event.target.value })}><option value="">{t('common.none')}</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label>
+            <label>{t('forms.notes')}<textarea value={propertyForm.notes} onChange={(event) => setPropertyForm({ ...propertyForm, notes: event.target.value })} /></label>
+            <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 };
