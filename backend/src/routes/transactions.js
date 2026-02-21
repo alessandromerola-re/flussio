@@ -118,6 +118,29 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
     where.push(`COALESCE(t.description, '') ILIKE $${params.length}`);
   }
 
+
+  if (filters.is_recurring != null && filters.is_recurring !== '') {
+    if (!['0', '1', 0, 1, 'true', 'false', true, false].includes(filters.is_recurring)) {
+      return { error: true };
+    }
+    where.push(
+      String(filters.is_recurring) === '1' || String(filters.is_recurring) === 'true'
+        ? 't.recurring_template_id IS NOT NULL'
+        : 't.recurring_template_id IS NULL'
+    );
+  }
+
+  if (filters.has_attachments != null && filters.has_attachments !== '') {
+    if (!['0', '1', 0, 1, 'true', 'false', true, false].includes(filters.has_attachments)) {
+      return { error: true };
+    }
+    where.push(
+      String(filters.has_attachments) === '1' || String(filters.has_attachments) === 'true'
+        ? 'EXISTS (SELECT 1 FROM attachments att WHERE att.transaction_id = t.id)'
+        : 'NOT EXISTS (SELECT 1 FROM attachments att WHERE att.transaction_id = t.id)'
+    );
+  }
+
   const limit = parseLimit(filters.limit, defaultLimit, maxLimit);
   if (limit == null) {
     return { error: true };

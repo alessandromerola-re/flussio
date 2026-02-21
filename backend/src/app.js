@@ -55,7 +55,7 @@ app.use('/api/properties', authMiddleware, requireMethodPermission({ GET: 'read'
 app.use('/api/jobs', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), jobsRoutes);
 app.use('/api/transactions', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), transactionsRoutes);
 app.use('/api/attachments', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', DELETE: 'delete_sensitive' }), attachmentsRoutes);
-app.use('/api/dashboard', authMiddleware, requireMethodPermission({ GET: 'read' }), dashboardRoutes);
+app.use('/api/dashboard', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'read' }), dashboardRoutes);
 app.use('/api/reports', authMiddleware, requireMethodPermission({ GET: 'read' }), reportsRoutes);
 app.use('/api/reports/advanced', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'read' }), advancedReportsRoutes);
 app.use('/api/recurring-templates', authMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), recurringTemplatesRoutes);

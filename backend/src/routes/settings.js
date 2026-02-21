@@ -106,12 +106,29 @@ const normalizeMovementType = (value = '') => {
 };
 
 const parseAmount = (value) => {
-  const normalized = String(value || '').replace(/\./g, '').replace(',', '.').replace(/\s/g, '');
+  const raw = String(value || '').trim().replace(/\s/g, '');
+  if (!raw) return NaN;
+
+  const hasComma = raw.includes(',');
+  const hasDot = raw.includes('.');
+  let normalized = raw;
+
+  if (hasComma && hasDot) {
+    if (raw.lastIndexOf(',') > raw.lastIndexOf('.')) {
+      normalized = raw.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = raw.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    normalized = raw.replace(/\./g, '').replace(',', '.');
+  }
+
   const n = Number(normalized);
   return Number.isFinite(n) ? n : NaN;
 };
 
 const getDirectionDelta = (direction, amount) => (direction === 'in' ? amount : -amount);
+const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const getBrandingDir = (companyId) => path.join(uploadsRoot, `company_${companyId}`, 'branding');
 const getMetadataPath = (companyId) => path.join(getBrandingDir(companyId), metadataFileName);
@@ -286,7 +303,7 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
     accountNames: headers.indexOf('account_names'),
     category: headers.indexOf('category'),
     contact: headers.indexOf('contact'),
-    job: headers.indexOf('commessa'),
+    job: headers.indexOf('commessa') >= 0 ? headers.indexOf('commessa') : headers.indexOf('job'),
     description: headers.indexOf('description'),
   };
 
@@ -320,6 +337,12 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
       const type = normalizeMovementType(row[idx.type]);
       const amountAbs = Math.abs(parseAmount(row[idx.amount]));
       const accountRaw = String(row[idx.accountNames] || '');
+
+      if (!isoDateRegex.test(String(date || '').trim())) {
+        skipped += 1;
+        errors.push({ line: lineIndex + 1, message: 'Data non valida (atteso YYYY-MM-DD)' });
+        continue;
+      }
 
       if (!date || !type || !Number.isFinite(amountAbs) || amountAbs <= 0 || !accountRaw) {
         skipped += 1;
@@ -403,7 +426,7 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(error);
-    return sendError(res, 500, 'MOVEMENTS_IMPORT_FAILED', 'Import CSV movimenti non riuscito.');
+    return sendError(res, 500, 'MOVEMENTS_IMPORT_FAILED', 'Import CSV movimenti non riuscito.', { details: { message: error.message } });
   } finally {
     client.release();
   }
