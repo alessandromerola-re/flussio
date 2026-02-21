@@ -252,6 +252,11 @@ const RegistryPage = () => {
     <div className="page">
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
+        {canPermission('write') && (
+          <button type="button" onClick={() => openCreateModal(tab)}>
+            {t('buttons.new')}
+          </button>
+        )}
       </div>
       {loadError && <div className="error">{loadError}</div>}
       <div className="tabs">
@@ -707,7 +712,7 @@ const RegistryPage = () => {
       {tab === 'properties' && (
         <div className="grid-two">
           <form className="card" onSubmit={handlePropertySubmit}>
-            <h2>{t('pages.registry.properties')}</h2>
+            <h2>{t('pages.registry.propertiesBeta')}</h2>
             <label>
               {t('forms.name')}
               <input
@@ -815,9 +820,15 @@ const RegistryPage = () => {
         {createModalTab === 'jobs' && (
           <form onSubmit={async (event) => { await handleJobSubmit(event); closeCreateModal(); }}>
             <h2>{t('pages.registry.jobs')}</h2>
-            <label>{t('forms.jobTitle')}<input type="text" value={jobForm.title} onChange={(event) => setJobForm({ ...jobForm, title: event.target.value })} required /></label>
+            {jobFormError && <div className="error">{jobFormError}</div>}
             <label>{t('forms.jobCode')}<input type="text" value={jobForm.code} onChange={(event) => setJobForm({ ...jobForm, code: event.target.value })} /></label>
-            <label>{t('forms.jobBudget')}<input type="number" step="0.01" value={jobForm.budget} onChange={(event) => setJobForm({ ...jobForm, budget: event.target.value })} /></label>
+            <label>{t('forms.jobTitle')}<input type="text" value={jobForm.title} onChange={(event) => setJobForm({ ...jobForm, title: event.target.value })} required /></label>
+            <label>{t('forms.jobStatus')}<select value={jobForm.is_closed ? 'closed' : 'open'} onChange={(event) => setJobForm({ ...jobForm, is_closed: event.target.value === 'closed' })}><option value="open">{t('labels.jobOpen')}</option><option value="closed">{t('labels.jobClosed')}</option></select></label>
+            <label>{t('forms.jobBudget')}<input type="number" step="0.01" min="0" value={jobForm.budget} onChange={(event) => setJobForm({ ...jobForm, budget: event.target.value })} /></label>
+            <label>{t('forms.jobStartDate')}<input type="date" value={jobForm.start_date} onChange={(event) => setJobForm({ ...jobForm, start_date: event.target.value })} /></label>
+            <label>{t('forms.jobEndDate')}<input type="date" value={jobForm.end_date} onChange={(event) => setJobForm({ ...jobForm, end_date: event.target.value })} /></label>
+            <label>{t('forms.notes')}<input type="text" value={jobForm.notes} onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })} /></label>
+            <label>{t('forms.referenceContact')}<select value={jobForm.contact_id} onChange={(event) => setJobForm({ ...jobForm, contact_id: event.target.value })}><option value="">{t('common.none')}</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label>
             <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
           </form>
         )}
