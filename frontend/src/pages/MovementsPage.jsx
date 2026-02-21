@@ -33,6 +33,8 @@ const defaultFilters = {
   property_id: '',
   job_id: '',
   q: '',
+  is_recurring: '',
+  has_attachments: '',
   limit: 30,
   offset: 0,
 };
@@ -105,14 +107,26 @@ const MovementsPage = () => {
     setLoadError('');
     await loadLookupData();
 
-    const deepLinkJobId = searchParams.get('job_id');
     const nextFilters = {
       ...defaultFilters,
-      job_id: deepLinkJobId || '',
+      date_from: searchParams.get('date_from') || '',
+      date_to: searchParams.get('date_to') || '',
+      type: searchParams.get('type') || '',
+      account_id: searchParams.get('account_id') || '',
+      category_id: searchParams.get('category_id') || '',
+      contact_id: searchParams.get('contact_id') || '',
+      property_id: searchParams.get('property_id') || '',
+      job_id: searchParams.get('job_id') || '',
+      q: searchParams.get('q') || '',
+      is_recurring: searchParams.get('is_recurring') || '',
+      has_attachments: searchParams.get('has_attachments') || '',
+      limit: Number(searchParams.get('limit') || defaultFilters.limit),
+      offset: Number(searchParams.get('offset') || defaultFilters.offset),
     };
 
     setFilters(nextFilters);
     setDraftFilters(nextFilters);
+    setFilterContactSearch('');
     await loadMovements(nextFilters);
   };
 
