@@ -112,7 +112,6 @@ const RegistryPage = () => {
     };
 
     return categories
-      .filter((cat) => cat.direction === categoryForm.direction)
       .filter((cat) => (editingId ? String(cat.id) !== String(editingId) : true))
       .map((cat) => ({ ...cat, depth: getDepth(cat) }));
   }, [categories, categoryForm.direction, editingId]);
@@ -130,6 +129,16 @@ const RegistryPage = () => {
   const handleTabChange = (nextTab) => {
     resetForms();
     setTab(nextTab);
+  };
+
+  const handleCategoryParentChange = (value) => {
+    const nextParentId = value || '';
+    const selectedParent = categories.find((cat) => String(cat.id) === String(nextParentId));
+    setCategoryForm((prev) => ({
+      ...prev,
+      parent_id: nextParentId,
+      direction: selectedParent?.direction || prev.direction,
+    }));
   };
 
   const handleAccountSubmit = async (event) => {
@@ -383,12 +392,12 @@ const RegistryPage = () => {
               {t('forms.parentCategory')}
               <select
                 value={categoryForm.parent_id}
-                onChange={(event) => setCategoryForm({ ...categoryForm, parent_id: event.target.value })}
+                onChange={(event) => handleCategoryParentChange(event.target.value)}
               >
                 <option value="">{t('common.none')}</option>
                 {categoryParentOptions.map((cat) => (
                   <option key={cat.id} value={cat.id}>
-                    {`${'— '.repeat(cat.depth)}${cat.name}`}
+                    {`${'— '.repeat(cat.depth)}${cat.name} (${t(`pages.movements.${cat.direction}`)})`}
                   </option>
                 ))}
               </select>
@@ -800,7 +809,7 @@ const RegistryPage = () => {
             <h2>{t('pages.registry.categories')}</h2>
             <label>{t('forms.name')}<input type="text" value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} required /></label>
             <label>{t('forms.direction')}<select value={categoryForm.direction} onChange={(event) => setCategoryForm({ ...categoryForm, direction: event.target.value, parent_id: '' })}><option value="income">{t('pages.movements.income')}</option><option value="expense">{t('pages.movements.expense')}</option></select></label>
-            <label>{t('forms.parentCategory')}<select value={categoryForm.parent_id} onChange={(event) => setCategoryForm({ ...categoryForm, parent_id: event.target.value })}><option value="">{t('common.none')}</option>{categoryParentOptions.map((cat) => <option key={cat.id} value={cat.id}>{`${'— '.repeat(cat.depth)}${cat.name}`}</option>)}</select></label>
+            <label>{t('forms.parentCategory')}<select value={categoryForm.parent_id} onChange={(event) => handleCategoryParentChange(event.target.value)}><option value="">{t('common.none')}</option>{categoryParentOptions.map((cat) => <option key={cat.id} value={cat.id}>{`${'— '.repeat(cat.depth)}${cat.name} (${t(`pages.movements.${cat.direction}`)})`}</option>)}</select></label>
             <label>{t('forms.color')}<div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><input type="color" value={categoryForm.color || '#2ecc71'} onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })} /><span style={{ width: 24, height: 24, borderRadius: 4, border: '1px solid #d1d5db', background: categoryForm.color || '#2ecc71' }} /></div></label>
             <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
           </form>
