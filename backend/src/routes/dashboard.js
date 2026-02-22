@@ -33,6 +33,40 @@ const getPeriodRange = (period) => {
   return { from: toIsoDate(sixMonths), to: toIsoDate(end) };
 };
 
+
+const pad = (n) => String(n).padStart(2, '0');
+const monthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
+
+const buildBuckets = (range, period) => {
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  const buckets = [];
+
+  if (period === 'currentmonth') {
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
+    }
+    return { granularity: 'day', buckets };
+  }
+
+  if (period === 'last30days') {
+    const weekStart = new Date(start);
+    while (weekStart.getDay() !== 1) weekStart.setDate(weekStart.getDate() - 1);
+    for (let d = new Date(weekStart); d <= end; d.setDate(d.getDate() + 7)) {
+      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
+    }
+    return { granularity: 'week', buckets };
+  }
+
+  for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
+    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    buckets.push({ key, label: monthLabel(d) });
+  }
+  return { granularity: 'month', buckets };
+};
+
 const getDateRangeFromQuery = (input = {}) => {
   const { from, to, period = 'last6months' } = input;
 
@@ -70,10 +104,17 @@ router.get('/summary', async (req, res) => {
       [req.user.company_id, range.from, range.to]
     );
 
-    const byMonthResult = await query(
+    const { granularity, buckets } = buildBuckets(range, req.query.period || 'last6months');
+    const bucketExpr = granularity === 'day'
+      ? "to_char(t.date, 'YYYY-MM-DD')"
+      : granularity === 'week'
+        ? "to_char(date_trunc('week', t.date), 'YYYY-MM-DD')"
+        : "to_char(date_trunc('month', t.date), 'YYYY-MM')";
+
+    const byBucketResult = await query(
       `
       SELECT
-        to_char(date_trunc('month', t.date), 'YYYY-MM') AS month,
+        ${bucketExpr} AS bucket,
         COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
         COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents
       FROM transactions t
@@ -94,11 +135,13 @@ router.get('/summary', async (req, res) => {
       expense_sum_cents: expense,
       net_sum_cents: income - expense,
       count: Number(base.count || 0),
-      by_month: byMonthResult.rows.map((row) => {
-        const incomeMonth = Number(row.income_sum_cents || 0);
-        const expenseMonth = Number(row.expense_sum_cents || 0);
+      by_bucket: buckets.map((bucket) => {
+        const row = byBucketResult.rows.find((entry) => entry.bucket === bucket.key);
+        const incomeMonth = Number(row?.income_sum_cents || 0);
+        const expenseMonth = Number(row?.expense_sum_cents || 0);
         return {
-          month: row.month,
+          bucket: bucket.key,
+          label: bucket.label,
           income_sum_cents: incomeMonth,
           expense_sum_cents: expenseMonth,
           net_sum_cents: incomeMonth - expenseMonth,
