@@ -5,6 +5,7 @@ import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import Modal from '../components/Modal.jsx';
+import FloatingAddButton from '../components/FloatingAddButton.jsx';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = {
@@ -262,7 +263,7 @@ const RegistryPage = () => {
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
         {canPermission('write') && (
-          <button type="button" onClick={() => openCreateModal(tab)}>
+          <button type="button" className="desktop-only" onClick={() => openCreateModal(tab)}>
             {t('buttons.new')}
           </button>
         )}
@@ -285,7 +286,7 @@ const RegistryPage = () => {
           {t('pages.registry.propertiesBeta')}
         </button>
         {canPermission('write') && (
-          <button type="button" onClick={() => openCreateModal(tab)}>{t('buttons.new')}</button>
+          <button type="button" className="desktop-only" onClick={() => openCreateModal(tab)}>{t('buttons.new')}</button>
         )}
       </div>
 
@@ -792,6 +793,8 @@ const RegistryPage = () => {
           </div>
         </div>
       )}
+
+      {canPermission('write') && <FloatingAddButton onClick={() => openCreateModal(tab)} label={t('buttons.new')} />}
 
       <Modal isOpen={Boolean(createModalTab)} onClose={closeCreateModal}>
         {createModalTab === 'accounts' && (
