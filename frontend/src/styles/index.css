@@ -761,3 +761,5 @@ button.danger {
 
 .report-layout { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 1rem; align-items: start; }
 @media (max-width: 768px) { .report-layout { grid-template-columns: 1fr; } }
+
+.registry-new-button { padding: 0.75rem 1.25rem; font-size: 1rem; min-height: 44px; }
