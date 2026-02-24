@@ -17,6 +17,7 @@ import { api } from '../services/api.js';
 ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const parseDate = (iso) => new Date(`${iso}T00:00:00`);
 
 const rangeFromPreset = (preset) => {
   const now = new Date();
@@ -32,6 +33,17 @@ const rangeFromPreset = (preset) => {
     return { from: toIsoDate(new Date(now.getFullYear(), 0, 1)), to: toIsoDate(now) };
   }
   return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth() - 5, 1)), to: toIsoDate(now) };
+};
+
+const getPreviousRange = ({ from, to }) => {
+  const start = parseDate(from);
+  const end = parseDate(to);
+  const days = Math.round((end - start) / 86400000) + 1;
+  const prevTo = new Date(start);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - (days - 1));
+  return { from: toIsoDate(prevFrom), to: toIsoDate(prevTo) };
 };
 
 const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -72,6 +84,7 @@ const DashboardPage = () => {
     const load = async () => {
       const summaryData = await api.getDashboardSummary({ ...activeRange, period });
       setSummary(summaryData);
+      setPrevSummary(prevData);
     };
     load();
   }, [activeRange, period]);
@@ -133,25 +146,10 @@ const DashboardPage = () => {
       labels.push(t('pages.dashboard.other'));
       values.push(Number(pieData.others_cents || 0) / 100);
     }
-    return {
-      labels,
-      datasets: [{ data: values, backgroundColor: ['#2563eb', '#16a34a', '#dc2626', '#7c3aed', '#ea580c', '#0891b2', '#65a30d', '#9333ea', '#0f766e', '#f59e0b', '#db2777', '#6b7280', '#111827'] }],
-    };
+    return { labels, datasets: [{ data: values, backgroundColor: ['#2563eb', '#16a34a', '#dc2626', '#7c3aed', '#ea580c', '#0891b2', '#65a30d', '#9333ea', '#0f766e', '#f59e0b', '#db2777', '#6b7280', '#111827'] }] };
   };
 
-  const topExpensesBarData = useMemo(() => {
-    if (!topExpenses) return { labels: [], datasets: [] };
-    return {
-      labels: topExpenses.slices.map((slice) => slice.label),
-      datasets: [
-        {
-          label: t('pages.dashboard.topExpensesByCategory'),
-          data: topExpenses.slices.map((slice) => Number(slice.value_cents || 0) / 100),
-          backgroundColor: '#ef4444',
-        },
-      ],
-    };
-  }, [topExpenses, t]);
+  const topExpensesBarData = useMemo(() => !topExpenses ? { labels: [], datasets: [] } : ({ labels: topExpenses.slices.map((slice) => slice.label), datasets: [{ label: t('pages.dashboard.topExpensesByCategory'), data: topExpenses.slices.map((slice) => Number(slice.value_cents || 0) / 100), backgroundColor: '#ef4444' }] }), [topExpenses, t]);
 
   const previous = summary.previous || {};
   const incomeDelta = computeDelta(summary.income_sum_cents, previous.income_sum_cents);
@@ -160,11 +158,7 @@ const DashboardPage = () => {
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-      {dimensionOptions.map((dimension) => (
-        <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>
-          {t(`pages.dashboard.dim.${dimension}`)}
-        </button>
-      ))}
+      {dimensionOptions.map((dimension) => <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>{t(`pages.dashboard.dim.${dimension}`)}</button>)}
     </div>
   );
 
@@ -225,10 +219,9 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h2>{t('pages.dashboard.topExpensesByCategory')}</h2>
-        <Bar data={topExpensesBarData} />
-      </div>
+      <div className="grid-two"><div className="card"><h2>{t('pages.dashboard.trendIncomeExpense')}</h2><Line data={trendData} /></div><div className="card"><h2>{t('pages.dashboard.netMonthlyTrend')}</h2><Line data={netTrendData} /></div></div>
+      <div className="grid-two" style={{ marginTop: '1rem' }}><div className="card"><h2>{t('pages.dashboard.pieIncomeBy')}</h2>{renderDimensionTabs(incomeDimension, setIncomeDimension)}{pieToChartData(incomePie) ? <Pie data={pieToChartData(incomePie)} /> : <p className="muted">{t('common.none')}</p>}</div><div className="card"><h2>{t('pages.dashboard.pieExpenseBy')}</h2>{renderDimensionTabs(expenseDimension, setExpenseDimension)}{pieToChartData(expensePie) ? <Pie data={pieToChartData(expensePie)} /> : <p className="muted">{t('common.none')}</p>}</div></div>
+      <div className="card" style={{ marginTop: '1rem' }}><h2>{t('pages.dashboard.topExpensesByCategory')}</h2><Bar data={topExpensesBarData} /></div>
     </div>
   );
 };
