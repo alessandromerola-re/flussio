@@ -56,10 +56,10 @@ const computeDelta = (current, previous) => {
   return ((curr - prev) / Math.abs(prev)) * 100;
 };
 
-const formatDelta = (value) => (value == null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`);
-const deltaClass = (value) => {
-  if (value == null || value === 0) return 'kpi-delta-badge neutral';
-  return value > 0 ? 'kpi-delta-badge positive' : 'kpi-delta-badge negative';
+const formatDelta = (delta) => (delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`);
+const deltaClassName = (delta) => {
+  if (delta == null || delta === 0) return 'kpi-delta-badge neutral';
+  return delta > 0 ? 'kpi-delta-badge positive' : 'kpi-delta-badge negative';
 };
 
 const dimensionOptions = ['category', 'contact', 'account', 'job'];
@@ -83,8 +83,7 @@ const DashboardPage = () => {
   useEffect(() => {
     const load = async () => {
       const summaryData = await api.getDashboardSummary({ ...activeRange, period });
-      setSummary(summaryData);
-      setPrevSummary(prevData);
+      setSummary((prev) => ({ ...prev, ...summaryData }));
     };
     load();
   }, [activeRange, period]);
@@ -105,38 +104,37 @@ const DashboardPage = () => {
   useEffect(() => { loadPie('expense', expenseDimension).then(setExpensePie); }, [expenseDimension, activeRange.from, activeRange.to]);
   useEffect(() => { loadPie('expense', 'category', 10).then(setTopExpenses); }, [activeRange.from, activeRange.to]);
 
-  const trendData = useMemo(() => {
-    const labels = (summary.by_bucket || []).map((row) => row.label);
-    return {
-      labels,
-      datasets: [
-        {
-          label: t('pages.dashboard.income'),
-          data: (summary.by_bucket || []).map((row) => Number(row.income_sum_cents || 0) / 100),
-          borderColor: '#16a34a',
-          backgroundColor: 'rgba(22,163,74,0.2)',
-        },
-        {
-          label: t('pages.dashboard.expense'),
-          data: (summary.by_bucket || []).map((row) => absCents(row.expense_sum_cents) / 100),
-          borderColor: '#dc2626',
-          backgroundColor: 'rgba(220,38,38,0.2)',
-        },
-      ],
-    };
-  }, [summary.by_bucket, t]);
+  const bucketSeries = summary.by_bucket || [];
+
+  const trendData = useMemo(() => ({
+    labels: bucketSeries.map((row) => row.label),
+    datasets: [
+      {
+        label: t('pages.dashboard.income'),
+        data: bucketSeries.map((row) => Number(row.income_sum_cents || 0) / 100),
+        borderColor: '#16a34a',
+        backgroundColor: 'rgba(22,163,74,0.2)',
+      },
+      {
+        label: t('pages.dashboard.expense'),
+        data: bucketSeries.map((row) => absCents(row.expense_sum_cents) / 100),
+        borderColor: '#dc2626',
+        backgroundColor: 'rgba(220,38,38,0.2)',
+      },
+    ],
+  }), [bucketSeries, t]);
 
   const netTrendData = useMemo(() => ({
-    labels: (summary.by_bucket || []).map((row) => row.label),
+    labels: bucketSeries.map((row) => row.label),
     datasets: [
       {
         label: t('pages.dashboard.netMonthlyTrend'),
-        data: (summary.by_bucket || []).map((row) => Number(row.net_sum_cents || 0) / 100),
+        data: bucketSeries.map((row) => Number(row.net_sum_cents || 0) / 100),
         borderColor: '#1d4ed8',
         backgroundColor: 'rgba(29,78,216,0.2)',
       },
     ],
-  }), [summary.by_bucket, t]);
+  }), [bucketSeries, t]);
 
   const pieToChartData = (pieData) => {
     if (!pieData) return null;
@@ -150,6 +148,11 @@ const DashboardPage = () => {
   };
 
   const topExpensesBarData = useMemo(() => !topExpenses ? { labels: [], datasets: [] } : ({ labels: topExpenses.slices.map((slice) => slice.label), datasets: [{ label: t('pages.dashboard.topExpensesByCategory'), data: topExpenses.slices.map((slice) => Number(slice.value_cents || 0) / 100), backgroundColor: '#ef4444' }] }), [topExpenses, t]);
+
+  const previous = summary.previous || {};
+  const incomeDelta = computeDelta(summary.income_sum_cents, previous.income_sum_cents);
+  const expenseDelta = computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents));
+  const netDelta = computeDelta(summary.net_sum_cents, previous.net_sum_cents);
 
   const previous = summary.previous || {};
   const incomeDelta = computeDelta(summary.income_sum_cents, previous.income_sum_cents);
@@ -180,17 +183,17 @@ const DashboardPage = () => {
       <div className="kpi-grid">
         <div className="card kpi">
           <span>{t('pages.dashboard.income')}</span>
-          <small className={deltaClass(incomeDelta)}>{formatDelta(incomeDelta)}</small>
+          <small className={deltaClassName(incomeDelta)}>{formatDelta(incomeDelta)}</small>
           <strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong>
         </div>
         <div className="card kpi">
           <span>{t('pages.dashboard.expense')}</span>
-          <small className={deltaClass(expenseDelta)}>{formatDelta(expenseDelta)}</small>
+          <small className={deltaClassName(expenseDelta)}>{formatDelta(expenseDelta)}</small>
           <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
         </div>
         <div className="card kpi">
           <span>{t('pages.dashboard.net')}</span>
-          <small className={deltaClass(netDelta)}>{formatDelta(netDelta)}</small>
+          <small className={deltaClassName(netDelta)}>{formatDelta(netDelta)}</small>
           <strong>{centsToEuro(summary.net_sum_cents)}</strong>
         </div>
       </div>
