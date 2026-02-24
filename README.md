@@ -26,13 +26,9 @@ Default URLs:
 
 ## Postgres 18 upgrade note
 
-After upgrading to Postgres 18 Docker image, for local environments without important data run:
+Dopo questo upgrade eseguire `docker compose down -v` prima del primo `up` in locale.
 
-```bash
-docker compose down -v
-```
-
-This is required because Postgres 18+ changed Docker image volume/PGDATA behavior (`VOLUME /var/lib/postgresql` with version-specific PGDATA), so the old data volume should be recreated/remounted correctly before first startup.
+Questo è necessario perché con Postgres 18+ l’immagine Docker ufficiale ha cambiato PGDATA/VOLUME (`/var/lib/postgresql`), quindi il volume precedente va ricreato e ri-montato correttamente.
 
 
 ## Frontend host port configuration
