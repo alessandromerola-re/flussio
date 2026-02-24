@@ -51,13 +51,11 @@ const buildBuckets = (range, period) => {
   }
 
   if (period === 'last30days') {
-    const weekStart = new Date(start);
-    while (weekStart.getDay() !== 1) weekStart.setDate(weekStart.getDate() - 1);
-    for (let d = new Date(weekStart); d <= end; d.setDate(d.getDate() + 7)) {
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
     }
-    return { granularity: 'week', buckets };
+    return { granularity: 'day', buckets };
   }
 
   for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
@@ -65,6 +63,20 @@ const buildBuckets = (range, period) => {
     buckets.push({ key, label: monthLabel(d) });
   }
   return { granularity: 'month', buckets };
+};
+
+const shiftRangeByDays = (range, deltaDays) => {
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  from.setDate(from.getDate() + deltaDays);
+  to.setDate(to.getDate() + deltaDays);
+  return { from: toIsoDate(from), to: toIsoDate(to) };
+};
+
+const countInclusiveDays = (range) => {
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  return Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1;
 };
 
 const getDateRangeFromQuery = (input = {}) => {
@@ -91,18 +103,35 @@ router.get('/summary', async (req, res) => {
   }
 
   try {
-    const summaryResult = await query(
-      `
-      SELECT
-        COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents,
-        COUNT(*)::int AS count
-      FROM transactions t
-      WHERE t.company_id = $1
-        AND t.date BETWEEN $2 AND $3
-      `,
-      [req.user.company_id, range.from, range.to]
-    );
+    const days = countInclusiveDays(range);
+    const previousRange = shiftRangeByDays(range, -days);
+
+    const [summaryResult, previousSummaryResult] = await Promise.all([
+      query(
+        `
+        SELECT
+          COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS expense_sum_cents,
+          COUNT(*)::int AS count
+        FROM transactions t
+        WHERE t.company_id = $1
+          AND t.date BETWEEN $2 AND $3
+        `,
+        [req.user.company_id, range.from, range.to]
+      ),
+      query(
+        `
+        SELECT
+          COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS expense_sum_cents,
+          COUNT(*)::int AS count
+        FROM transactions t
+        WHERE t.company_id = $1
+          AND t.date BETWEEN $2 AND $3
+        `,
+        [req.user.company_id, previousRange.from, previousRange.to]
+      ),
+    ]);
 
     const { granularity, buckets } = buildBuckets(range, req.query.period || 'last6months');
     const bucketExpr = granularity === 'day'
@@ -116,7 +145,7 @@ router.get('/summary', async (req, res) => {
       SELECT
         ${bucketExpr} AS bucket,
         COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS expense_sum_cents
       FROM transactions t
       WHERE t.company_id = $1
         AND t.date BETWEEN $2 AND $3
@@ -127,14 +156,25 @@ router.get('/summary', async (req, res) => {
     );
 
     const base = summaryResult.rows[0] || { income_sum_cents: 0, expense_sum_cents: 0, count: 0 };
+    const previousBase = previousSummaryResult.rows[0] || { income_sum_cents: 0, expense_sum_cents: 0, count: 0 };
     const income = Number(base.income_sum_cents || 0);
     const expense = Number(base.expense_sum_cents || 0);
+    const previousIncome = Number(previousBase.income_sum_cents || 0);
+    const previousExpense = Number(previousBase.expense_sum_cents || 0);
 
     return res.json({
       income_sum_cents: income,
       expense_sum_cents: expense,
       net_sum_cents: income - expense,
       count: Number(base.count || 0),
+      previous: {
+        from: previousRange.from,
+        to: previousRange.to,
+        income_sum_cents: previousIncome,
+        expense_sum_cents: previousExpense,
+        net_sum_cents: previousIncome - previousExpense,
+        count: Number(previousBase.count || 0),
+      },
       by_bucket: buckets.map((bucket) => {
         const row = byBucketResult.rows.find((entry) => entry.bucket === bucket.key);
         const incomeMonth = Number(row?.income_sum_cents || 0);

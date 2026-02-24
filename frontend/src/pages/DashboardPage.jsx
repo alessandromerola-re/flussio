@@ -47,11 +47,19 @@ const getPreviousRange = ({ from, to }) => {
 };
 
 const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
-const fmtPercent = (n) => (n == null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`);
-const deltaPercent = (current, previous) => {
+const absCents = (value) => Math.abs(Number(value || 0));
+
+const computeDelta = (current, previous) => {
   const prev = Number(previous || 0);
+  const curr = Number(current || 0);
   if (prev === 0) return null;
-  return ((Number(current || 0) - prev) / Math.abs(prev)) * 100;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+};
+
+const formatDelta = (value) => (value == null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`);
+const deltaClass = (value) => {
+  if (value == null || value === 0) return 'kpi-delta-badge neutral';
+  return value > 0 ? 'kpi-delta-badge positive' : 'kpi-delta-badge negative';
 };
 
 const dimensionOptions = ['category', 'contact', 'account', 'job'];
@@ -59,8 +67,13 @@ const dimensionOptions = ['category', 'contact', 'account', 'job'];
 const DashboardPage = () => {
   const { t } = useTranslation();
   const [period, setPeriod] = useState('last6months');
-  const [summary, setSummary] = useState({ income_sum_cents: 0, expense_sum_cents: 0, net_sum_cents: 0, by_bucket: [] });
-  const [prevSummary, setPrevSummary] = useState({ income_sum_cents: 0, expense_sum_cents: 0, net_sum_cents: 0 });
+  const [summary, setSummary] = useState({
+    income_sum_cents: 0,
+    expense_sum_cents: 0,
+    net_sum_cents: 0,
+    by_bucket: [],
+    previous: { income_sum_cents: 0, expense_sum_cents: 0, net_sum_cents: 0 },
+  });
   const [incomeDimension, setIncomeDimension] = useState('category');
   const [expenseDimension, setExpenseDimension] = useState('category');
   const [pieCache, setPieCache] = useState({});
@@ -69,11 +82,7 @@ const DashboardPage = () => {
 
   useEffect(() => {
     const load = async () => {
-      const prevRange = getPreviousRange(activeRange);
-      const [summaryData, prevData] = await Promise.all([
-        api.getDashboardSummary({ ...activeRange, period }),
-        api.getDashboardSummary({ ...prevRange, period }),
-      ]);
+      const summaryData = await api.getDashboardSummary({ ...activeRange, period });
       setSummary(summaryData);
       setPrevSummary(prevData);
     };
@@ -101,15 +110,32 @@ const DashboardPage = () => {
     return {
       labels,
       datasets: [
-        { label: t('pages.dashboard.income'), data: (summary.by_bucket || []).map((row) => Number(row.income_sum_cents || 0) / 100), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.2)' },
-        { label: t('pages.dashboard.expense'), data: (summary.by_bucket || []).map((row) => Number(row.expense_sum_cents || 0) / 100), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.2)' },
+        {
+          label: t('pages.dashboard.income'),
+          data: (summary.by_bucket || []).map((row) => Number(row.income_sum_cents || 0) / 100),
+          borderColor: '#16a34a',
+          backgroundColor: 'rgba(22,163,74,0.2)',
+        },
+        {
+          label: t('pages.dashboard.expense'),
+          data: (summary.by_bucket || []).map((row) => absCents(row.expense_sum_cents) / 100),
+          borderColor: '#dc2626',
+          backgroundColor: 'rgba(220,38,38,0.2)',
+        },
       ],
     };
   }, [summary.by_bucket, t]);
 
   const netTrendData = useMemo(() => ({
     labels: (summary.by_bucket || []).map((row) => row.label),
-    datasets: [{ label: t('pages.dashboard.netMonthlyTrend'), data: (summary.by_bucket || []).map((row) => Number(row.net_sum_cents || 0) / 100), borderColor: '#1d4ed8', backgroundColor: 'rgba(29,78,216,0.2)' }],
+    datasets: [
+      {
+        label: t('pages.dashboard.netMonthlyTrend'),
+        data: (summary.by_bucket || []).map((row) => Number(row.net_sum_cents || 0) / 100),
+        borderColor: '#1d4ed8',
+        backgroundColor: 'rgba(29,78,216,0.2)',
+      },
+    ],
   }), [summary.by_bucket, t]);
 
   const pieToChartData = (pieData) => {
@@ -124,6 +150,11 @@ const DashboardPage = () => {
   };
 
   const topExpensesBarData = useMemo(() => !topExpenses ? { labels: [], datasets: [] } : ({ labels: topExpenses.slices.map((slice) => slice.label), datasets: [{ label: t('pages.dashboard.topExpensesByCategory'), data: topExpenses.slices.map((slice) => Number(slice.value_cents || 0) / 100), backgroundColor: '#ef4444' }] }), [topExpenses, t]);
+
+  const previous = summary.previous || {};
+  const incomeDelta = computeDelta(summary.income_sum_cents, previous.income_sum_cents);
+  const expenseDelta = computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents));
+  const netDelta = computeDelta(summary.net_sum_cents, previous.net_sum_cents);
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
@@ -147,9 +178,45 @@ const DashboardPage = () => {
       </div>
 
       <div className="kpi-grid">
-        <div className="card kpi"><span>{t('pages.dashboard.income')}</span><strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong><small className="kpi-delta">{fmtPercent(deltaPercent(summary.income_sum_cents, prevSummary.income_sum_cents))}</small></div>
-        <div className="card kpi"><span>{t('pages.dashboard.expense')}</span><strong className="negative">{centsToEuro(summary.expense_sum_cents)}</strong><small className="kpi-delta">{fmtPercent(deltaPercent(summary.expense_sum_cents, prevSummary.expense_sum_cents))}</small></div>
-        <div className="card kpi"><span>{t('pages.dashboard.net')}</span><strong>{centsToEuro(summary.net_sum_cents)}</strong><small className="kpi-delta">{fmtPercent(deltaPercent(summary.net_sum_cents, prevSummary.net_sum_cents))}</small></div>
+        <div className="card kpi">
+          <span>{t('pages.dashboard.income')}</span>
+          <small className={deltaClass(incomeDelta)}>{formatDelta(incomeDelta)}</small>
+          <strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong>
+        </div>
+        <div className="card kpi">
+          <span>{t('pages.dashboard.expense')}</span>
+          <small className={deltaClass(expenseDelta)}>{formatDelta(expenseDelta)}</small>
+          <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
+        </div>
+        <div className="card kpi">
+          <span>{t('pages.dashboard.net')}</span>
+          <small className={deltaClass(netDelta)}>{formatDelta(netDelta)}</small>
+          <strong>{centsToEuro(summary.net_sum_cents)}</strong>
+        </div>
+      </div>
+
+      <div className="grid-two">
+        <div className="card">
+          <h2>{t('pages.dashboard.trendIncomeExpense')}</h2>
+          <Line data={trendData} />
+        </div>
+        <div className="card">
+          <h2>{t('pages.dashboard.netMonthlyTrend')}</h2>
+          <Line data={netTrendData} />
+        </div>
+      </div>
+
+      <div className="grid-two" style={{ marginTop: '1rem' }}>
+        <div className="card">
+          <h2>{t('pages.dashboard.pieIncomeBy')}</h2>
+          {renderDimensionTabs(incomeDimension, setIncomeDimension)}
+          {pieToChartData(incomePie) ? <Pie data={pieToChartData(incomePie)} /> : <p className="muted">{t('common.none')}</p>}
+        </div>
+        <div className="card">
+          <h2>{t('pages.dashboard.pieExpenseBy')}</h2>
+          {renderDimensionTabs(expenseDimension, setExpenseDimension)}
+          {pieToChartData(expensePie) ? <Pie data={pieToChartData(expensePie)} /> : <p className="muted">{t('common.none')}</p>}
+        </div>
       </div>
 
       <div className="grid-two"><div className="card"><h2>{t('pages.dashboard.trendIncomeExpense')}</h2><Line data={trendData} /></div><div className="card"><h2>{t('pages.dashboard.netMonthlyTrend')}</h2><Line data={netTrendData} /></div></div>
