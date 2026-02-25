@@ -163,23 +163,49 @@ const MovementsPage = () => {
     return [];
   }, [categories, form.type]);
 
-  const groupedCategories = useMemo(() => {
-    const parents = movementCategories.filter((cat) => !cat.parent_id);
-    const children = movementCategories.filter((cat) => cat.parent_id);
-    const parentIds = new Set(parents.map((parent) => parent.id));
-    const grouped = parents.map((parent) => ({
-      ...parent,
-      children: children.filter((child) => child.parent_id === parent.id),
-    }));
+  const movementCategoryOptions = useMemo(() => {
+    const byParentId = new Map();
 
-    const orphans = children
-      .filter((child) => !parentIds.has(child.parent_id))
-      .map((child) => ({
-        ...child,
-        children: [],
-      }));
+    for (const category of movementCategories) {
+      const parentId = category.parent_id == null ? null : category.parent_id;
+      if (!byParentId.has(parentId)) {
+        byParentId.set(parentId, []);
+      }
+      byParentId.get(parentId).push(category);
+    }
 
-    return [...grouped, ...orphans];
+    const options = [];
+    const visited = new Set();
+
+    const appendBranch = (category, depth) => {
+      if (visited.has(category.id)) {
+        return;
+      }
+
+      visited.add(category.id);
+      options.push({
+        id: category.id,
+        label: `${'— '.repeat(depth)}${category.name}`,
+      });
+
+      const children = byParentId.get(category.id) || [];
+      for (const child of children) {
+        appendBranch(child, depth + 1);
+      }
+    };
+
+    const roots = byParentId.get(null) || [];
+    for (const root of roots) {
+      appendBranch(root, 0);
+    }
+
+    for (const category of movementCategories) {
+      if (!visited.has(category.id)) {
+        appendBranch(category, 0);
+      }
+    }
+
+    return options;
   }, [movementCategories]);
 
   const handleChange = (field, value) => {
@@ -654,13 +680,8 @@ const MovementsPage = () => {
                 {t('pages.movements.category')}
                 <select value={form.category_id} onChange={(event) => handleChange('category_id', event.target.value)}>
                   <option value="">{t('common.none')}</option>
-                  {groupedCategories.map((category) => (
-                    <optgroup key={category.id} label={category.name}>
-                      <option value={category.id}>{category.name}</option>
-                      {category.children.map((child) => (
-                        <option key={child.id} value={child.id}>└ {child.name}</option>
-                      ))}
-                    </optgroup>
+                  {movementCategoryOptions.map((category) => (
+                    <option key={category.id} value={category.id}>{category.label}</option>
                   ))}
                 </select>
               </label>
