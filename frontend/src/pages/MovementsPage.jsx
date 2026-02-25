@@ -79,7 +79,7 @@ const MovementsPage = () => {
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
-      api.getJobs(),
+      api.getJobs({ active: 0, include_closed: 1 }),
     ]);
 
     const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
@@ -166,10 +166,20 @@ const MovementsPage = () => {
   const groupedCategories = useMemo(() => {
     const parents = movementCategories.filter((cat) => !cat.parent_id);
     const children = movementCategories.filter((cat) => cat.parent_id);
-    return parents.map((parent) => ({
+    const parentIds = new Set(parents.map((parent) => parent.id));
+    const grouped = parents.map((parent) => ({
       ...parent,
       children: children.filter((child) => child.parent_id === parent.id),
     }));
+
+    const orphans = children
+      .filter((child) => !parentIds.has(child.parent_id))
+      .map((child) => ({
+        ...child,
+        children: [],
+      }));
+
+    return [...grouped, ...orphans];
   }, [movementCategories]);
 
   const handleChange = (field, value) => {
@@ -325,7 +335,8 @@ const MovementsPage = () => {
     setSubmitMessage('');
   };
 
-  const openNewMovementModal = () => {
+  const openNewMovementModal = async () => {
+    await loadLookupData();
     setEditingMovementId(null);
     setForm(emptyForm);
     setContactSearch('');
@@ -409,7 +420,7 @@ const MovementsPage = () => {
       setContactSearch('');
       setEditingMovementId(null);
       await loadMovements(filters);
-      setAccounts(await api.getAccounts());
+      await loadLookupData();
       setSubmitMessage(t('pages.movements.createSuccess'));
       setMovementModalOpen(false);
     } catch (submitError) {

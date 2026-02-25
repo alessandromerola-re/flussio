@@ -20,6 +20,19 @@ const parseInteger = (value) => {
   return parsed;
 };
 
+const parseOptionalForeignKey = (value) => {
+  if (value == null || value === '') {
+    return { value: null, valid: true };
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return { value: null, valid: false };
+  }
+
+  return { value: parsed, valid: true };
+};
+
 const parseLimit = (value, fallback, max) => {
   if (value == null || value === '') {
     return fallback;
@@ -349,12 +362,30 @@ router.post('/', async (req, res) => {
     type,
     amount_total,
     description = null,
-    category_id = null,
-    contact_id = null,
-    property_id = null,
-    job_id = null,
+    category_id: categoryIdInput = null,
+    categoryId = null,
+    contact_id: contactIdInput = null,
+    contactId = null,
+    property_id: propertyIdInput = null,
+    propertyId = null,
+    job_id: jobIdInput = null,
+    jobId = null,
     accounts = [],
   } = req.body;
+
+  const categoryParse = parseOptionalForeignKey(categoryIdInput ?? categoryId);
+  const contactParse = parseOptionalForeignKey(contactIdInput ?? contactId);
+  const propertyParse = parseOptionalForeignKey(propertyIdInput ?? propertyId);
+  const jobParse = parseOptionalForeignKey(jobIdInput ?? jobId);
+
+  if (!categoryParse.valid || !contactParse.valid || !propertyParse.valid || !jobParse.valid) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const category_id = categoryParse.value;
+  const contact_id = contactParse.value;
+  const property_id = propertyParse.value;
+  const job_id = jobParse.value;
 
   if (!date || !type || amount_total == null || accounts.length === 0) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
@@ -467,12 +498,30 @@ router.put('/:id', async (req, res) => {
     type,
     amount_total,
     description = null,
-    category_id = null,
-    contact_id = null,
-    property_id = null,
-    job_id = null,
+    category_id: categoryIdInput = null,
+    categoryId = null,
+    contact_id: contactIdInput = null,
+    contactId = null,
+    property_id: propertyIdInput = null,
+    propertyId = null,
+    job_id: jobIdInput = null,
+    jobId = null,
     accounts = [],
   } = req.body;
+
+  const categoryParse = parseOptionalForeignKey(categoryIdInput ?? categoryId);
+  const contactParse = parseOptionalForeignKey(contactIdInput ?? contactId);
+  const propertyParse = parseOptionalForeignKey(propertyIdInput ?? propertyId);
+  const jobParse = parseOptionalForeignKey(jobIdInput ?? jobId);
+
+  if (!categoryParse.valid || !contactParse.valid || !propertyParse.valid || !jobParse.valid) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const category_id = categoryParse.value;
+  const contact_id = contactParse.value;
+  const property_id = propertyParse.value;
+  const job_id = jobParse.value;
 
   if (!date || !type || amount_total == null || accounts.length === 0) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });

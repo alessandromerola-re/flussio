@@ -106,17 +106,33 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
 };
 
 router.get('/', async (req, res) => {
-  const activeOnly = req.query.active !== '0';
-  const includeClosed = req.query.include_closed === '1';
+  const parseBooleanQuery = (value) => {
+    if (value == null || value === '') {
+      return null;
+    }
+
+    if (['1', 'true', 'yes'].includes(String(value).toLowerCase())) {
+      return true;
+    }
+
+    if (['0', 'false', 'no'].includes(String(value).toLowerCase())) {
+      return false;
+    }
+
+    return null;
+  };
+
+  const active = parseBooleanQuery(req.query.active);
+  const includeClosed = parseBooleanQuery(req.query.include_closed);
 
   const where = ['j.company_id = $1'];
   const params = [req.user.company_id];
 
-  if (activeOnly) {
-    where.push('j.is_active = true');
+  if (active !== null) {
+    where.push(`j.is_active = ${active}`);
   }
 
-  if (!includeClosed) {
+  if (includeClosed === false) {
     where.push('j.is_closed = false');
   }
 
@@ -125,6 +141,7 @@ router.get('/', async (req, res) => {
       `
       SELECT
         j.id,
+        j.name,
         j.code,
         j.title,
         j.notes,
