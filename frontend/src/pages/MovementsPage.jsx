@@ -546,7 +546,7 @@ const MovementsPage = () => {
         {canPermission('write') && (
           <button
             type="button"
-            className="primary desktop-only"
+            className="primary movements-new-desktop"
             onClick={openNewMovementModal}
           >
             {t('pages.movements.new')}
@@ -953,6 +953,10 @@ const MovementsPage = () => {
         fetchPreviewBlob={fetchPreviewBlob}
         onDownload={handleDownloadAttachment}
       />
+
+      {canPermission('write') && (
+        <FloatingAddButton onClick={openNewMovementModal} ariaLabel={t('pages.movements.new')} />
+      )}
     </div>
   );
 };

@@ -86,6 +86,7 @@ const DashboardPage = () => {
       const response = await api.getDashboardSummary({ ...activeRange, period });
       setSummary((prev) => ({ ...prev, ...response }));
     };
+
     loadSummary();
   }, [activeRange, period]);
 
@@ -122,7 +123,11 @@ const DashboardPage = () => {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      scales: { y: { beginAtZero: true } },
+      scales: {
+        y: {
+          beginAtZero: true,
+        },
+      },
       plugins: {
         tooltip: {
           callbacks: {
@@ -214,9 +219,7 @@ const DashboardPage = () => {
   const topExpensesBarData = useMemo(() => {
     if (!topExpenses) return { labels: [], datasets: [] };
 
-    const sortedSlices = [...topExpenses.slices].sort(
-      (a, b) => Number(b.value_cents || 0) - Number(a.value_cents || 0)
-    );
+    const sortedSlices = [...topExpenses.slices].sort((a, b) => Number(b.value_cents || 0) - Number(a.value_cents || 0));
 
     return {
       labels: sortedSlices.map((slice) => slice.label),
@@ -233,19 +236,19 @@ const DashboardPage = () => {
   const previous = summary.previous || {};
 
   const kpiDeltas = useMemo(() => {
-  return {
-    income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
-    expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
-    net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
-  };
-}, [
-  summary.income_sum_cents,
-  summary.expense_sum_cents,
-  summary.net_sum_cents,
-  previous.income_sum_cents,
-  previous.expense_sum_cents,
-  previous.net_sum_cents,
-]);
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [
+    summary.income_sum_cents,
+    summary.expense_sum_cents,
+    summary.net_sum_cents,
+    previous.income_sum_cents,
+    previous.expense_sum_cents,
+    previous.net_sum_cents,
+  ]);
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions dashboard-tabs" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
@@ -331,23 +334,23 @@ const DashboardPage = () => {
 
       <div className="card dashboard-chart-card" style={{ marginTop: '1rem' }}>
         <h2>{t('pages.dashboard.topExpensesByCategory')}</h2>
-        <div className="dashboard-chart-wrap">
-          <Bar
-            data={topExpensesBarData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                tooltip: {
-                  callbacks: {
-                    label: (context) => `${context.label}: ${currencyTooltip(context)}`,
-                  },
+        <Bar
+          data={topExpensesBarData}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: (context) => `${context.label}: ${currencyTooltip(context)}`,
                 },
               },
-              scales: { y: { beginAtZero: true } },
-            }}
-          />
-        </div>
+            },
+            scales: {
+              y: { beginAtZero: true },
+            },
+          }}
+        />
       </div>
     </div>
   );
