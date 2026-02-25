@@ -72,12 +72,6 @@ const shiftRangeByDays = (range, deltaDays) => {
   return { from: toIsoDate(from), to: toIsoDate(to) };
 };
 
-const countInclusiveDays = (range) => {
-  const from = new Date(`${range.from}T00:00:00`);
-  const to = new Date(`${range.to}T00:00:00`);
-  return Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1;
-};
-
 const getDateRangeFromQuery = (input = {}) => {
   const { from, to, period = 'last6months' } = input;
 
