@@ -148,12 +148,7 @@ router.get('/summary', async (req, res) => {
       ),
     ]);
 
-    const { granularity, buckets } = buildBuckets(range, period);
-    const bucketExpr = granularity === 'day'
-      ? "to_char(t.date, 'YYYY-MM-DD')"
-      : "to_char(date_trunc('month', t.date), 'YYYY-MM')";
-
-    const byBucketResult = await query(
+       const byBucketResult = await query(
       `
       SELECT
         ${bucketExpr} AS bucket,
