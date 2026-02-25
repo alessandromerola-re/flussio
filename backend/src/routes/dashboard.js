@@ -36,11 +36,6 @@ const getPeriodRange = (period) => {
 
 const pad = (n) => String(n).padStart(2, '0');
 
-const buildBuckets = (range, period) => {
-  const start = new Date(`${range.from}T00:00:00`);
-  const end = new Date(`${range.to}T00:00:00`);
-  const buckets = [];
-
   if (period === 'currentmonth') {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
