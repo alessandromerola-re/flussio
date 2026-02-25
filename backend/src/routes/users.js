@@ -10,7 +10,7 @@ router.get('/', requirePermission('users_manage'), async (req, res) => {
   try {
     const result = await query(
       'SELECT id, email, role, is_active, created_at FROM users WHERE company_id = $1 ORDER BY id DESC',
-      [req.user.company_id]
+      [req.companyId]
     );
     return res.json(result.rows);
   } catch (error) {
@@ -33,7 +33,7 @@ router.post('/', requirePermission('users_manage'), async (req, res) => {
       VALUES ($1, $2, $3, $4)
       RETURNING id, email, role, is_active, created_at
       `,
-      [req.user.company_id, email, hash, role]
+      [req.companyId, email, hash, role]
     );
     return res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -58,7 +58,7 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
         AND company_id = $4
       RETURNING id, email, role, is_active, created_at
       `,
-      [role ?? null, is_active ?? null, req.params.id, req.user.company_id]
+      [role ?? null, is_active ?? null, req.params.id, req.companyId]
     );
 
     if (result.rowCount === 0) {
@@ -78,7 +78,7 @@ router.post('/:id/reset-password-token', requirePermission('users_manage'), asyn
   try {
     const userResult = await query('SELECT id FROM users WHERE id = $1 AND company_id = $2', [
       req.params.id,
-      req.user.company_id,
+      req.companyId,
     ]);
     if (userResult.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
