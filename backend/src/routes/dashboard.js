@@ -115,6 +115,7 @@ const buildBuckets = (range, period) => {
   const end = new Date(`${range.to}T00:00:00`);
   const buckets = [];
   const twoDigits = (value) => String(value).padStart(2, '0');
+  const formatMonthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
   if (period === 'last30days' || period === 'currentmonth') {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -126,7 +127,7 @@ const buildBuckets = (range, period) => {
 
   for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
     const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}`;
-    buckets.push({ key, label: monthLabel(d) });
+    buckets.push({ key, label: formatMonthLabel(d) });
   }
   return { granularity: 'month', buckets };
 };
