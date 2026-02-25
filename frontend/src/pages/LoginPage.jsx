@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { api, setToken } from '../services/api.js';
+import { api, setActiveCompanyId, setToken } from '../services/api.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import BrandMark from '../components/BrandMark.jsx';
 
@@ -21,6 +21,9 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
     try {
       const data = await api.login({ email, password });
       setToken(data.token, data.role);
+      localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
+      setActiveCompanyId(data.default_company_id);
+      localStorage.setItem('flussio_role', data.role || 'viewer');
       if (!remember) {
         sessionStorage.setItem('flussio_token_temp', data.token);
       }

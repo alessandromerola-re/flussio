@@ -110,7 +110,7 @@ router.get('/', async (req, res) => {
   const includeClosedRaw = req.query.include_closed == null ? '' : String(req.query.include_closed).trim().toLowerCase();
 
   const where = ['j.company_id = $1'];
-  const params = [req.user.company_id];
+  const params = [req.companyId];
 
   // Backward compatibility:
   // - active=0 historically meant "do not filter by active"
@@ -183,7 +183,7 @@ router.get('/:id', async (req, res) => {
         AND j.company_id = $2
       LIMIT 1
       `,
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     if (result.rowCount === 0) {
@@ -200,7 +200,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const payload = normalizeJobPayload(req.body);
-  const validation = await validateJobPayload(payload, req.user.company_id);
+  const validation = await validateJobPayload(payload, req.companyId);
 
   if (!validation.valid) {
     const messageByCode = {
@@ -231,7 +231,7 @@ router.post('/', async (req, res) => {
       RETURNING *
       `,
       [
-        req.user.company_id,
+        req.companyId,
         payload.name,
         payload.title,
         payload.code,
@@ -245,7 +245,7 @@ router.post('/', async (req, res) => {
       ]
     );
     await writeAuditLog({
-      companyId: req.user.company_id,
+      companyId: req.companyId,
       userId: req.user.user_id,
       action: 'create',
       entityType: 'jobs',
@@ -262,7 +262,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const payload = normalizeJobPayload(req.body);
-  const validation = await validateJobPayload(payload, req.user.company_id, Number(id));
+  const validation = await validateJobPayload(payload, req.companyId, Number(id));
 
   if (!validation.valid) {
     const messageByCode = {
@@ -304,7 +304,7 @@ router.put('/:id', async (req, res) => {
         payload.start_date,
         payload.end_date,
         id,
-        req.user.company_id,
+        req.companyId,
       ]
     );
 
@@ -313,7 +313,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await writeAuditLog({
-      companyId: req.user.company_id,
+      companyId: req.companyId,
       userId: req.user.user_id,
       action: 'update',
       entityType: 'jobs',
@@ -339,7 +339,7 @@ router.delete('/:id', async (req, res) => {
         AND company_id = $2
       RETURNING id
       `,
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     if (result.rowCount === 0) {
@@ -347,7 +347,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await writeAuditLog({
-      companyId: req.user.company_id,
+      companyId: req.companyId,
       userId: req.user.user_id,
       action: 'delete',
       entityType: 'jobs',
