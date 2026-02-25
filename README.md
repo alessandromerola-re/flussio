@@ -8,7 +8,7 @@ Flussio is a lightweight accounting web app (Phase 1 MVP) for managing:
 Stack:
 - Frontend: React + Vite
 - Backend: Node.js + Express
-- Database: PostgreSQL 16
+- Database: PostgreSQL 18
 
 ## Quickstart (Docker)
 
@@ -21,6 +21,15 @@ docker compose up -d --build
 Default URLs:
 - Frontend: http://localhost:9808
 - Backend API: http://localhost:4000
+
+
+
+## Postgres 18 upgrade note
+
+Dopo questo upgrade eseguire `docker compose down -v` prima del primo `up` in locale.
+
+Questo è necessario perché con Postgres 18+ l’immagine Docker ufficiale ha cambiato PGDATA/VOLUME (`/var/lib/postgresql`), quindi il volume precedente va ricreato e ri-montato correttamente.
+
 
 ## Frontend host port configuration
 
