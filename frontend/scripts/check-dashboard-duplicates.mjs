@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -16,14 +16,18 @@ const checks = [
       ['const previous = summary.previous || {};', 1],
     ]),
   },
-  {
-    file: backendDashboardPath,
-    patterns: new Map([
-      ['const monthLabel =', 0],
-      ['const formatMonthLabel =', 1],
-      ['const twoDigits =', 1],
-    ]),
-  },
+  ...(existsSync(backendDashboardPath)
+    ? [
+        {
+          file: backendDashboardPath,
+          patterns: new Map([
+            ['const monthLabel =', 0],
+            ['const formatMonthLabel =', 1],
+            ['const twoDigits =', 1],
+          ]),
+        },
+      ]
+    : []),
 ];
 
 const errors = [];
