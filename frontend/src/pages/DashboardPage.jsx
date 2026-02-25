@@ -106,6 +106,12 @@ const DashboardPage = () => {
 
   const bucketSeries = summary.by_bucket || [];
 
+  useEffect(() => {
+    loadPie('expense', 'category', 10).then(setTopExpenses);
+  }, [activeRange.from, activeRange.to]);
+
+  const bucketSeries = summary.by_bucket || [];
+
   const trendData = useMemo(() => ({
     labels: bucketSeries.map((row) => row.label),
     datasets: [
@@ -159,6 +165,15 @@ const DashboardPage = () => {
   const expenseDelta = computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents));
   const netDelta = computeDelta(summary.net_sum_cents, previous.net_sum_cents);
 
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary]);
+
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
       {dimensionOptions.map((dimension) => <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>{t(`pages.dashboard.dim.${dimension}`)}</button>)}
@@ -183,17 +198,17 @@ const DashboardPage = () => {
       <div className="kpi-grid">
         <div className="card kpi">
           <span>{t('pages.dashboard.income')}</span>
-          <small className={deltaClassName(incomeDelta)}>{formatDelta(incomeDelta)}</small>
+          <small className={deltaClassName(kpiDeltas.income)}>{formatDelta(kpiDeltas.income)}</small>
           <strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong>
         </div>
         <div className="card kpi">
           <span>{t('pages.dashboard.expense')}</span>
-          <small className={deltaClassName(expenseDelta)}>{formatDelta(expenseDelta)}</small>
+          <small className={deltaClassName(kpiDeltas.expense)}>{formatDelta(kpiDeltas.expense)}</small>
           <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
         </div>
         <div className="card kpi">
           <span>{t('pages.dashboard.net')}</span>
-          <small className={deltaClassName(netDelta)}>{formatDelta(netDelta)}</small>
+          <small className={deltaClassName(kpiDeltas.net)}>{formatDelta(kpiDeltas.net)}</small>
           <strong>{centsToEuro(summary.net_sum_cents)}</strong>
         </div>
       </div>
