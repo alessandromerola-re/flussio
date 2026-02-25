@@ -126,8 +126,6 @@ router.get('/summary', async (req, res) => {
   }
 
   try {
-    const previousRange = shiftRangeByDays(range, -countInclusiveDays(range));
-
     const [summaryResult, previousSummaryResult] = await Promise.all([
       query(
         `
