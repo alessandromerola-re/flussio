@@ -8,6 +8,7 @@ const allowedDimensions = new Set(['category', 'contact', 'account', 'job']);
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const pad2 = (n) => String(n).padStart(2, '0');
 const monthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
 const getPeriodRange = (period) => {
@@ -29,36 +30,10 @@ const getPeriodRange = (period) => {
     return { from: toIsoDate(new Date(now.getFullYear(), 0, 1)), to: toIsoDate(end) };
   }
 
+  // default: last6months
   const sixMonths = new Date(now.getFullYear(), now.getMonth() - 5, 1);
   return { from: toIsoDate(sixMonths), to: toIsoDate(end) };
 };
-
-
-const pad = (n) => String(n).padStart(2, '0');
-
-  if (period === 'currentmonth') {
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
-    }
-    return { granularity: 'day', buckets };
-  }
-
-  if (period === 'last30days') {
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
-    }
-    return { granularity: 'day', buckets };
-  }
-
-  for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
-    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
-    buckets.push({ key, label: monthLabel(d) });
-  }
-  return { granularity: 'month', buckets };
-};
-
 
 const getDateRangeFromQuery = (input = {}) => {
   const { from, to, period = 'last6months' } = input;
@@ -95,20 +70,20 @@ const buildBuckets = (range, period) => {
   const start = new Date(`${range.from}T00:00:00`);
   const end = new Date(`${range.to}T00:00:00`);
   const buckets = [];
-  const twoDigits = (value) => String(value).padStart(2, '0');
-  const formatMonthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
+  // day buckets for last30days / currentmonth
   if (period === 'last30days' || period === 'currentmonth') {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(d.getDate())}`;
-      buckets.push({ key, label: `${twoDigits(d.getDate())}/${twoDigits(d.getMonth() + 1)}` });
+      const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      buckets.push({ key, label: `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}` });
     }
     return { granularity: 'day', buckets };
   }
 
+  // month buckets for last6months / currentyear / fallback
   for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
-    const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}`;
-    buckets.push({ key, label: formatMonthLabel(d) });
+    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    buckets.push({ key, label: monthLabel(d) });
   }
   return { granularity: 'month', buckets };
 };
@@ -116,11 +91,14 @@ const buildBuckets = (range, period) => {
 router.get('/summary', async (req, res) => {
   const period = req.query.period || 'last6months';
   const range = getDateRangeFromQuery({ ...req.query, period });
+
   if (range.error) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
   try {
+    const previousRange = shiftRangeByDays(range, -countInclusiveDays(range));
+
     const [summaryResult, previousSummaryResult] = await Promise.all([
       query(
         `
@@ -148,12 +126,18 @@ router.get('/summary', async (req, res) => {
       ),
     ]);
 
-       const byBucketResult = await query(
+    const { granularity, buckets } = buildBuckets(range, period);
+    const bucketExpr =
+      granularity === 'day'
+        ? "to_char(t.date, 'YYYY-MM-DD')"
+        : "to_char(date_trunc('month', t.date), 'YYYY-MM')";
+
+    const byBucketResult = await query(
       `
       SELECT
         ${bucketExpr} AS bucket,
         COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS expense_sum_cents
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents
       FROM transactions t
       WHERE t.company_id = $1
         AND t.date BETWEEN $2 AND $3
