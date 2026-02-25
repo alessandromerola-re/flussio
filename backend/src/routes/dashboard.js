@@ -7,8 +7,9 @@ const allowedKinds = new Set(['income', 'expense']);
 const allowedDimensions = new Set(['category', 'contact', 'account', 'job']);
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
-
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const pad = (n) => String(n).padStart(2, '0');
+const monthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
 const getPeriodRange = (period) => {
   const now = new Date();
@@ -50,30 +51,86 @@ const getDateRangeFromQuery = (input = {}) => {
   return getPeriodRange(period);
 };
 
+const countInclusiveDays = (range) => {
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  return Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1;
+};
+
+const shiftRangeByDays = (range, deltaDays) => {
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  from.setDate(from.getDate() + deltaDays);
+  to.setDate(to.getDate() + deltaDays);
+  return { from: toIsoDate(from), to: toIsoDate(to) };
+};
+
+const buildBuckets = (range, period) => {
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  const buckets = [];
+
+  if (period === 'last30days' || period === 'currentmonth') {
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
+    }
+    return { granularity: 'day', buckets };
+  }
+
+  for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
+    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    buckets.push({ key, label: monthLabel(d) });
+  }
+  return { granularity: 'month', buckets };
+};
+
 router.get('/summary', async (req, res) => {
-  const range = getDateRangeFromQuery(req.query);
+  const period = req.query.period || 'last6months';
+  const range = getDateRangeFromQuery({ ...req.query, period });
   if (range.error) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
   try {
-    const summaryResult = await query(
-      `
-      SELECT
-        COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents,
-        COUNT(*)::int AS count
-      FROM transactions t
-      WHERE t.company_id = $1
-        AND t.date BETWEEN $2 AND $3
-      `,
-      [req.user.company_id, range.from, range.to]
-    );
+    const previousRange = shiftRangeByDays(range, -countInclusiveDays(range));
 
-    const byMonthResult = await query(
+    const [summaryResult, previousSummaryResult] = await Promise.all([
+      query(
+        `
+        SELECT
+          COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents,
+          COUNT(*)::int AS count
+        FROM transactions t
+        WHERE t.company_id = $1
+          AND t.date BETWEEN $2 AND $3
+        `,
+        [req.user.company_id, range.from, range.to]
+      ),
+      query(
+        `
+        SELECT
+          COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents,
+          COUNT(*)::int AS count
+        FROM transactions t
+        WHERE t.company_id = $1
+          AND t.date BETWEEN $2 AND $3
+        `,
+        [req.user.company_id, previousRange.from, previousRange.to]
+      ),
+    ]);
+
+    const { granularity, buckets } = buildBuckets(range, period);
+    const bucketExpr = granularity === 'day'
+      ? "to_char(t.date, 'YYYY-MM-DD')"
+      : "to_char(date_trunc('month', t.date), 'YYYY-MM')";
+
+    const byBucketResult = await query(
       `
       SELECT
-        to_char(date_trunc('month', t.date), 'YYYY-MM') AS month,
+        ${bucketExpr} AS bucket,
         COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
         COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents
       FROM transactions t
@@ -85,25 +142,51 @@ router.get('/summary', async (req, res) => {
       [req.user.company_id, range.from, range.to]
     );
 
+    const byBucketMap = new Map(byBucketResult.rows.map((row) => [row.bucket, row]));
+
+    const byBucket = buckets.map((bucket) => {
+      const row = byBucketMap.get(bucket.key);
+      const incomeBucket = Number(row?.income_sum_cents || 0);
+      const expenseBucket = Number(row?.expense_sum_cents || 0);
+      return {
+        bucket: bucket.key,
+        label: bucket.label,
+        income_sum_cents: incomeBucket,
+        expense_sum_cents: expenseBucket,
+        net_sum_cents: incomeBucket - expenseBucket,
+      };
+    });
+
     const base = summaryResult.rows[0] || { income_sum_cents: 0, expense_sum_cents: 0, count: 0 };
+    const prev = previousSummaryResult.rows[0] || { income_sum_cents: 0, expense_sum_cents: 0, count: 0 };
+
     const income = Number(base.income_sum_cents || 0);
     const expense = Number(base.expense_sum_cents || 0);
+    const prevIncome = Number(prev.income_sum_cents || 0);
+    const prevExpense = Number(prev.expense_sum_cents || 0);
 
     return res.json({
       income_sum_cents: income,
       expense_sum_cents: expense,
       net_sum_cents: income - expense,
       count: Number(base.count || 0),
-      by_month: byMonthResult.rows.map((row) => {
-        const incomeMonth = Number(row.income_sum_cents || 0);
-        const expenseMonth = Number(row.expense_sum_cents || 0);
-        return {
-          month: row.month,
-          income_sum_cents: incomeMonth,
-          expense_sum_cents: expenseMonth,
-          net_sum_cents: incomeMonth - expenseMonth,
-        };
-      }),
+      previous: {
+        from: previousRange.from,
+        to: previousRange.to,
+        income_sum_cents: prevIncome,
+        expense_sum_cents: prevExpense,
+        net_sum_cents: prevIncome - prevExpense,
+        count: Number(prev.count || 0),
+      },
+      by_bucket: byBucket,
+      by_month: byBucket
+        .filter((row) => row.bucket.length === 7)
+        .map((row) => ({
+          month: row.bucket,
+          income_sum_cents: row.income_sum_cents,
+          expense_sum_cents: row.expense_sum_cents,
+          net_sum_cents: row.net_sum_cents,
+        })),
     });
   } catch (error) {
     console.error(error);
