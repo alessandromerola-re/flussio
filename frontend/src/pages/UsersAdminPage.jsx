@@ -14,6 +14,8 @@ const UsersAdminPage = () => {
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const isSuperAdmin = localStorage.getItem('flussio_role') === 'super_admin';
 
   const loadUsers = async () => {
     if (!canPermission('users_manage')) return;
@@ -23,14 +25,6 @@ const UsersAdminPage = () => {
   useEffect(() => {
     loadUsers().catch(() => setMessage(getErrorMessage(t, null)));
   }, []);
-
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    await api.createUser(form);
-    setForm(initialForm);
-    setCreateOpen(false);
-    await loadUsers();
-  };
 
   if (!canPermission('users_manage')) {
     return <div className="page"><div className="error">{t('errors.FORBIDDEN')}</div></div>;
@@ -43,9 +37,42 @@ const UsersAdminPage = () => {
 
   const submitCreate = async (event) => {
     event.preventDefault();
-    await api.createUser(form);
-    closeModal();
-    await loadUsers();
+    setMessage('');
+    try {
+      await api.createUser({
+        email: form.email,
+        role: form.role,
+        ...(form.password ? { password: form.password } : {}),
+      });
+      closeModal();
+      await loadUsers();
+      setMessage('Membro aggiornato con successo.');
+    } catch (error) {
+      setMessage(getErrorMessage(t, error));
+    }
+  };
+
+  const handleToggleMembership = async (user) => {
+    setMessage('');
+    try {
+      await api.updateUser(user.id, { membership_active: !user.membership_active });
+      await loadUsers();
+    } catch (error) {
+      setMessage(getErrorMessage(t, error));
+    }
+  };
+
+  const handleCreateCompany = async (event) => {
+    event.preventDefault();
+    if (!companyName.trim()) return;
+    setMessage('');
+    try {
+      const created = await api.createCompany({ name: companyName.trim() });
+      setCompanyName('');
+      setMessage(`Azienda creata: ${created.name}`);
+    } catch (error) {
+      setMessage(getErrorMessage(t, error));
+    }
   };
 
   return (
@@ -58,6 +85,27 @@ const UsersAdminPage = () => {
       </div>
 
       {message && <div className="muted users-feedback">{message}</div>}
+
+      {isSuperAdmin && (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <form onSubmit={handleCreateCompany} className="users-create-form">
+            <h3>Crea azienda</h3>
+            <label>
+              Nome azienda
+              <input
+                type="text"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                placeholder="Nuova azienda"
+                required
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="submit">Crea</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card users-card">
         <div className="users-table-head">
@@ -79,8 +127,8 @@ const UsersAdminPage = () => {
               </div>
 
               <div className="users-cell">
-                <span className={`users-status-pill ${user.is_active ? 'active' : 'inactive'}`}>
-                  {user.is_active ? 'active' : 'inactive'}
+                <span className={`users-status-pill ${user.membership_active ? 'active' : 'inactive'}`}>
+                  {user.membership_active ? 'active' : 'inactive'}
                 </span>
               </div>
 
@@ -88,12 +136,9 @@ const UsersAdminPage = () => {
                 <button
                   type="button"
                   className="ghost users-action-btn"
-                  onClick={async () => {
-                    await api.updateUser(user.id, { is_active: !user.is_active });
-                    await loadUsers();
-                  }}
+                  onClick={() => handleToggleMembership(user)}
                 >
-                  {user.is_active ? t('buttons.deactivate') : t('buttons.activate')}
+                  {user.membership_active ? t('buttons.deactivate') : t('buttons.activate')}
                 </button>
 
                 <button
@@ -115,7 +160,7 @@ const UsersAdminPage = () => {
       <Modal isOpen={modalOpen} onClose={closeModal}>
         <div className="modal-content">
           <form onSubmit={submitCreate} className="users-create-form">
-            <h2>{t('buttons.new')}</h2>
+            <h2>Aggiungi membro</h2>
             <label>
               {t('forms.email')}
               <input
@@ -127,12 +172,11 @@ const UsersAdminPage = () => {
             </label>
 
             <label>
-              {t('forms.password')}
+              {t('forms.password')} (opzionale per utente esistente)
               <input
                 type="password"
                 value={form.password}
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-                required
               />
             </label>
 

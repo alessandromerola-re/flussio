@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
   try {
     const result = await query(
       'SELECT id, name, type, opening_balance, balance, is_active FROM accounts WHERE company_id = $1 ORDER BY name',
-      [req.user.company_id]
+      [req.companyId]
     );
     return res.json(result.rows);
   } catch (error) {
@@ -39,7 +39,7 @@ router.post('/', async (req, res) => {
       VALUES ($1, $2, $3, $4, $4, $5)
       RETURNING *
       `,
-      [req.user.company_id, name.trim(), type, parsedOpeningBalance, is_active]
+      [req.companyId, name.trim(), type, parsedOpeningBalance, is_active]
     );
     return res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -72,7 +72,7 @@ router.put('/:id', async (req, res) => {
       )
       SELECT * FROM updated
       `,
-      [name.trim(), type, parsedOpeningBalance, is_active, id, req.user.company_id]
+      [name.trim(), type, parsedOpeningBalance, is_active, id, req.companyId]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
@@ -89,7 +89,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const result = await query(
       'DELETE FROM accounts WHERE id = $1 AND company_id = $2',
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });

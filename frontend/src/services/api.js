@@ -2,6 +2,15 @@ const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const getToken = () => localStorage.getItem('flussio_token');
 export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
+export const getActiveCompanyId = () => localStorage.getItem('flussio_company_id');
+
+export const setActiveCompanyId = (id) => {
+  if (id == null || id === '') {
+    localStorage.removeItem('flussio_company_id');
+    return;
+  }
+  localStorage.setItem('flussio_company_id', String(id));
+};
 
 export const setToken = (token, role = null) => {
   localStorage.setItem('flussio_token', token);
@@ -13,6 +22,8 @@ export const setToken = (token, role = null) => {
 export const clearToken = () => {
   localStorage.removeItem('flussio_token');
   localStorage.removeItem('flussio_role');
+  localStorage.removeItem('flussio_company_id');
+  localStorage.removeItem('flussio_companies');
 };
 
 const toQueryString = (params = {}) => {
@@ -39,6 +50,11 @@ const request = async (path, options = {}) => {
   const token = getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+  }
+
+  const activeCompanyId = getActiveCompanyId();
+  if (activeCompanyId) {
+    headers['X-Company-Id'] = activeCompanyId;
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
@@ -90,6 +106,8 @@ const request = async (path, options = {}) => {
 
 export const api = {
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  getCompanies: () => request('/companies'),
+  createCompany: (payload) => request('/companies', { method: 'POST', body: JSON.stringify(payload) }),
   getAccounts: () => request('/accounts'),
   createAccount: (payload) => request('/accounts', { method: 'POST', body: JSON.stringify(payload) }),
   updateAccount: (id, payload) => request(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
