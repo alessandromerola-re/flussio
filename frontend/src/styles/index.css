@@ -184,6 +184,10 @@ button.danger {
   margin-bottom: 1.5rem;
 }
 
+.kpi {
+  position: relative;
+}
+
 .kpi strong {
   display: block;
   font-size: 1.4rem;
@@ -680,5 +684,77 @@ button.danger {
   .hamburger {
     padding: 0.35rem 0.65rem;
     font-size: 1.15rem;
+  }
+}
+
+
+.kpi-delta-badge {
+  position: absolute;
+  top: 0.9rem;
+  right: 1rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.kpi-delta-badge.positive {
+  color: #15803d;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.kpi-delta-badge.negative {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.kpi-delta-badge.neutral {
+  color: #4b5563;
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.dashboard-page-header {
+  align-items: flex-end;
+}
+
+.dashboard-period {
+  min-width: 180px;
+}
+
+.dashboard-chart-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-chart-wrap {
+  position: relative;
+  height: 280px;
+}
+
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-chart-wrap {
+    height: 220px;
+  }
+
+  .dashboard-page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .dashboard-period {
+    width: 100%;
+  }
+
+  .dashboard-period select {
+    width: 100%;
   }
 }
