@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Line } from 'react-chartjs-2';
+import { Bar, Line, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -14,7 +14,7 @@ import {
 } from 'chart.js';
 import { api } from '../services/api.js';
 
-ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
+ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
 const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -86,7 +86,6 @@ const DashboardPage = () => {
       const response = await api.getDashboardSummary({ ...activeRange, period });
       setSummary((prev) => ({ ...prev, ...response }));
     };
-
     loadSummary();
   }, [activeRange, period]);
 
@@ -123,11 +122,7 @@ const DashboardPage = () => {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      scales: {
-        y: {
-          beginAtZero: true,
-        },
-      },
+      scales: { y: { beginAtZero: true } },
       plugins: {
         tooltip: {
           callbacks: {
@@ -219,7 +214,9 @@ const DashboardPage = () => {
   const topExpensesBarData = useMemo(() => {
     if (!topExpenses) return { labels: [], datasets: [] };
 
-    const sortedSlices = [...topExpenses.slices].sort((a, b) => Number(b.value_cents || 0) - Number(a.value_cents || 0));
+    const sortedSlices = [...topExpenses.slices].sort(
+      (a, b) => Number(b.value_cents || 0) - Number(a.value_cents || 0)
+    );
 
     return {
       labels: sortedSlices.map((slice) => slice.label),
@@ -235,25 +232,31 @@ const DashboardPage = () => {
 
   const previous = summary.previous || {};
 
-  const kpiDeltas = useMemo(() => {
-    return {
+  const kpiDeltas = useMemo(
+    () => ({
       income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
       expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
       net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
-    };
-  }, [
-    summary.income_sum_cents,
-    summary.expense_sum_cents,
-    summary.net_sum_cents,
-    previous.income_sum_cents,
-    previous.expense_sum_cents,
-    previous.net_sum_cents,
-  ]);
+    }),
+    [
+      summary.income_sum_cents,
+      summary.expense_sum_cents,
+      summary.net_sum_cents,
+      previous.income_sum_cents,
+      previous.expense_sum_cents,
+      previous.net_sum_cents,
+    ]
+  );
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions dashboard-tabs" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
       {dimensionOptions.map((dimension) => (
-        <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>
+        <button
+          key={dimension}
+          type="button"
+          className={selected === dimension ? '' : 'ghost'}
+          onClick={() => onChange(dimension)}
+        >
           {t(`pages.dashboard.dim.${dimension}`)}
         </button>
       ))}
@@ -276,7 +279,6 @@ const DashboardPage = () => {
           </select>
         </div>
       </div>
-    </div>
 
       <div className="kpi-grid">
         <div className="card kpi">
@@ -312,6 +314,7 @@ const DashboardPage = () => {
             <Line data={netTrendData} options={commonLineOptions} />
           </div>
         </div>
+      </div>
 
       <div className="grid-two" style={{ marginTop: '1rem' }}>
         <div className="card">
@@ -327,25 +330,25 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '1rem' }}>
+      <div className="card dashboard-chart-card" style={{ marginTop: '1rem' }}>
         <h2>{t('pages.dashboard.topExpensesByCategory')}</h2>
-        <Bar
-          data={topExpensesBarData}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: (context) => `${context.label}: ${currencyTooltip(context)}`,
+        <div className="dashboard-chart-wrap">
+          <Bar
+            data={topExpensesBarData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                tooltip: {
+                  callbacks: {
+                    label: (context) => `${context.label}: ${currencyTooltip(context)}`,
+                  },
                 },
               },
-            },
-            scales: {
-              y: { beginAtZero: true },
-            },
-          }}
-        />
+              scales: { y: { beginAtZero: true } },
+            }}
+          />
+        </div>
       </div>
     </div>
   );
