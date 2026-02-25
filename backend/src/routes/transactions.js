@@ -178,7 +178,7 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
     c.name AS category_name,
     ct.name AS contact_name,
     p.name AS property_name,
-    j.name AS job_name,
+    COALESCE(j.title, j.name) AS job_name,
     rt.title AS recurring_template_title,
     (
       SELECT u.email
@@ -216,7 +216,7 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
   LEFT JOIN transaction_accounts ta ON t.id = ta.transaction_id
   LEFT JOIN accounts a ON ta.account_id = a.id
   WHERE ${whereSql}
-  GROUP BY t.id, c.name, ct.name, p.name, j.name, rt.title
+  GROUP BY t.id, c.name, ct.name, p.name, j.title, j.name, rt.title
   ORDER BY t.date DESC, t.id DESC
   ${includePagination ? `LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}` : ''}
 `;

@@ -670,7 +670,7 @@ const MovementsPage = () => {
               <select value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
                 {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>{job.name}</option>
+                  <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
             </label>
@@ -790,7 +790,7 @@ const MovementsPage = () => {
               >
                 <option value="">{t('common.all')}</option>
                 {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>{job.name}</option>
+                  <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
             </label>
