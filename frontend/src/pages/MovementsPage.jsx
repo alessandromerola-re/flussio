@@ -11,7 +11,7 @@ import FloatingAddButton from '../components/FloatingAddButton.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
-  type: 'income',
+  type: '',
   amount_total: '',
   description: '',
   account_in: '',
@@ -79,7 +79,7 @@ const MovementsPage = () => {
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
-      api.getJobs(),
+      api.getJobs({ active: 0, include_closed: 1 }),
     ]);
 
     const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
