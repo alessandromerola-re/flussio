@@ -85,7 +85,7 @@ router.get('/file/:id', async (req, res) => {
       JOIN transactions t ON a.transaction_id = t.id
       WHERE a.id = $1 AND t.company_id = $2
       `,
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     if (result.rowCount === 0) {
@@ -127,7 +127,7 @@ router.get('/:transactionId', async (req, res) => {
       WHERE a.transaction_id = $1 AND t.company_id = $2
       ORDER BY a.created_at DESC
       `,
-      [transactionId, req.user.company_id]
+      [transactionId, req.companyId]
     );
     return res.json(result.rows);
   } catch (error) {
@@ -156,13 +156,13 @@ const uploadAttachmentHandler = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const transaction = await getTransactionForCompany(client, transactionId, req.user.company_id);
+    const transaction = await getTransactionForCompany(client, transactionId, req.companyId);
     if (!transaction) {
       await client.query('ROLLBACK');
       return sendError(res, 404, 'NOT_FOUND', 'Risorsa non trovata.');
     }
 
-    const relativeDir = path.join(`company_${req.user.company_id}`, `tx_${transaction.id}`);
+    const relativeDir = path.join(`company_${req.companyId}`, `tx_${transaction.id}`);
     const targetDir = path.join(uploadsRoot, relativeDir);
     await fs.mkdir(targetDir, { recursive: true });
 
@@ -206,7 +206,7 @@ const uploadAttachmentHandler = async (req, res) => {
     );
 
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'create', entityType: 'attachments', entityId: insertResult.rows[0].id, meta: { transaction_id: transaction.id } });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'attachments', entityId: insertResult.rows[0].id, meta: { transaction_id: transaction.id } });
     return res.status(201).json(insertResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -234,7 +234,7 @@ router.delete('/:id', async (req, res) => {
       WHERE a.id = $1 AND t.company_id = $2
       FOR UPDATE
       `,
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     if (result.rowCount === 0) {
@@ -253,7 +253,7 @@ router.delete('/:id', async (req, res) => {
       }
     });
 
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'attachments', entityId: id, meta: {} });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'attachments', entityId: id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     await client.query('ROLLBACK');
