@@ -276,6 +276,7 @@ const DashboardPage = () => {
           </select>
         </div>
       </div>
+    </div>
 
       <div className="kpi-grid">
         <div className="card kpi">
