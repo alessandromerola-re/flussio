@@ -14,8 +14,18 @@ CREATE TABLE users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'admin',
+  is_super_admin BOOLEAN NOT NULL DEFAULT false,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_companies (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'viewer', 'operatore')),
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, company_id)
 );
 
 CREATE TABLE accounts (
@@ -198,6 +208,8 @@ CREATE INDEX idx_recurring_templates_due ON recurring_templates(is_active, next_
 CREATE INDEX idx_recurring_runs_template_cycle ON recurring_runs(template_id, cycle_key);
 CREATE INDEX idx_audit_company_created ON audit_log(company_id, created_at DESC);
 CREATE INDEX idx_password_reset_user ON password_reset_tokens(user_id, created_at DESC);
+CREATE INDEX idx_user_companies_company ON user_companies(company_id);
+CREATE INDEX idx_user_companies_user ON user_companies(user_id);
 CREATE INDEX idx_contracts_company_property ON contracts(company_id, property_id);
 
 COMMIT;

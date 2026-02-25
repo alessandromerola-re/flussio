@@ -3,6 +3,14 @@ INSERT INTO companies (name) VALUES ('Flussio Demo');
 INSERT INTO users (company_id, email, password_hash)
 VALUES (1, 'dev@flussio.local', '$2a$10$VLjcBGe17jXHE4u5YHpkDOOgnoMvZLElu4HGAg42zAiFOsUM6/EMK');
 
+INSERT INTO user_companies (user_id, company_id, role)
+VALUES (1, 1, 'admin');
+
+INSERT INTO companies (name) VALUES ('Seconda Demo');
+
+INSERT INTO user_companies (user_id, company_id, role)
+VALUES (1, 2, 'editor');
+
 INSERT INTO accounts (company_id, name, type, opening_balance, balance)
 VALUES
   (1, 'Cassa', 'cash', 1500.00, 1500.00),
