@@ -107,16 +107,9 @@ const DashboardPage = () => {
     loadPie('expense', expenseDimension).then(setExpensePie);
   }, [expenseDimension, activeRange.from, activeRange.to]);
 
-  // ⚠️ IMPORTANTISSIMO: queste 3 righe devono esistere UNA SOLA VOLTA nel file (guard build)
-  const bucketSeries = summary.by_bucket || [];
-  const previous = summary.previous || {};
-  const kpiDeltas = useMemo(() => {
-    return {
-      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
-      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
-      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
-    };
-  }, [summary.income_sum_cents, summary.expense_sum_cents, summary.net_sum_cents, summary.previous]);
+  useEffect(() => {
+    loadPie('expense', 'category', 10).then(setTopExpenses);
+  }, [activeRange.from, activeRange.to]);
 
   const bucketSeries = summary.by_bucket || [];
 
@@ -240,15 +233,22 @@ const DashboardPage = () => {
     };
   }, [topExpenses, t]);
 
-  const kpiDeltas = useMemo(() => {
-    const previous = summary.previous || {};
+  const previous = summary.previous || {};
 
+  const kpiDeltas = useMemo(() => {
     return {
       income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
       expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
       net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
     };
-  }, [summary.income_sum_cents, summary.expense_sum_cents, summary.net_sum_cents, summary.previous]);
+  }, [
+    summary.income_sum_cents,
+    summary.expense_sum_cents,
+    summary.net_sum_cents,
+    previous.income_sum_cents,
+    previous.expense_sum_cents,
+    previous.net_sum_cents,
+  ]);
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions dashboard-tabs" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
