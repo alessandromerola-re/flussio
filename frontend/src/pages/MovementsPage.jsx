@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/errorMessages.js';
 import { formatDateIT } from '../utils/date.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
 import Modal from '../components/Modal.jsx';
+import FloatingAddButton from '../components/FloatingAddButton.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -545,7 +546,7 @@ const MovementsPage = () => {
         {canPermission('write') && (
           <button
             type="button"
-            className="primary"
+            className="primary movements-new-desktop"
             onClick={openNewMovementModal}
           >
             {t('pages.movements.new')}
@@ -936,6 +937,10 @@ const MovementsPage = () => {
         fetchPreviewBlob={fetchPreviewBlob}
         onDownload={handleDownloadAttachment}
       />
+
+      {canPermission('write') && (
+        <FloatingAddButton onClick={openNewMovementModal} ariaLabel={t('pages.movements.new')} />
+      )}
     </div>
   );
 };
