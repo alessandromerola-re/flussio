@@ -11,7 +11,7 @@ import FloatingAddButton from '../components/FloatingAddButton.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
-  type: 'income',
+  type: '',
   amount_total: '',
   description: '',
   account_in: '',
@@ -140,6 +140,17 @@ const MovementsPage = () => {
     return names.length ? names.join(' → ') : t('common.none');
   };
 
+  const normalizeDirection = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['income', 'in', 'entrata'].includes(normalized)) {
+      return 'income';
+    }
+    if (['expense', 'out', 'uscita'].includes(normalized)) {
+      return 'expense';
+    }
+    return normalized;
+  };
+
   useEffect(() => {
     const loadAttachments = async () => {
       if (!selected) {
@@ -158,9 +169,14 @@ const MovementsPage = () => {
 
   const movementCategories = useMemo(() => {
     if (form.type === 'income' || form.type === 'expense') {
-      return categories.filter((cat) => cat.direction === form.type);
+      return categories.filter((cat) => normalizeDirection(cat.direction) === form.type);
     }
-    return [];
+
+    if (form.type === 'transfer') {
+      return [];
+    }
+
+    return categories;
   }, [categories, form.type]);
 
   const movementCategoryOptions = useMemo(() => {
@@ -210,6 +226,25 @@ const MovementsPage = () => {
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleTypeChange = (value) => {
+    setForm((prev) => {
+      const next = { ...prev, type: value };
+      if (value === 'transfer') {
+        next.category_id = '';
+        return next;
+      }
+
+      if (value === 'income' || value === 'expense') {
+        const selectedCategory = categories.find((cat) => String(cat.id) === String(prev.category_id));
+        if (selectedCategory && normalizeDirection(selectedCategory.direction) !== value) {
+          next.category_id = '';
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleContactSearch = async (value) => {
@@ -614,7 +649,8 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.type')}
-              <select value={form.type} onChange={(event) => handleChange('type', event.target.value)}>
+              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)} required>
+                <option value="">{t('common.all')}</option>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
