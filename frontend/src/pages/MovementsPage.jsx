@@ -140,6 +140,17 @@ const MovementsPage = () => {
     return names.length ? names.join(' → ') : t('common.none');
   };
 
+  const normalizeDirection = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['income', 'in', 'entrata'].includes(normalized)) {
+      return 'income';
+    }
+    if (['expense', 'out', 'uscita'].includes(normalized)) {
+      return 'expense';
+    }
+    return normalized;
+  };
+
   useEffect(() => {
     const loadAttachments = async () => {
       if (!selected) {
@@ -158,22 +169,78 @@ const MovementsPage = () => {
 
   const movementCategories = useMemo(() => {
     if (form.type === 'income' || form.type === 'expense') {
-      return categories.filter((cat) => cat.direction === form.type);
+      return categories.filter((cat) => normalizeDirection(cat.direction) === form.type);
     }
+
     return [];
   }, [categories, form.type]);
 
-  const groupedCategories = useMemo(() => {
-    const parents = movementCategories.filter((cat) => !cat.parent_id);
-    const children = movementCategories.filter((cat) => cat.parent_id);
-    return parents.map((parent) => ({
-      ...parent,
-      children: children.filter((child) => child.parent_id === parent.id),
-    }));
+  const movementCategoryOptions = useMemo(() => {
+    const byParentId = new Map();
+
+    for (const category of movementCategories) {
+      const parentId = category.parent_id == null ? null : category.parent_id;
+      if (!byParentId.has(parentId)) {
+        byParentId.set(parentId, []);
+      }
+      byParentId.get(parentId).push(category);
+    }
+
+    const options = [];
+    const visited = new Set();
+
+    const appendBranch = (category, depth) => {
+      if (visited.has(category.id)) {
+        return;
+      }
+
+      visited.add(category.id);
+      options.push({
+        id: category.id,
+        label: `${'— '.repeat(depth)}${category.name}`,
+      });
+
+      const children = byParentId.get(category.id) || [];
+      for (const child of children) {
+        appendBranch(child, depth + 1);
+      }
+    };
+
+    const roots = byParentId.get(null) || [];
+    for (const root of roots) {
+      appendBranch(root, 0);
+    }
+
+    for (const category of movementCategories) {
+      if (!visited.has(category.id)) {
+        appendBranch(category, 0);
+      }
+    }
+
+    return options;
   }, [movementCategories]);
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleTypeChange = (value) => {
+    setForm((prev) => {
+      const next = { ...prev, type: value };
+      if (value === 'transfer') {
+        next.category_id = '';
+        return next;
+      }
+
+      if (value === 'income' || value === 'expense') {
+        const selectedCategory = categories.find((cat) => String(cat.id) === String(prev.category_id));
+        if (selectedCategory && normalizeDirection(selectedCategory.direction) !== value) {
+          next.category_id = '';
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleContactSearch = async (value) => {
@@ -325,7 +392,8 @@ const MovementsPage = () => {
     setSubmitMessage('');
   };
 
-  const openNewMovementModal = () => {
+  const openNewMovementModal = async () => {
+    await loadLookupData();
     setEditingMovementId(null);
     setForm(emptyForm);
     setContactSearch('');
@@ -409,7 +477,7 @@ const MovementsPage = () => {
       setContactSearch('');
       setEditingMovementId(null);
       await loadMovements(filters);
-      setAccounts(await api.getAccounts());
+      await loadLookupData();
       setSubmitMessage(t('pages.movements.createSuccess'));
       setMovementModalOpen(false);
     } catch (submitError) {
@@ -577,7 +645,7 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.type')}
-              <select value={form.type} onChange={(event) => handleChange('type', event.target.value)}>
+              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)}>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -643,13 +711,8 @@ const MovementsPage = () => {
                 {t('pages.movements.category')}
                 <select value={form.category_id} onChange={(event) => handleChange('category_id', event.target.value)}>
                   <option value="">{t('common.none')}</option>
-                  {groupedCategories.map((category) => (
-                    <optgroup key={category.id} label={category.name}>
-                      <option value={category.id}>{category.name}</option>
-                      {category.children.map((child) => (
-                        <option key={child.id} value={child.id}>└ {child.name}</option>
-                      ))}
-                    </optgroup>
+                  {movementCategoryOptions.map((category) => (
+                    <option key={category.id} value={category.id}>{category.label}</option>
                   ))}
                 </select>
               </label>
@@ -659,7 +722,7 @@ const MovementsPage = () => {
               <select value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
                 {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>{job.name}</option>
+                  <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
             </label>
@@ -722,7 +785,6 @@ const MovementsPage = () => {
                 value={draftFilters.type}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, type: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -734,7 +796,6 @@ const MovementsPage = () => {
                 value={draftFilters.account_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, account_id: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>{account.name}</option>
                 ))}
@@ -746,7 +807,6 @@ const MovementsPage = () => {
                 value={draftFilters.category_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, category_id: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>{category.name}</option>
                 ))}
@@ -777,9 +837,8 @@ const MovementsPage = () => {
                 value={draftFilters.job_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, job_id: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>{job.name}</option>
+                  <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
             </label>
