@@ -232,21 +232,20 @@ const DashboardPage = () => {
 
   const previous = summary.previous || {};
 
-  const kpiDeltas = useMemo(
-    () => ({
-      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
-      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
-      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
-    }),
-    [
-      summary.income_sum_cents,
-      summary.expense_sum_cents,
-      summary.net_sum_cents,
-      previous.income_sum_cents,
-      previous.expense_sum_cents,
-      previous.net_sum_cents,
-    ]
-  );
+  const kpiDeltas = useMemo(() => {
+  return {
+    income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+    expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+    net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+  };
+}, [
+  summary.income_sum_cents,
+  summary.expense_sum_cents,
+  summary.net_sum_cents,
+  previous.income_sum_cents,
+  previous.expense_sum_cents,
+  previous.net_sum_cents,
+]);
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions dashboard-tabs" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
