@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bar, Line, Pie } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -14,7 +14,7 @@ import {
 } from 'chart.js';
 import { api } from '../services/api.js';
 
-ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
+ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
 const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -311,7 +311,6 @@ const DashboardPage = () => {
             <Line data={netTrendData} options={commonLineOptions} />
           </div>
         </div>
-      </div>
 
       <div className="grid-two" style={{ marginTop: '1rem' }}>
         <div className="card">

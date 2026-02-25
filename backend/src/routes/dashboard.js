@@ -8,6 +8,8 @@ const allowedDimensions = new Set(['category', 'contact', 'account', 'job']);
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const pad2 = (n) => String(n).padStart(2, '0');
+const monthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
 const getPeriodRange = (period) => {
   const now = new Date();
@@ -28,6 +30,7 @@ const getPeriodRange = (period) => {
     return { from: toIsoDate(new Date(now.getFullYear(), 0, 1)), to: toIsoDate(end) };
   }
 
+  // default: last6months
   const sixMonths = new Date(now.getFullYear(), now.getMonth() - 5, 1);
   return { from: toIsoDate(sixMonths), to: toIsoDate(end) };
 };
