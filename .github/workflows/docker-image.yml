@@ -45,6 +45,9 @@ jobs:
       - name: Check init schema duplicates
         run: python scripts/check_init_schema_duplicates.py
 
+      - name: Check dashboard duplicate declarations
+        run: python scripts/check_dashboard_duplicates.py
+
       - name: Run backend tests
         working-directory: ./backend
         env:
