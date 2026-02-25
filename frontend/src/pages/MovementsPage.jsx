@@ -166,10 +166,20 @@ const MovementsPage = () => {
   const groupedCategories = useMemo(() => {
     const parents = movementCategories.filter((cat) => !cat.parent_id);
     const children = movementCategories.filter((cat) => cat.parent_id);
-    return parents.map((parent) => ({
+    const parentIds = new Set(parents.map((parent) => parent.id));
+    const grouped = parents.map((parent) => ({
       ...parent,
       children: children.filter((child) => child.parent_id === parent.id),
     }));
+
+    const orphans = children
+      .filter((child) => !parentIds.has(child.parent_id))
+      .map((child) => ({
+        ...child,
+        children: [],
+      }));
+
+    return [...grouped, ...orphans];
   }, [movementCategories]);
 
   const handleChange = (field, value) => {
@@ -325,7 +335,8 @@ const MovementsPage = () => {
     setSubmitMessage('');
   };
 
-  const openNewMovementModal = () => {
+  const openNewMovementModal = async () => {
+    await loadLookupData();
     setEditingMovementId(null);
     setForm(emptyForm);
     setContactSearch('');
@@ -409,7 +420,7 @@ const MovementsPage = () => {
       setContactSearch('');
       setEditingMovementId(null);
       await loadMovements(filters);
-      setAccounts(await api.getAccounts());
+      await loadLookupData();
       setSubmitMessage(t('pages.movements.createSuccess'));
       setMovementModalOpen(false);
     } catch (submitError) {
@@ -659,7 +670,7 @@ const MovementsPage = () => {
               <select value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
                 {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>{job.name}</option>
+                  <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
             </label>
@@ -779,7 +790,7 @@ const MovementsPage = () => {
               >
                 <option value="">{t('common.all')}</option>
                 {jobs.map((job) => (
-                  <option key={job.id} value={job.id}>{job.name}</option>
+                  <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
             </label>
