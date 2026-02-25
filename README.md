@@ -58,6 +58,15 @@ You can also set `FRONTEND_HOST_PORT` in root `.env`.
 
 DEV seed stores password as bcrypt hash. Login uses bcrypt verification only.
 
+
+## Multi-company context (active company)
+
+- After login, API returns:
+  - `companies`: list of accessible companies
+  - `default_company_id`: default active company for the session
+- Frontend stores active company and sends `X-Company-Id` on every authenticated API request.
+- You can switch company from the **Azienda** selector in the top bar; UI reloads `/dashboard` so company-scoped data/branding (logo) refreshes correctly.
+
 ## Manual migrations (Approach A)
 
 Init SQL runs only on first bootstrap of an empty Postgres volume (`database/init`).
