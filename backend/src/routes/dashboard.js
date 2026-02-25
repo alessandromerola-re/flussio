@@ -33,6 +33,52 @@ const getPeriodRange = (period) => {
   return { from: toIsoDate(sixMonths), to: toIsoDate(end) };
 };
 
+
+const pad = (n) => String(n).padStart(2, '0');
+const monthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
+
+const buildBuckets = (range, period) => {
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  const buckets = [];
+
+  if (period === 'currentmonth') {
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
+    }
+    return { granularity: 'day', buckets };
+  }
+
+  if (period === 'last30days') {
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
+    }
+    return { granularity: 'day', buckets };
+  }
+
+  for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
+    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    buckets.push({ key, label: monthLabel(d) });
+  }
+  return { granularity: 'month', buckets };
+};
+
+const shiftRangeByDays = (range, deltaDays) => {
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  from.setDate(from.getDate() + deltaDays);
+  to.setDate(to.getDate() + deltaDays);
+  return { from: toIsoDate(from), to: toIsoDate(to) };
+};
+
+const countInclusiveDays = (range) => {
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  return Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1;
+};
+
 const getDateRangeFromQuery = (input = {}) => {
   const { from, to, period = 'last6months' } = input;
 
@@ -132,7 +178,7 @@ router.get('/summary', async (req, res) => {
       SELECT
         ${bucketExpr} AS bucket,
         COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS income_sum_cents,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END),0)::bigint AS expense_sum_cents
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END),0)::bigint AS expense_sum_cents
       FROM transactions t
       WHERE t.company_id = $1
         AND t.date BETWEEN $2 AND $3
