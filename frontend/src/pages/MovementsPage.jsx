@@ -172,11 +172,7 @@ const MovementsPage = () => {
       return categories.filter((cat) => normalizeDirection(cat.direction) === form.type);
     }
 
-    if (form.type === 'transfer') {
-      return [];
-    }
-
-    return categories;
+    return [];
   }, [categories, form.type]);
 
   const movementCategoryOptions = useMemo(() => {
@@ -649,8 +645,7 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.type')}
-              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)} required>
-                <option value="">{t('common.all')}</option>
+              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)}>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -790,7 +785,6 @@ const MovementsPage = () => {
                 value={draftFilters.type}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, type: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -802,7 +796,6 @@ const MovementsPage = () => {
                 value={draftFilters.account_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, account_id: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>{account.name}</option>
                 ))}
@@ -814,7 +807,6 @@ const MovementsPage = () => {
                 value={draftFilters.category_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, category_id: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>{category.name}</option>
                 ))}
@@ -845,7 +837,6 @@ const MovementsPage = () => {
                 value={draftFilters.job_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, job_id: event.target.value }))}
               >
-                <option value="">{t('common.all')}</option>
                 {jobs.map((job) => (
                   <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
