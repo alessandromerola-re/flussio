@@ -103,9 +103,7 @@ const DashboardPage = () => {
     loadPie('income', incomeDimension).then(setIncomePie);
   }, [incomeDimension, activeRange.from, activeRange.to]);
 
-  useEffect(() => {
-    loadPie('expense', expenseDimension).then(setExpensePie);
-  }, [expenseDimension, activeRange.from, activeRange.to]);
+  const bucketSeries = summary.by_bucket || [];
 
   useEffect(() => {
     loadPie('expense', 'category', 10).then(setTopExpenses);
@@ -183,22 +181,71 @@ const DashboardPage = () => {
         },
       ],
     };
-  };
+  }, [summary]);
 
   const topExpensesBarData = useMemo(() => {
     if (!topExpenses) return { labels: [], datasets: [] };
 
     return {
-      labels: topExpenses.slices.map((slice) => slice.label),
-      datasets: [
-        {
-          label: t('pages.dashboard.topExpensesByCategory'),
-          data: topExpenses.slices.map((slice) => Number(slice.value_cents || 0) / 100),
-          backgroundColor: '#ef4444',
-        },
-      ],
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
     };
-  }, [topExpenses, t]);
+  }, [summary]);
+
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary]);
+
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary]);
+
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary]);
+
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary]);
+
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary]);
+
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary.income_sum_cents, summary.expense_sum_cents, summary.net_sum_cents, summary.previous]);
 
   const kpiDeltas = useMemo(() => {
     const previous = summary.previous || {};
@@ -212,11 +259,7 @@ const DashboardPage = () => {
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-      {dimensionOptions.map((dimension) => (
-        <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>
-          {t(`pages.dashboard.dim.${dimension}`)}
-        </button>
-      ))}
+      {dimensionOptions.map((dimension) => <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>{t(`pages.dashboard.dim.${dimension}`)}</button>)}
     </div>
   );
 
@@ -283,10 +326,9 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h2>{t('pages.dashboard.topExpensesByCategory')}</h2>
-        <Bar data={topExpensesBarData} />
-      </div>
+      <div className="grid-two"><div className="card"><h2>{t('pages.dashboard.trendIncomeExpense')}</h2><Line data={trendData} /></div><div className="card"><h2>{t('pages.dashboard.netMonthlyTrend')}</h2><Line data={netTrendData} /></div></div>
+      <div className="grid-two" style={{ marginTop: '1rem' }}><div className="card"><h2>{t('pages.dashboard.pieIncomeBy')}</h2>{renderDimensionTabs(incomeDimension, setIncomeDimension)}{pieToChartData(incomePie) ? <Pie data={pieToChartData(incomePie)} /> : <p className="muted">{t('common.none')}</p>}</div><div className="card"><h2>{t('pages.dashboard.pieExpenseBy')}</h2>{renderDimensionTabs(expenseDimension, setExpenseDimension)}{pieToChartData(expensePie) ? <Pie data={pieToChartData(expensePie)} /> : <p className="muted">{t('common.none')}</p>}</div></div>
+      <div className="card" style={{ marginTop: '1rem' }}><h2>{t('pages.dashboard.topExpensesByCategory')}</h2><Bar data={topExpensesBarData} /></div>
     </div>
   );
 };

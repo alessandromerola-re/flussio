@@ -5,6 +5,7 @@ import routes from './routes.jsx';
 import { api, clearToken, getToken } from './services/api.js';
 import { can } from './utils/permissions.js';
 import { setLanguage } from './i18n/index.js';
+import BrandMark from './components/BrandMark.jsx';
 
 const App = () => {
   const { t } = useTranslation();
@@ -104,7 +105,7 @@ const App = () => {
     setLanguageState(nextLanguage);
   };
 
-  const brandNode = brandLogoUrl ? <img src={brandLogoUrl} className="brand-logo" alt="Logo azienda" /> : <span className="brand-text">Flussio</span>;
+  const brandNode = <BrandMark logoUrl={brandLogoUrl} alt="Logo azienda" />;
 
   return (
     <div className="app">
@@ -166,7 +167,7 @@ const App = () => {
 
           <main className="content">
             <Routes>
-              {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo }).map((route) => (
+              {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo, brandLogoUrl }).map((route) => (
                 <Route key={route.path} path={route.path} element={route.element} />
               ))}
             </Routes>
@@ -174,7 +175,7 @@ const App = () => {
         </div>
       ) : (
         <Routes>
-          {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo }).map((route) => (
+          {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo, brandLogoUrl }).map((route) => (
             <Route key={route.path} path={route.path} element={route.element} />
           ))}
         </Routes>
