@@ -64,13 +64,6 @@ const buildBuckets = (range, period) => {
   return { granularity: 'month', buckets };
 };
 
-const shiftRangeByDays = (range, deltaDays) => {
-  const from = new Date(`${range.from}T00:00:00`);
-  const to = new Date(`${range.to}T00:00:00`);
-  from.setDate(from.getDate() + deltaDays);
-  to.setDate(to.getDate() + deltaDays);
-  return { from: toIsoDate(from), to: toIsoDate(to) };
-};
 
 const getDateRangeFromQuery = (input = {}) => {
   const { from, to, period = 'last6months' } = input;
