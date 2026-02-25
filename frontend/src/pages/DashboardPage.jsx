@@ -174,6 +174,15 @@ const DashboardPage = () => {
     };
   }, [summary]);
 
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary]);
+
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
       {dimensionOptions.map((dimension) => <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>{t(`pages.dashboard.dim.${dimension}`)}</button>)}

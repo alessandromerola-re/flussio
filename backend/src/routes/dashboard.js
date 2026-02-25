@@ -8,7 +8,6 @@ const allowedDimensions = new Set(['category', 'contact', 'account', 'job']);
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
-const pad = (n) => String(n).padStart(2, '0');
 const monthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
 const getPeriodRange = (period) => {
@@ -115,17 +114,18 @@ const buildBuckets = (range, period) => {
   const start = new Date(`${range.from}T00:00:00`);
   const end = new Date(`${range.to}T00:00:00`);
   const buckets = [];
+  const twoDigits = (value) => String(value).padStart(2, '0');
 
   if (period === 'last30days' || period === 'currentmonth') {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      buckets.push({ key, label: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}` });
+      const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(d.getDate())}`;
+      buckets.push({ key, label: `${twoDigits(d.getDate())}/${twoDigits(d.getMonth() + 1)}` });
     }
     return { granularity: 'day', buckets };
   }
 
   for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
-    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}`;
     buckets.push({ key, label: monthLabel(d) });
   }
   return { granularity: 'month', buckets };
