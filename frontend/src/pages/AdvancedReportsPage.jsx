@@ -317,6 +317,7 @@ const AdvancedReportsPage = () => {
         </div>
       )}
 
+      <div className="report-layout">
       <details className="card" open>
         <summary><strong>{t('pages.movements.filters')}</strong></summary>
         <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>
@@ -357,6 +358,7 @@ const AdvancedReportsPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}</tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} onClick={() => handleDrilldown(row)} style={{ cursor: 'pointer', backgroundColor: row.category_id == null ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col.includes('cents') ? formatEuro(row[col]) : String(row[col] ?? '')}</td>)}</tr>)}{rows.length === 0 && <tr><td colSpan={columns.length || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table>
         </div>
       )}
+      </div>
     </div>
   );
 };

@@ -284,5 +284,11 @@
   "pages.dashboard.dim.job": "Commesse",
   "pages.dashboard.other": "Altro",
   "pages.dashboard.topExpensesByCategory": "Top 10 spese per categoria",
-  "pages.dashboard.netMonthlyTrend": "Netto mensile"
+  "pages.dashboard.netMonthlyTrend": "Netto mensile",
+  "pages.login.welcomeTitle": "Benvenuto in Flussio",
+  "pages.login.welcomeText": "Gestione movimenti, report e anagrafiche ottimizzata per mobile e collaborazione.",
+  "forms.rememberMe": "Ricordami",
+  "forms.forgotPassword": "Password dimenticata?",
+  "pages.users.status": "Stato",
+  "pages.users.actions": "Azioni"
 }
