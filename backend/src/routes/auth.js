@@ -39,20 +39,58 @@ router.post('/login', async (req, res) => {
         role: 'super_admin',
       }));
     } else {
-      const companiesResult = await query(
-        `SELECT c.id, c.name, uc.role
-         FROM user_companies uc
-         JOIN companies c ON c.id = uc.company_id
-         WHERE uc.user_id = $1
-           AND uc.is_active = true
-         ORDER BY c.name`,
-        [user.id]
-      );
-      companies = companiesResult.rows.map((company) => ({
-        id: company.id,
-        name: company.name,
-        role: company.role,
-      }));
+      try {
+        const companiesResult = await query(
+          `SELECT c.id, c.name, uc.role
+           FROM user_companies uc
+           JOIN companies c ON c.id = uc.company_id
+           WHERE uc.user_id = $1
+             AND uc.is_active = true
+           ORDER BY c.name`,
+          [user.id]
+        );
+        companies = companiesResult.rows.map((company) => ({
+          id: company.id,
+          name: company.name,
+          role: company.role,
+        }));
+
+        if (companies.length === 0 && user.company_id) {
+          const fallbackCompanyResult = await query(
+            'SELECT id, name FROM companies WHERE id = $1',
+            [user.company_id]
+          );
+          if (fallbackCompanyResult.rowCount > 0) {
+            const fallbackRole = user.role || 'admin';
+            companies = [{
+              id: fallbackCompanyResult.rows[0].id,
+              name: fallbackCompanyResult.rows[0].name,
+              role: fallbackRole,
+            }];
+
+            await query(
+              `INSERT INTO user_companies (user_id, company_id, role, is_active)
+               VALUES ($1, $2, $3, true)
+               ON CONFLICT (user_id, company_id) DO NOTHING`,
+              [user.id, user.company_id, fallbackRole]
+            );
+          }
+        }
+      } catch (membershipError) {
+        if (membershipError?.code !== '42P01') {
+          throw membershipError;
+        }
+
+        const fallbackCompanyResult = await query(
+          'SELECT id, name FROM companies WHERE id = $1',
+          [user.company_id]
+        );
+        companies = fallbackCompanyResult.rows.map((company) => ({
+          id: company.id,
+          name: company.name,
+          role: user.role || 'admin',
+        }));
+      }
     }
 
     if (companies.length === 0) {
