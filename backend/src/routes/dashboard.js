@@ -70,20 +70,20 @@ const buildBuckets = (range, period) => {
   const start = new Date(`${range.from}T00:00:00`);
   const end = new Date(`${range.to}T00:00:00`);
   const buckets = [];
+  const twoDigits = (value) => String(value).padStart(2, '0');
+  const formatMonthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
-  // day buckets for last30days / currentmonth
   if (period === 'last30days' || period === 'currentmonth') {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-      buckets.push({ key, label: `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}` });
+      const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(d.getDate())}`;
+      buckets.push({ key, label: `${twoDigits(d.getDate())}/${twoDigits(d.getMonth() + 1)}` });
     }
     return { granularity: 'day', buckets };
   }
 
-  // month buckets for last6months / currentyear / fallback
   for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
-    const key = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-    buckets.push({ key, label: monthLabel(d) });
+    const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}`;
+    buckets.push({ key, label: formatMonthLabel(d) });
   }
   return { granularity: 'month', buckets };
 };
@@ -91,7 +91,6 @@ const buildBuckets = (range, period) => {
 router.get('/summary', async (req, res) => {
   const period = req.query.period || 'last6months';
   const range = getDateRangeFromQuery({ ...req.query, period });
-
   if (range.error) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
@@ -127,10 +126,9 @@ router.get('/summary', async (req, res) => {
     ]);
 
     const { granularity, buckets } = buildBuckets(range, period);
-    const bucketExpr =
-      granularity === 'day'
-        ? "to_char(t.date, 'YYYY-MM-DD')"
-        : "to_char(date_trunc('month', t.date), 'YYYY-MM')";
+    const bucketExpr = granularity === 'day'
+      ? "to_char(t.date, 'YYYY-MM-DD')"
+      : "to_char(date_trunc('month', t.date), 'YYYY-MM')";
 
     const byBucketResult = await query(
       `
