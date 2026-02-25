@@ -79,7 +79,7 @@ const MovementsPage = () => {
       api.getCategories(),
       api.getContacts(),
       api.getProperties(),
-      api.getJobs(),
+      api.getJobs({ active: 0, include_closed: 1 }),
     ]);
 
     const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
