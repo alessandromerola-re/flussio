@@ -253,7 +253,12 @@ const DashboardPage = () => {
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions dashboard-tabs" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
       {dimensionOptions.map((dimension) => (
-        <button key={dimension} type="button" className={selected === dimension ? '' : 'ghost'} onClick={() => onChange(dimension)}>
+        <button
+          key={dimension}
+          type="button"
+          className={selected === dimension ? '' : 'ghost'}
+          onClick={() => onChange(dimension)}
+        >
           {t(`pages.dashboard.dim.${dimension}`)}
         </button>
       ))}
@@ -327,7 +332,7 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '1rem' }}>
+      <div className="card dashboard-chart-card" style={{ marginTop: '1rem' }}>
         <h2>{t('pages.dashboard.topExpensesByCategory')}</h2>
         <Bar
           data={topExpensesBarData}

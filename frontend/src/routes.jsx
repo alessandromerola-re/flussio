@@ -11,13 +11,13 @@ import SettingsAdminPage from './pages/SettingsAdminPage.jsx';
 import AdvancedReportsPage from './pages/AdvancedReportsPage.jsx';
 import { can } from './utils/permissions.js';
 
-const routes = ({ setTokenState, token, onBrandingChanged }) => [
+const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
   {
     path: '/login',
     element: token ? (
       <Navigate to="/dashboard" replace />
     ) : (
-      <LoginPage onLogin={(newToken) => setTokenState(newToken)} />
+      <LoginPage onLogin={(newToken) => setTokenState(newToken)} brandLogoUrl={brandLogoUrl} />
     ),
   },
   {

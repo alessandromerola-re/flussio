@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
+import FloatingAddButton from '../components/FloatingAddButton.jsx';
 import { getErrorMessage } from '../utils/errorMessages.js';
 
 const initialForm = {
@@ -179,7 +180,7 @@ const RecurringTemplatesPage = () => {
           <label>{t('pages.registry.propertiesBeta')}<select value={form.property_id} onChange={(event) => setForm((prev) => ({ ...prev, property_id: event.target.value }))}><option value="">{t('common.none')}</option>{properties.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.job')}<select value={form.job_id} onChange={(event) => setForm((prev) => ({ ...prev, job_id: event.target.value }))}><option value="">{t('common.none')}</option>{jobs.map((x)=><option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>
           <label>{t('forms.notes')}<input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} /></label>
-          {canPermission('write') && <button type="submit">{t('buttons.save')}</button>}
+          {canPermission('write') && <button type="submit" className="desktop-only">{t('buttons.save')}</button>}
         </form>
 
         <div className="card">
@@ -240,6 +241,7 @@ const RecurringTemplatesPage = () => {
         {accounts.length > 0 && <div className="muted">{t('pages.recurring.accountsLoaded')}: {accounts.length}</div>}
         <Link to="/movements">{t('nav.movements')}</Link>
       </div>
+      {canPermission('write') && <FloatingAddButton onClick={() => setEditingId(null)} label={t('buttons.new')} />}
     </div>
   );
 };

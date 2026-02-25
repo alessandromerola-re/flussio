@@ -698,7 +698,7 @@ const MovementsPage = () => {
           <h2>{t('pages.movements.filters')}</h2>
           {hasActiveFilters && <div className="muted">{t('pages.movements.activeFilters')}</div>}
           {filtersOpen && (
-            <>
+            <div className="filters-drawer">
 <div className="form-grid">
             <label>
               {t('pages.movements.dateFrom')}
@@ -808,7 +808,7 @@ const MovementsPage = () => {
                   ))}
                 </div>
               )}
-            </>
+            </div>
           )}
 
           <h2>{t('pages.movements.latest')}</h2>
@@ -847,6 +847,22 @@ const MovementsPage = () => {
           </div>
         </div>
       </div>
+
+      <div className="card movement-detail-card desktop-only">
+        <h2>{t('pages.movements.details')}</h2>
+        {!selected && <p className="muted">{t('common.none')}</p>}
+        {selected && (
+          <>
+            <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
+            <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
+            <p><strong>{t('pages.movements.amount')}:</strong> € {Number(selected.amount_total).toFixed(2)}</p>
+            <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
+            <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
+          </>
+        )}
+      </div>
+
+      {canPermission('write') && <FloatingAddButton onClick={openNewMovementModal} label={t('buttons.new')} />}
 
       {selected && (
         <Modal isOpen={Boolean(selected)} onClose={() => {

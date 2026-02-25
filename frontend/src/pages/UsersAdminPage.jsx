@@ -24,6 +24,14 @@ const UsersAdminPage = () => {
     loadUsers().catch(() => setMessage(getErrorMessage(t, null)));
   }, []);
 
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    await api.createUser(form);
+    setForm(initialForm);
+    setCreateOpen(false);
+    await loadUsers();
+  };
+
   if (!canPermission('users_manage')) {
     return <div className="page"><div className="error">{t('errors.FORBIDDEN')}</div></div>;
   }
