@@ -35,7 +35,6 @@ const getPeriodRange = (period) => {
 
 
 const pad = (n) => String(n).padStart(2, '0');
-const monthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
 
 const buildBuckets = (range, period) => {
   const start = new Date(`${range.from}T00:00:00`);
