@@ -3,71 +3,101 @@ import { useTranslation } from 'react-i18next';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
-  LineElement,
-  BarElement,
   ArcElement,
+  BarElement,
   CategoryScale,
+  Legend,
+  LineElement,
   LinearScale,
   PointElement,
   Tooltip,
-  Legend,
 } from 'chart.js';
 import { api } from '../services/api.js';
-import { formatMonthYearIT } from '../utils/date.js';
 
 ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
+const absCents = (value) => Math.abs(Number(value || 0));
 
-const rangeFromPreset = (preset) => {
-  const now = new Date();
-  if (preset === 'last30days') {
-    const from = new Date();
-    from.setDate(from.getDate() - 29);
-    return { from: toIsoDate(from), to: toIsoDate(now) };
-  }
-  if (preset === 'currentmonth') {
-    return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: toIsoDate(now) };
-  }
-  if (preset === 'currentyear') {
-    return { from: toIsoDate(new Date(now.getFullYear(), 0, 1)), to: toIsoDate(now) };
-  }
-  return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth() - 5, 1)), to: toIsoDate(now) };
+const computeDelta = (current, previousValue) => {
+  const currentNumber = Number(current || 0);
+  const previousNumber = Number(previousValue || 0);
+  if (previousNumber === 0) return null;
+  return ((currentNumber - previousNumber) / Math.abs(previousNumber)) * 100;
 };
 
-const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
+const formatDelta = (delta) => (delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`);
+const deltaClassName = (delta) => {
+  if (delta == null || delta === 0) return 'kpi-delta-badge neutral';
+  return delta > 0 ? 'kpi-delta-badge positive' : 'kpi-delta-badge negative';
+};
 
 const dimensionOptions = ['category', 'contact', 'account', 'job'];
 
+const buildRangeFromPreset = (preset) => {
+  const now = new Date();
+
+  if (preset === 'last30days') {
+    const from = new Date(now);
+    from.setDate(from.getDate() - 29);
+    return { from: toIsoDate(from), to: toIsoDate(now) };
+  }
+
+  if (preset === 'currentmonth') {
+    return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: toIsoDate(now) };
+  }
+
+  if (preset === 'currentyear') {
+    return { from: toIsoDate(new Date(now.getFullYear(), 0, 1)), to: toIsoDate(now) };
+  }
+
+  return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth() - 5, 1)), to: toIsoDate(now) };
+};
+
 const DashboardPage = () => {
   const { t } = useTranslation();
+
   const [period, setPeriod] = useState('last6months');
-  const [summary, setSummary] = useState({ income_sum_cents: 0, expense_sum_cents: 0, net_sum_cents: 0, by_month: [] });
   const [incomeDimension, setIncomeDimension] = useState('category');
   const [expenseDimension, setExpenseDimension] = useState('category');
-  const [pieCache, setPieCache] = useState({});
 
-  const activeRange = useMemo(() => rangeFromPreset(period), [period]);
+  const [summary, setSummary] = useState({
+    income_sum_cents: 0,
+    expense_sum_cents: 0,
+    net_sum_cents: 0,
+    by_bucket: [],
+    previous: {
+      income_sum_cents: 0,
+      expense_sum_cents: 0,
+      net_sum_cents: 0,
+    },
+  });
+
+  const [pieCache, setPieCache] = useState({});
+  const [incomePie, setIncomePie] = useState(null);
+  const [expensePie, setExpensePie] = useState(null);
+  const [topExpenses, setTopExpenses] = useState(null);
+
+  const activeRange = useMemo(() => buildRangeFromPreset(period), [period]);
 
   useEffect(() => {
-    const load = async () => {
-      const summaryData = await api.getDashboardSummary(activeRange);
-      setSummary(summaryData);
+    const loadSummary = async () => {
+      const response = await api.getDashboardSummary({ ...activeRange, period });
+      setSummary((prev) => ({ ...prev, ...response }));
     };
-    load();
-  }, [activeRange]);
+
+    loadSummary();
+  }, [activeRange, period]);
 
   const loadPie = async (kind, dimension, topN = 12) => {
     const cacheKey = `${activeRange.from}:${activeRange.to}:${kind}:${dimension}:${topN}`;
     if (pieCache[cacheKey]) return pieCache[cacheKey];
+
     const response = await api.getDashboardPie({ ...activeRange, kind, dimension, topN });
     setPieCache((prev) => ({ ...prev, [cacheKey]: response }));
     return response;
   };
-
-  const [incomePie, setIncomePie] = useState(null);
-  const [expensePie, setExpensePie] = useState(null);
-  const [topExpenses, setTopExpenses] = useState(null);
 
   useEffect(() => {
     loadPie('income', incomeDimension).then(setIncomePie);
@@ -81,55 +111,83 @@ const DashboardPage = () => {
     loadPie('expense', 'category', 10).then(setTopExpenses);
   }, [activeRange.from, activeRange.to]);
 
-  const trendData = useMemo(() => {
-    const labels = (summary.by_month || []).map((row) => formatMonthYearIT(`${row.month}-01`));
-    return {
-      labels,
+  const bucketSeries = summary.by_bucket || [];
+
+  const trendData = useMemo(
+    () => ({
+      labels: bucketSeries.map((row) => row.label),
       datasets: [
         {
           label: t('pages.dashboard.income'),
-          data: (summary.by_month || []).map((row) => Number(row.income_sum_cents || 0) / 100),
+          data: bucketSeries.map((row) => Number(row.income_sum_cents || 0) / 100),
           borderColor: '#16a34a',
           backgroundColor: 'rgba(22,163,74,0.2)',
         },
         {
           label: t('pages.dashboard.expense'),
-          data: (summary.by_month || []).map((row) => Number(row.expense_sum_cents || 0) / 100),
+          data: bucketSeries.map((row) => absCents(row.expense_sum_cents) / 100),
           borderColor: '#dc2626',
           backgroundColor: 'rgba(220,38,38,0.2)',
         },
       ],
-    };
-  }, [summary.by_month, t]);
+    }),
+    [bucketSeries, t]
+  );
 
-  const netTrendData = useMemo(() => ({
-    labels: (summary.by_month || []).map((row) => formatMonthYearIT(`${row.month}-01`)),
-    datasets: [
-      {
-        label: t('pages.dashboard.netMonthlyTrend'),
-        data: (summary.by_month || []).map((row) => Number(row.net_sum_cents || 0) / 100),
-        borderColor: '#1d4ed8',
-        backgroundColor: 'rgba(29,78,216,0.2)',
-      },
-    ],
-  }), [summary.by_month, t]);
+  const netTrendData = useMemo(
+    () => ({
+      labels: bucketSeries.map((row) => row.label),
+      datasets: [
+        {
+          label: t('pages.dashboard.netMonthlyTrend'),
+          data: bucketSeries.map((row) => Number(row.net_sum_cents || 0) / 100),
+          borderColor: '#1d4ed8',
+          backgroundColor: 'rgba(29,78,216,0.2)',
+        },
+      ],
+    }),
+    [bucketSeries, t]
+  );
 
   const pieToChartData = (pieData) => {
     if (!pieData) return null;
+
     const labels = pieData.slices.map((slice) => slice.label);
     const values = pieData.slices.map((slice) => Number(slice.value_cents || 0) / 100);
+
     if (pieData.others_cents > 0) {
       labels.push(t('pages.dashboard.other'));
       values.push(Number(pieData.others_cents || 0) / 100);
     }
+
     return {
       labels,
-      datasets: [{ data: values, backgroundColor: ['#2563eb', '#16a34a', '#dc2626', '#7c3aed', '#ea580c', '#0891b2', '#65a30d', '#9333ea', '#0f766e', '#f59e0b', '#db2777', '#6b7280', '#111827'] }],
+      datasets: [
+        {
+          data: values,
+          backgroundColor: [
+            '#2563eb',
+            '#16a34a',
+            '#dc2626',
+            '#7c3aed',
+            '#ea580c',
+            '#0891b2',
+            '#65a30d',
+            '#9333ea',
+            '#0f766e',
+            '#f59e0b',
+            '#db2777',
+            '#6b7280',
+            '#111827',
+          ],
+        },
+      ],
     };
   };
 
   const topExpensesBarData = useMemo(() => {
     if (!topExpenses) return { labels: [], datasets: [] };
+
     return {
       labels: topExpenses.slices.map((slice) => slice.label),
       datasets: [
@@ -141,6 +199,16 @@ const DashboardPage = () => {
       ],
     };
   }, [topExpenses, t]);
+
+  const kpiDeltas = useMemo(() => {
+    const previous = summary.previous || {};
+
+    return {
+      income: computeDelta(summary.income_sum_cents, previous.income_sum_cents),
+      expense: computeDelta(absCents(summary.expense_sum_cents), absCents(previous.expense_sum_cents)),
+      net: computeDelta(summary.net_sum_cents, previous.net_sum_cents),
+    };
+  }, [summary.income_sum_cents, summary.expense_sum_cents, summary.net_sum_cents, summary.previous]);
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
@@ -157,7 +225,9 @@ const DashboardPage = () => {
       <div className="page-header">
         <h1>{t('pages.dashboard.title')}</h1>
         <div>
-          <label htmlFor="period" className="muted">{t('pages.dashboard.period')}</label>
+          <label htmlFor="period" className="muted">
+            {t('pages.dashboard.period')}
+          </label>
           <select id="period" value={period} onChange={(event) => setPeriod(event.target.value)}>
             <option value="last30days">{t('pages.dashboard.last30days')}</option>
             <option value="currentmonth">{t('pages.dashboard.currentMonth')}</option>
@@ -168,9 +238,23 @@ const DashboardPage = () => {
       </div>
 
       <div className="kpi-grid">
-        <div className="card kpi"><span>{t('pages.dashboard.income')}</span><strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong></div>
-        <div className="card kpi"><span>{t('pages.dashboard.expense')}</span><strong className="negative">{centsToEuro(summary.expense_sum_cents)}</strong></div>
-        <div className="card kpi"><span>{t('pages.dashboard.net')}</span><strong>{centsToEuro(summary.net_sum_cents)}</strong></div>
+        <div className="card kpi">
+          <span>{t('pages.dashboard.income')}</span>
+          <small className={deltaClassName(kpiDeltas.income)}>{formatDelta(kpiDeltas.income)}</small>
+          <strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong>
+        </div>
+
+        <div className="card kpi">
+          <span>{t('pages.dashboard.expense')}</span>
+          <small className={deltaClassName(kpiDeltas.expense)}>{formatDelta(kpiDeltas.expense)}</small>
+          <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
+        </div>
+
+        <div className="card kpi">
+          <span>{t('pages.dashboard.net')}</span>
+          <small className={deltaClassName(kpiDeltas.net)}>{formatDelta(kpiDeltas.net)}</small>
+          <strong>{centsToEuro(summary.net_sum_cents)}</strong>
+        </div>
       </div>
 
       <div className="grid-two">
@@ -178,6 +262,7 @@ const DashboardPage = () => {
           <h2>{t('pages.dashboard.trendIncomeExpense')}</h2>
           <Line data={trendData} />
         </div>
+
         <div className="card">
           <h2>{t('pages.dashboard.netMonthlyTrend')}</h2>
           <Line data={netTrendData} />
@@ -190,6 +275,7 @@ const DashboardPage = () => {
           {renderDimensionTabs(incomeDimension, setIncomeDimension)}
           {pieToChartData(incomePie) ? <Pie data={pieToChartData(incomePie)} /> : <p className="muted">{t('common.none')}</p>}
         </div>
+
         <div className="card">
           <h2>{t('pages.dashboard.pieExpenseBy')}</h2>
           {renderDimensionTabs(expenseDimension, setExpenseDimension)}
