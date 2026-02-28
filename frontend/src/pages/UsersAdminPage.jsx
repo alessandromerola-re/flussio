@@ -17,6 +17,12 @@ const UsersAdminPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [companies, setCompanies] = useState([]);
 
+  // Backward compatibility guard: older cached bundles referenced this handler
+  // while company creation has been moved to Settings page only.
+  const handleCreateCompany = (event) => {
+    event?.preventDefault?.();
+  };
+
   const isSuperAdmin = getIsSuperAdmin();
   const activeCompanyId = Number(getActiveCompanyId());
 
