@@ -65,6 +65,8 @@ const MovementsPage = () => {
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState(null);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState([]);
   const [filters, setFilters] = useState(defaultFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
   const [filterContactSearch, setFilterContactSearch] = useState('');
@@ -563,6 +565,29 @@ const MovementsPage = () => {
     URL.revokeObjectURL(url);
   };
 
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0] || null;
+    setImportFile(file);
+    if (!file) {
+      setImportPreview([]);
+      return;
+    }
+    const text = await file.text();
+    setImportPreview(text.split(/\r?\n/).filter((line) => line.trim()).slice(0, 6));
+  };
+
+  const handleImportCsv = async () => {
+    if (!importFile) return;
+    try {
+      const out = await api.importEntityCsv('transactions', importFile);
+      setSubmitMessage(`OK: ${out.ok} | creati: ${out.created} | aggiornati: ${out.updated} | errori: ${out.errors}`);
+      await loadMovements(filters);
+    } catch (importError) {
+      setError(getErrorMessage(t, importError));
+    }
+  };
+
   const handleDeleteAttachment = async (attachmentId) => {
     await api.deleteAttachment(attachmentId);
     if (!selected) {
@@ -621,8 +646,13 @@ const MovementsPage = () => {
           </button>
         )}
         <button type="button" className="ghost" onClick={() => setFiltersOpen((v) => !v)}>{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
+        <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>
+        {canPermission('write') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
+        {canPermission('write') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={!importFile}>Importa CSV</button>}
         {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
       </div>
+
+      {importPreview.length > 0 && <pre className="card" style={{ maxHeight: 140, overflow: 'auto' }}>{importPreview.join('\n')}</pre>}
 
       {!filtersOpen && hasActiveFilters && (
         <div className="filter-chip-list">
