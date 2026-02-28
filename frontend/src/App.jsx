@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import routes from './routes.jsx';
-import { api, clearToken, getToken } from './services/api.js';
+import { api, clearToken, getActiveCompanyId, getToken, setActiveCompanyId } from './services/api.js';
 import { can } from './utils/permissions.js';
 import { setLanguage } from './i18n/index.js';
 import BrandMark from './components/BrandMark.jsx';
@@ -14,6 +14,14 @@ const App = () => {
   const [language, setLanguageState] = useState(() => localStorage.getItem('flussio_lang') || 'it');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [companies, setCompanies] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('flussio_companies') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [activeCompanyId, setActiveCompanyIdState] = useState(() => getActiveCompanyId() || '');
 
   const loadBrandingLogo = async () => {
     if (!getToken()) {
@@ -52,6 +60,24 @@ const App = () => {
     return () => {
       if (brandLogoUrl) URL.revokeObjectURL(brandLogoUrl);
     };
+  }, [token]);
+
+
+  useEffect(() => {
+    if (!token) {
+      setCompanies([]);
+      setActiveCompanyIdState('');
+      return;
+    }
+
+    try {
+      const storedCompanies = JSON.parse(localStorage.getItem('flussio_companies') || '[]');
+      setCompanies(Array.isArray(storedCompanies) ? storedCompanies : []);
+    } catch {
+      setCompanies([]);
+    }
+
+    setActiveCompanyIdState(getActiveCompanyId() || '');
   }, [token]);
 
   useEffect(() => {
@@ -105,6 +131,18 @@ const App = () => {
     setLanguageState(nextLanguage);
   };
 
+  const handleCompanyChange = (event) => {
+    const nextCompanyId = event.target.value;
+    setActiveCompanyId(nextCompanyId);
+    setActiveCompanyIdState(nextCompanyId);
+
+    const selectedCompany = companies.find((company) => String(company.id) === String(nextCompanyId));
+    const nextRole = selectedCompany?.role || 'viewer';
+    localStorage.setItem('flussio_role', nextRole);
+
+    window.location.href = '/dashboard';
+  };
+
   const brandNode = <BrandMark logoUrl={brandLogoUrl} alt="Logo azienda" />;
 
   return (
@@ -121,6 +159,14 @@ const App = () => {
               ))}
             </nav>
             <div className="actions">
+              <label>
+                Azienda
+                <select value={String(activeCompanyId || '')} onChange={handleCompanyChange}>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>{company.name}</option>
+                  ))}
+                </select>
+              </label>
               <label>
                 {t('common.language')}
                 <select value={language} onChange={handleLanguageChange}>
@@ -154,6 +200,14 @@ const App = () => {
               ))}
             </nav>
             <div className="sidebar-footer">
+              <label>
+                Azienda
+                <select value={String(activeCompanyId || '')} onChange={handleCompanyChange}>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>{company.name}</option>
+                  ))}
+                </select>
+              </label>
               <label>
                 {t('common.language')}
                 <select value={language} onChange={handleLanguageChange}>

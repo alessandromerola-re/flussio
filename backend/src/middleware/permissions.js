@@ -5,6 +5,7 @@ const levels = {
   operatore: 2,
   editor: 3,
   admin: 4,
+  super_admin: 5,
 };
 
 export const rolePermissions = {
@@ -12,9 +13,10 @@ export const rolePermissions = {
   operatore: { read: true, write: true, delete_sensitive: false, export: false, users_manage: false },
   editor: { read: true, write: true, delete_sensitive: true, export: true, users_manage: false },
   admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
+  super_admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
 };
 
-export const getRole = (req) => req.user?.role || 'viewer';
+export const getRole = (req) => req.companyRole || 'viewer';
 
 export const requirePermission = (permission) => (req, res, next) => {
   const role = getRole(req);
