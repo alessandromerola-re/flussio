@@ -172,6 +172,27 @@ const UsersAdminPage = () => {
 
       {message && <div className="muted users-feedback">{message}</div>}
 
+      {isSuperAdmin && (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <form onSubmit={handleCreateCompany} className="users-create-form">
+            <h3>Crea azienda</h3>
+            <label>
+              Nome azienda
+              <input
+                type="text"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                placeholder="Nuova azienda"
+                required
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="submit">Crea</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <div className="card users-card">
         <div className="users-table-head">
           <span>{t('forms.email')}</span>
