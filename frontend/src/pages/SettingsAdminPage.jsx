@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, getRole } from '../services/api.js';
+import { api, getIsSuperAdmin, getRole } from '../services/api.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 
 const maxMb = 20;
@@ -20,7 +20,7 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const [companySeedDefaults, setCompanySeedDefaults] = useState(true);
   const [companyMessage, setCompanyMessage] = useState('');
   const [companyError, setCompanyError] = useState('');
-  const isSuperAdmin = getRole() === 'super_admin';
+  const isSuperAdmin = getRole() === 'super_admin' || getIsSuperAdmin();
 
   const loadBranding = async () => {
     const data = await api.getBranding();

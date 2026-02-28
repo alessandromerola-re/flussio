@@ -12,6 +12,26 @@ export const setActiveCompanyId = (id) => {
   localStorage.setItem('flussio_company_id', String(id));
 };
 
+
+const parseJwtPayload = (token) => {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
+export const getIsSuperAdmin = () => {
+  const payload = parseJwtPayload(getToken());
+  return payload?.is_super_admin === true;
+};
+
 export const setToken = (token, role = null) => {
   localStorage.setItem('flussio_token', token);
   if (role) {

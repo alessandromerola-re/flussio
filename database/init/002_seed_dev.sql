@@ -11,14 +11,6 @@ INSERT INTO companies (name) VALUES ('Seconda Demo');
 INSERT INTO user_companies (user_id, company_id, role)
 VALUES (1, 2, 'editor');
 
-INSERT INTO user_companies (user_id, company_id, role)
-VALUES (1, 1, 'admin');
-
-INSERT INTO companies (name) VALUES ('Seconda Demo');
-
-INSERT INTO user_companies (user_id, company_id, role)
-VALUES (1, 2, 'editor');
-
 INSERT INTO accounts (company_id, name, type, opening_balance, balance)
 VALUES
   (1, 'Cassa', 'cash', 1500.00, 1500.00),
