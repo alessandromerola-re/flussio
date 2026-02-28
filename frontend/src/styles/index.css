@@ -830,7 +830,27 @@ button.danger {
 
 .dashboard-chart-wrap {
   position: relative;
+  min-height: 220px;
+}
+
+.dashboard-chart-wrap--line {
+  height: 300px;
+}
+
+.dashboard-chart-wrap--pie {
   height: 280px;
+}
+
+.dashboard-chart-wrap--bar {
+  height: 360px;
+}
+
+.dashboard-chart-wrap--scroll {
+  overflow: auto;
+}
+
+.dashboard-pie-fallback-list {
+  gap: 0.45rem;
 }
 
 @media (max-width: 768px) {
@@ -838,8 +858,22 @@ button.danger {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-chart-wrap {
-    height: 220px;
+  .grid-two {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .dashboard-chart-wrap--line,
+  .dashboard-chart-wrap--pie {
+    height: 260px;
+  }
+
+  .dashboard-chart-wrap--bar {
+    height: 320px;
   }
 
   .dashboard-page-header {
