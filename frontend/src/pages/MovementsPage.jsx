@@ -580,8 +580,14 @@ const MovementsPage = () => {
   const handleImportCsv = async () => {
     if (!importFile) return;
     try {
-      const out = await api.importEntityCsv('transactions', importFile);
-      setSubmitMessage(`OK: ${out.ok} | creati: ${out.created} | aggiornati: ${out.updated} | errori: ${out.errors}`);
+      const out = await api.importMovementsCsv(importFile);
+      setSubmitMessage(`Importati: ${out.imported} | Saltati: ${out.skipped} | Errori: ${out.errors?.length || 0}`);
+      if (out.errors?.length) {
+        const topErrors = out.errors.slice(0, 3).map((entry) => `riga ${entry.line}: ${entry.message}`).join(' | ');
+        setError(`Alcune righe non sono state importate (${topErrors})`);
+      } else {
+        setError('');
+      }
       await loadMovements(filters);
     } catch (importError) {
       setError(getErrorMessage(t, importError));
@@ -652,7 +658,7 @@ const MovementsPage = () => {
         {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
       </div>
 
-      {importPreview.length > 0 && <pre className="card" style={{ maxHeight: 140, overflow: 'auto' }}>{importPreview.join('\n')}</pre>}
+      {importPreview.length > 0 && <div className="card" style={{ fontSize: '0.9rem' }}>CSV selezionato: {importFile?.name}</div>}
 
       {!filtersOpen && hasActiveFilters && (
         <div className="filter-chip-list">
