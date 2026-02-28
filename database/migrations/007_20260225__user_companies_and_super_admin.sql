@@ -3,6 +3,10 @@ BEGIN;
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN NOT NULL DEFAULT false;
 
+UPDATE users
+SET is_super_admin = true
+WHERE email = 'dev@flussio.local';
+
 CREATE TABLE IF NOT EXISTS user_companies (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,

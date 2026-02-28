@@ -119,7 +119,7 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
       await api.createCompany({ name: companyName.trim(), seed_defaults: companySeedDefaults });
       setCompanyName('');
       await loadCompanies();
-      setCompanyMessage('Azienda creata');
+      setCompanyMessage(t('pages.settings.companyCreated')); 
     } catch (createError) {
       setCompanyError(getErrorMessage(t, createError));
     }
@@ -185,10 +185,10 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
 
       {isSuperAdmin && (
         <div className="card" style={{ maxWidth: 680, marginTop: '1rem' }}>
-          <h2>Aziende (Super Admin)</h2>
+          <h2>{t('pages.settings.companiesTitle')}</h2>
           <form onSubmit={handleCreateCompany}>
             <label>
-              Nome azienda
+              {t('pages.settings.companyName')}
               <input
                 type="text"
                 value={companyName}
@@ -202,10 +202,10 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
                 checked={companySeedDefaults}
                 onChange={(event) => setCompanySeedDefaults(event.target.checked)}
               />
-              seed_defaults
+              {t('pages.settings.seedDefaults')}
             </label>
             <div className="row-actions">
-              <button type="submit">Crea</button>
+              <button type="submit">{t('pages.settings.createCompany')}</button>
             </div>
           </form>
 

@@ -26,6 +26,20 @@ router.get('/', requirePermission('users_manage'), async (req, res) => {
     );
     return res.json(result.rows);
   } catch (error) {
+    if (error?.code === '42P01') {
+      try {
+        const fallback = await query(
+          `SELECT id, email, is_active, role, is_active AS membership_active, created_at
+           FROM users
+           WHERE company_id = $1
+           ORDER BY id DESC`,
+          [req.companyId]
+        );
+        return res.json(fallback.rows);
+      } catch (fallbackError) {
+        console.error(fallbackError);
+      }
+    }
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
   }
