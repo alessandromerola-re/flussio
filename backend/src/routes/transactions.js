@@ -1,6 +1,7 @@
 import express from 'express';
 import { getClient, query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
+import { formatDateISO } from '../utils/dateParse.js';
 
 const router = express.Router();
 
@@ -309,7 +310,7 @@ router.get('/export', async (req, res) => {
         .join(' → ');
 
       return [
-        csvEscape(movement.date),
+        csvEscape(formatDateISO(movement.date)),
         csvEscape(movement.type),
         csvEscape(movement.amount_total),
         csvEscape(accountNames),
