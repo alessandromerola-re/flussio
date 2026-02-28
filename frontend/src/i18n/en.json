@@ -190,13 +190,12 @@
   "pages.settings.importMovements": "Import movements from CSV",
   "pages.settings.importHint": "Use a CSV exported from Flussio (UTF-8).",
   "pages.settings.importButton": "Import CSV",
-  
   "pages.settings.companiesTitle": "Companies (Super Admin)",
   "pages.settings.companyName": "Company name",
   "pages.settings.seedDefaults": "Create default data (accounts/categories)",
   "pages.settings.createCompany": "Create",
   "pages.settings.companyCreated": "Company created",
-"pages.settings.importResult": "Import completed: {{imported}} imported, {{skipped}} skipped.",
+  "pages.settings.importResult": "Import completed: {{imported}} imported, {{skipped}} skipped.",
   "errors.VALIDATION_INVALID_FILE_TYPE": "Unsupported file type.",
   "errors.BRANDING_UPLOAD_FAILED": "Logo upload failed.",
   "errors.MOVEMENTS_IMPORT_FAILED": "Movements CSV import failed.",
@@ -297,5 +296,14 @@
   "forms.rememberMe": "Remember me",
   "forms.forgotPassword": "Forgot password?",
   "pages.users.status": "Status",
-  "pages.users.actions": "Actions"
+  "pages.users.actions": "Actions",
+  "forms.active": "Active",
+  "buttons.remove": "Remove",
+  "pages.users.created": "User created successfully.",
+  "pages.users.updated": "User updated successfully.",
+  "pages.users.addUser": "Add user",
+  "pages.users.editUser": "Edit user",
+  "pages.users.companyAccess": "Company access",
+  "pages.users.selectCompany": "Select company",
+  "pages.users.addCompanyAccess": "Add company access"
 }

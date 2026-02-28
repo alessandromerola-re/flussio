@@ -206,6 +206,7 @@ export const api = {
   getDashboardSummary: (params = {}) => request(`/dashboard/summary${toQueryString(params)}`),
   getDashboardPie: (payload) => request('/dashboard/pie', { method: 'POST', body: JSON.stringify(payload) }),
   getUsers: () => request('/users'),
+  getUser: (id) => request(`/users/${id}`),
   createUser: (payload) => request('/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (id, payload) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   createResetToken: (id) => request(`/users/${id}/reset-password-token`, { method: 'POST' }),

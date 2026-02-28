@@ -1,12 +1,48 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import express from 'express';
-import { query } from '../db/index.js';
+import { getClient, query } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
 
 const VALID_ROLES = ['admin', 'editor', 'viewer', 'operatore'];
 
 const router = express.Router();
+
+const normalizeMemberships = (memberships = []) => {
+  if (!Array.isArray(memberships)) {
+    return null;
+  }
+
+  const normalized = memberships
+    .map((membership) => ({
+      company_id: Number(membership?.company_id),
+      role: membership?.role,
+      is_active: membership?.is_active !== false,
+    }))
+    .filter((membership) => Number.isInteger(membership.company_id) && VALID_ROLES.includes(membership.role));
+
+  const dedup = [];
+  const seen = new Set();
+  for (const membership of normalized) {
+    if (seen.has(membership.company_id)) continue;
+    seen.add(membership.company_id);
+    dedup.push(membership);
+  }
+
+  return dedup;
+};
+
+const loadUserMemberships = async (userId) => {
+  const memberships = await query(
+    `SELECT uc.company_id, c.name AS company_name, uc.role, uc.is_active
+     FROM user_companies uc
+     JOIN companies c ON c.id = uc.company_id
+     WHERE uc.user_id = $1
+     ORDER BY c.name`,
+    [userId]
+  );
+  return memberships.rows;
+};
 
 router.get('/', requirePermission('users_manage'), async (req, res) => {
   try {
@@ -45,14 +81,63 @@ router.get('/', requirePermission('users_manage'), async (req, res) => {
   }
 });
 
+router.get('/:id', requirePermission('users_manage'), async (req, res) => {
+  try {
+    const userResult = await query('SELECT id, email, is_active FROM users WHERE id = $1', [req.params.id]);
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error_code: 'NOT_FOUND' });
+    }
+
+    const accessResult = await query(
+      'SELECT 1 FROM user_companies WHERE user_id = $1 AND company_id = $2',
+      [req.params.id, req.companyId]
+    );
+
+    if (accessResult.rowCount === 0 && req.user?.is_super_admin !== true) {
+      return res.status(404).json({ error_code: 'NOT_FOUND' });
+    }
+
+    const memberships = await loadUserMemberships(req.params.id);
+
+    return res.json({
+      ...userResult.rows[0],
+      memberships,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  }
+});
+
 router.post('/', requirePermission('users_manage'), async (req, res) => {
-  const { email, password, role = 'viewer' } = req.body;
-  if (!email || !VALID_ROLES.includes(role)) {
+  const { email, password, role = 'viewer', memberships } = req.body;
+  if (!email || (!VALID_ROLES.includes(role) && !Array.isArray(memberships))) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
+  const parsedMemberships = normalizeMemberships(memberships);
+  if (Array.isArray(memberships) && parsedMemberships == null) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const desiredMemberships = req.user?.is_super_admin === true && parsedMemberships?.length > 0
+    ? parsedMemberships
+    : [{ company_id: req.companyId, role, is_active: true }];
+
+  const client = await getClient();
   try {
-    const existingUser = await query('SELECT id, email, is_active FROM users WHERE email = $1', [email]);
+    await client.query('BEGIN');
+
+    const companiesResult = await client.query(
+      'SELECT id FROM companies WHERE id = ANY($1::int[])',
+      [desiredMemberships.map((membership) => membership.company_id)]
+    );
+    if (companiesResult.rowCount !== desiredMemberships.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+    }
+
+    const existingUser = await client.query('SELECT id, email, is_active FROM users WHERE email = $1', [email]);
 
     let userId;
     let userEmail;
@@ -60,15 +145,17 @@ router.post('/', requirePermission('users_manage'), async (req, res) => {
 
     if (existingUser.rowCount === 0) {
       if (!password) {
+        await client.query('ROLLBACK');
         return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
       }
 
       const hash = await bcrypt.hash(password, 10);
-      const createUser = await query(
+      const primaryCompanyId = desiredMemberships[0].company_id;
+      const createUser = await client.query(
         `INSERT INTO users (company_id, email, password_hash)
          VALUES ($1, $2, $3)
          RETURNING id, email, is_active`,
-        [req.companyId, email, hash]
+        [primaryCompanyId, email, hash]
       );
 
       userId = createUser.rows[0].id;
@@ -80,72 +167,166 @@ router.post('/', requirePermission('users_manage'), async (req, res) => {
       userIsActive = existingUser.rows[0].is_active;
     }
 
-    await query(
-      `INSERT INTO user_companies (user_id, company_id, role, is_active)
-       VALUES ($1, $2, $3, true)
-       ON CONFLICT (user_id, company_id) DO NOTHING`,
-      [userId, req.companyId, role]
+    for (const membership of desiredMemberships) {
+      await client.query(
+        `INSERT INTO user_companies (user_id, company_id, role, is_active)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, company_id)
+         DO UPDATE SET role = EXCLUDED.role, is_active = EXCLUDED.is_active`,
+        [userId, membership.company_id, membership.role, membership.is_active]
+      );
+    }
+
+    const membershipsResult = await client.query(
+      `SELECT uc.company_id, c.name AS company_name, uc.role, uc.is_active
+       FROM user_companies uc
+       JOIN companies c ON c.id = uc.company_id
+       WHERE uc.user_id = $1
+       ORDER BY c.name`,
+      [userId]
     );
 
-    const membership = await query(
-      `SELECT role, is_active AS membership_active, created_at
-       FROM user_companies
-       WHERE user_id = $1
-         AND company_id = $2`,
-      [userId, req.companyId]
-    );
+    await client.query('COMMIT');
+
+    const currentCompanyMembership = membershipsResult.rows.find((membership) => membership.company_id === req.companyId)
+      || membershipsResult.rows[0];
 
     return res.status(201).json({
       id: userId,
       email: userEmail,
       is_active: userIsActive,
-      role: membership.rows[0].role,
-      membership_active: membership.rows[0].membership_active,
-      created_at: membership.rows[0].created_at,
+      role: currentCompanyMembership?.role || role,
+      membership_active: currentCompanyMembership?.is_active ?? true,
+      memberships: membershipsResult.rows,
     });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  } finally {
+    client.release();
   }
 });
 
 router.put('/:id', requirePermission('users_manage'), async (req, res) => {
-  const { role, membership_active } = req.body;
+  const { role, membership_active, memberships, email, is_active } = req.body;
+
   if ((role && !VALID_ROLES.includes(role)) || (membership_active != null && typeof membership_active !== 'boolean')) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
+  const parsedMemberships = memberships == null ? null : normalizeMemberships(memberships);
+  if (memberships != null && parsedMemberships == null) {
+    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  }
+
+  const client = await getClient();
   try {
-    const result = await query(
-      `UPDATE user_companies
-       SET role = COALESCE($1, role),
-           is_active = COALESCE($2, is_active)
-       WHERE user_id = $3
-         AND company_id = $4
-       RETURNING role, is_active AS membership_active, created_at`,
-      [role ?? null, membership_active ?? null, req.params.id, req.companyId]
+    await client.query('BEGIN');
+
+    const userResult = await client.query('SELECT id, email, is_active FROM users WHERE id = $1', [req.params.id]);
+    if (userResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error_code: 'NOT_FOUND' });
+    }
+
+    const membershipAccess = await client.query(
+      'SELECT 1 FROM user_companies WHERE user_id = $1 AND company_id = $2',
+      [req.params.id, req.companyId]
+    );
+    if (membershipAccess.rowCount === 0 && req.user?.is_super_admin !== true) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error_code: 'NOT_FOUND' });
+    }
+
+    if (email || typeof is_active === 'boolean') {
+      await client.query(
+        `UPDATE users
+         SET email = COALESCE($1, email),
+             is_active = COALESCE($2, is_active)
+         WHERE id = $3`,
+        [email ?? null, is_active ?? null, req.params.id]
+      );
+    }
+
+    if (req.user?.is_super_admin === true && parsedMemberships) {
+      if (parsedMemberships.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+      }
+
+      const companiesResult = await client.query(
+        'SELECT id FROM companies WHERE id = ANY($1::int[])',
+        [parsedMemberships.map((membership) => membership.company_id)]
+      );
+      if (companiesResult.rowCount !== parsedMemberships.length) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+      }
+
+      await client.query(
+        `UPDATE user_companies
+         SET is_active = false
+         WHERE user_id = $1
+           AND company_id <> ALL($2::int[])`,
+        [req.params.id, parsedMemberships.map((membership) => membership.company_id)]
+      );
+
+      for (const membership of parsedMemberships) {
+        await client.query(
+          `INSERT INTO user_companies (user_id, company_id, role, is_active)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (user_id, company_id)
+           DO UPDATE SET role = EXCLUDED.role, is_active = EXCLUDED.is_active`,
+          [req.params.id, membership.company_id, membership.role, membership.is_active]
+        );
+      }
+    } else {
+      const result = await client.query(
+        `UPDATE user_companies
+         SET role = COALESCE($1, role),
+             is_active = COALESCE($2, is_active)
+         WHERE user_id = $3
+           AND company_id = $4
+         RETURNING role, is_active AS membership_active`,
+        [role ?? null, membership_active ?? null, req.params.id, req.companyId]
+      );
+
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error_code: 'NOT_FOUND' });
+      }
+    }
+
+    const updatedUserResult = await client.query('SELECT id, email, is_active FROM users WHERE id = $1', [req.params.id]);
+    const membershipsResult = await client.query(
+      `SELECT uc.company_id, c.name AS company_name, uc.role, uc.is_active
+       FROM user_companies uc
+       JOIN companies c ON c.id = uc.company_id
+       WHERE uc.user_id = $1
+       ORDER BY c.name`,
+      [req.params.id]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
-    }
+    await client.query('COMMIT');
 
-    const userResult = await query('SELECT id, email, is_active FROM users WHERE id = $1', [req.params.id]);
-    if (userResult.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
-    }
+    const currentMembership = membershipsResult.rows.find((membership) => membership.company_id === req.companyId)
+      || membershipsResult.rows[0];
 
     return res.json({
-      id: userResult.rows[0].id,
-      email: userResult.rows[0].email,
-      is_active: userResult.rows[0].is_active,
-      role: result.rows[0].role,
-      membership_active: result.rows[0].membership_active,
-      created_at: result.rows[0].created_at,
+      id: updatedUserResult.rows[0].id,
+      email: updatedUserResult.rows[0].email,
+      is_active: updatedUserResult.rows[0].is_active,
+      role: currentMembership?.role || 'viewer',
+      membership_active: currentMembership?.is_active ?? false,
+      memberships: membershipsResult.rows,
     });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  } finally {
+    client.release();
   }
 });
 
