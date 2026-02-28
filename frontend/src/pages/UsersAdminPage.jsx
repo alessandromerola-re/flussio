@@ -14,6 +14,8 @@ const UsersAdminPage = () => {
   const [form, setForm] = useState(initialForm);
   const [message, setMessage] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const isSuperAdmin = localStorage.getItem('flussio_role') === 'super_admin';
 
   const loadUsers = async () => {
     if (!canPermission('users_manage')) return;
@@ -70,6 +72,27 @@ const UsersAdminPage = () => {
       </div>
 
       {message && <div className="muted users-feedback">{message}</div>}
+
+      {isSuperAdmin && (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <form onSubmit={handleCreateCompany} className="users-create-form">
+            <h3>Crea azienda</h3>
+            <label>
+              Nome azienda
+              <input
+                type="text"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                placeholder="Nuova azienda"
+                required
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="submit">Crea</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card users-card">
         <div className="users-table-head">
