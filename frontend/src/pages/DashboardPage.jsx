@@ -19,6 +19,7 @@ ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale
 const toIsoDate = (date) => date.toISOString().slice(0, 10);
 const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
 const absCents = (value) => Math.abs(Number(value || 0));
+const emptySeriesMessage = 'Nessun dato nel periodo selezionato';
 
 const computeDelta = (current, previousValue) => {
   const currentNumber = Number(current || 0);
@@ -78,8 +79,18 @@ const DashboardPage = () => {
   const [incomePie, setIncomePie] = useState(null);
   const [expensePie, setExpensePie] = useState(null);
   const [topExpenses, setTopExpenses] = useState(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  const [showAllTopExpenses, setShowAllTopExpenses] = useState(false);
 
   const activeRange = useMemo(() => buildRangeFromPreset(period), [period]);
+
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const loadSummary = async () => {
@@ -108,6 +119,7 @@ const DashboardPage = () => {
   }, [expenseDimension, activeRange.from, activeRange.to]);
 
   useEffect(() => {
+    setShowAllTopExpenses(false);
     loadPie('expense', 'category', 10).then(setTopExpenses);
   }, [activeRange.from, activeRange.to]);
 
@@ -138,6 +150,60 @@ const DashboardPage = () => {
     }),
     []
   );
+
+
+  const pieOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+        },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.label}: ${currencyTooltip(context)}`,
+          },
+        },
+      },
+    }),
+    []
+  );
+
+  const hasBucketData = useMemo(() => {
+    if (!bucketSeries.length) return false;
+    return bucketSeries.some((row) => absCents(row.income_sum_cents) > 0 || absCents(row.expense_sum_cents) > 0 || absCents(row.net_sum_cents) > 0);
+  }, [bucketSeries]);
+
+  const shouldFallbackPieToList = (pieData) => {
+    if (!pieData || !Array.isArray(pieData.slices) || pieData.slices.length <= 1) {
+      return true;
+    }
+
+    const total = pieData.slices.reduce((sum, slice) => sum + absCents(slice.value_cents), 0) + absCents(pieData.others_cents);
+    if (total <= 0) {
+      return true;
+    }
+
+    const firstValue = absCents(pieData.slices[0]?.value_cents);
+    return (firstValue / total) > 0.8;
+  };
+
+  const buildPieTopList = (pieData, maxItems = 5) => {
+    if (!pieData || !Array.isArray(pieData.slices)) return [];
+    const sorted = [...pieData.slices].sort((a, b) => absCents(b.value_cents) - absCents(a.value_cents));
+    const total = sorted.reduce((sum, slice) => sum + absCents(slice.value_cents), 0) + absCents(pieData.others_cents);
+    if (total <= 0) return [];
+
+    return sorted.slice(0, maxItems).map((slice) => {
+      const cents = absCents(slice.value_cents);
+      return {
+        label: slice.label,
+        value: centsToEuro(cents),
+        percent: `${((cents / total) * 100).toFixed(1)}%`,
+      };
+    });
+  };
 
   const trendData = useMemo(
     () => ({
@@ -220,18 +286,19 @@ const DashboardPage = () => {
     if (!topExpenses) return { labels: [], datasets: [] };
 
     const sortedSlices = [...topExpenses.slices].sort((a, b) => Number(b.value_cents || 0) - Number(a.value_cents || 0));
+    const visibleSlices = isMobile && !showAllTopExpenses ? sortedSlices.slice(0, 5) : sortedSlices;
 
     return {
-      labels: sortedSlices.map((slice) => slice.label),
+      labels: visibleSlices.map((slice) => slice.label),
       datasets: [
         {
           label: t('pages.dashboard.topExpensesByCategory'),
-          data: sortedSlices.map((slice) => Number(slice.value_cents || 0) / 100),
+          data: visibleSlices.map((slice) => Number(slice.value_cents || 0) / 100),
           backgroundColor: '#ef4444',
         },
       ],
     };
-  }, [topExpenses, t]);
+  }, [isMobile, showAllTopExpenses, topExpenses, t]);
 
   const previous = summary.previous || {};
 
@@ -249,6 +316,26 @@ const DashboardPage = () => {
     previous.expense_sum_cents,
     previous.net_sum_cents,
   ]);
+
+  const topExpensesOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.label}: ${currencyTooltip(context)}`,
+          },
+        },
+      },
+      scales: {
+        x: { beginAtZero: true },
+        y: { ticks: { autoSkip: false } },
+      },
+    }),
+    []
+  );
 
   const renderDimensionTabs = (selected, onChange) => (
     <div className="row-actions dashboard-tabs" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
@@ -305,52 +392,75 @@ const DashboardPage = () => {
       <div className="grid-two">
         <div className="card dashboard-chart-card">
           <h2>Cashflow trend</h2>
-          <div className="dashboard-chart-wrap">
-            <Line data={trendData} options={commonLineOptions} />
+          <div className="dashboard-chart-wrap dashboard-chart-wrap--line">
+            {hasBucketData ? <Line data={trendData} options={commonLineOptions} /> : <p className="muted">{emptySeriesMessage}</p>}
           </div>
         </div>
 
         <div className="card dashboard-chart-card">
           <h2>Netto nel tempo</h2>
-          <div className="dashboard-chart-wrap">
-            <Line data={netTrendData} options={commonLineOptions} />
+          <div className="dashboard-chart-wrap dashboard-chart-wrap--line">
+            {hasBucketData ? <Line data={netTrendData} options={commonLineOptions} /> : <p className="muted">{emptySeriesMessage}</p>}
           </div>
         </div>
       </div>
 
       <div className="grid-two" style={{ marginTop: '1rem' }}>
-        <div className="card">
+        <div className="card dashboard-chart-card">
           <h2>Entrate per</h2>
           {renderDimensionTabs(incomeDimension, setIncomeDimension)}
-          {pieToChartData(incomePie) ? <Pie data={pieToChartData(incomePie)} /> : <p className="muted">{t('common.none')}</p>}
+          <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
+            {pieToChartData(incomePie) ? (
+              shouldFallbackPieToList(incomePie) ? (
+                <ul className="list dashboard-pie-fallback-list">
+                  {buildPieTopList(incomePie).map((item) => (
+                    <li key={item.label} className="list-item-row">
+                      <span>{item.label}</span>
+                      <strong>{item.value} <small className="muted">({item.percent})</small></strong>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Pie data={pieToChartData(incomePie)} options={pieOptions} />
+              )
+            ) : <p className="muted">{t('common.none')}</p>}
+          </div>
         </div>
 
-        <div className="card">
+        <div className="card dashboard-chart-card">
           <h2>Uscite per</h2>
           {renderDimensionTabs(expenseDimension, setExpenseDimension)}
-          {pieToChartData(expensePie) ? <Pie data={pieToChartData(expensePie)} /> : <p className="muted">{t('common.none')}</p>}
+          <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
+            {pieToChartData(expensePie) ? (
+              shouldFallbackPieToList(expensePie) ? (
+                <ul className="list dashboard-pie-fallback-list">
+                  {buildPieTopList(expensePie).map((item) => (
+                    <li key={item.label} className="list-item-row">
+                      <span>{item.label}</span>
+                      <strong>{item.value} <small className="muted">({item.percent})</small></strong>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Pie data={pieToChartData(expensePie)} options={pieOptions} />
+              )
+            ) : <p className="muted">{t('common.none')}</p>}
+          </div>
         </div>
       </div>
 
       <div className="card dashboard-chart-card" style={{ marginTop: '1rem' }}>
         <h2>{t('pages.dashboard.topExpensesByCategory')}</h2>
-        <Bar
-          data={topExpensesBarData}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: (context) => `${context.label}: ${currencyTooltip(context)}`,
-                },
-              },
-            },
-            scales: {
-              y: { beginAtZero: true },
-            },
-          }}
-        />
+        {isMobile && topExpenses?.slices?.length > 5 && (
+          <div className="row-actions" style={{ marginBottom: '0.75rem' }}>
+            <button type="button" className="ghost" onClick={() => setShowAllTopExpenses((prev) => !prev)}>
+              {showAllTopExpenses ? 'Mostra meno' : 'Mostra tutte'}
+            </button>
+          </div>
+        )}
+        <div className={`dashboard-chart-wrap dashboard-chart-wrap--bar ${showAllTopExpenses ? 'dashboard-chart-wrap--scroll' : ''}`}>
+          {topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted">{emptySeriesMessage}</p>}
+        </div>
       </div>
     </div>
   );
