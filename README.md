@@ -141,6 +141,8 @@ curl -L -H "Authorization: Bearer <TOKEN>"   "http://localhost:4000/api/transact
 CSV columns:
 `date;type;amount_total;account_names;category;contact;commessa;description`
 
+Date format standard for movements CSV export/import: `YYYY-MM-DD` (example: `2026-02-19`).
+
 ## Attachments usage
 
 In movement details modal:

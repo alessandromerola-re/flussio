@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/permissions.js';
 import { sendError } from '../utils/httpErrors.js';
 import { writeAuditLog } from '../services/audit.js';
 import { getClient, query } from '../db/index.js';
+import { parseCsvDateToISO } from '../utils/dateParse.js';
 
 const router = express.Router();
 
@@ -128,7 +129,6 @@ const parseAmount = (value) => {
 };
 
 const getDirectionDelta = (direction, amount) => (direction === 'in' ? amount : -amount);
-const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const getBrandingDir = (companyId) => path.join(uploadsRoot, `company_${companyId}`, 'branding');
 const getMetadataPath = (companyId) => path.join(getBrandingDir(companyId), metadataFileName);
@@ -333,14 +333,16 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
 
     for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
       const row = parseCsvLine(lines[lineIndex], delimiter);
-      const date = row[idx.date];
+      let date;
       const type = normalizeMovementType(row[idx.type]);
       const amountAbs = Math.abs(parseAmount(row[idx.amount]));
       const accountRaw = String(row[idx.accountNames] || '');
 
-      if (!isoDateRegex.test(String(date || '').trim())) {
+      try {
+        date = parseCsvDateToISO(row[idx.date]);
+      } catch {
         skipped += 1;
-        errors.push({ line: lineIndex + 1, message: 'Data non valida (atteso YYYY-MM-DD)' });
+        errors.push({ line: lineIndex + 1, message: 'Data non valida (formati supportati: YYYY-MM-DD, DD/MM/YYYY, formato legacy export)' });
         continue;
       }
 
