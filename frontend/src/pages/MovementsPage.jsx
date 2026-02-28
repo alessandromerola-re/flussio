@@ -67,6 +67,9 @@ const MovementsPage = () => {
   const [previewAttachment, setPreviewAttachment] = useState(null);
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState([]);
+  const [importMessage, setImportMessage] = useState('');
+  const [importError, setImportError] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
   const [filters, setFilters] = useState(defaultFilters);
   const [draftFilters, setDraftFilters] = useState(defaultFilters);
   const [filterContactSearch, setFilterContactSearch] = useState('');
@@ -569,6 +572,8 @@ const MovementsPage = () => {
   const handleImportFile = async (event) => {
     const file = event.target.files?.[0] || null;
     setImportFile(file);
+    setImportMessage('');
+    setImportError('');
     if (!file) {
       setImportPreview([]);
       return;
@@ -578,19 +583,29 @@ const MovementsPage = () => {
   };
 
   const handleImportCsv = async () => {
-    if (!importFile) return;
+    if (!importFile) {
+      setImportMessage('');
+      setImportError('Seleziona un file CSV prima di importare.');
+      return;
+    }
+
+    setImportLoading(true);
+    setImportMessage('');
+    setImportError('');
+
     try {
       const out = await api.importMovementsCsv(importFile);
-      setSubmitMessage(`Importati: ${out.imported} | Saltati: ${out.skipped} | Errori: ${out.errors?.length || 0}`);
-      if (out.errors?.length) {
+      const errorCount = out.errors?.length || 0;
+      setImportMessage(`Import completato: importati ${out.imported}, saltati ${out.skipped}, errori ${errorCount}.`);
+      if (errorCount) {
         const topErrors = out.errors.slice(0, 3).map((entry) => `riga ${entry.line}: ${entry.message}`).join(' | ');
-        setError(`Alcune righe non sono state importate (${topErrors})`);
-      } else {
-        setError('');
+        setImportError(`Alcune righe non sono state importate (${topErrors})`);
       }
       await loadMovements(filters);
-    } catch (importError) {
-      setError(getErrorMessage(t, importError));
+    } catch (errorImportCsv) {
+      setImportError(`Import fallito: ${getErrorMessage(t, errorImportCsv)}`);
+    } finally {
+      setImportLoading(false);
     }
   };
 
@@ -654,11 +669,13 @@ const MovementsPage = () => {
         <button type="button" className="ghost" onClick={() => setFiltersOpen((v) => !v)}>{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
         <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>
         {canPermission('write') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
-        {canPermission('write') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={!importFile}>Importa CSV</button>}
+        {canPermission('write') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={importLoading}>{importLoading ? 'Import in corso...' : 'Importa CSV'}</button>}
         {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
       </div>
 
       {importPreview.length > 0 && <div className="card" style={{ fontSize: '0.9rem' }}>CSV selezionato: {importFile?.name}</div>}
+      {importError && <div className="error">{importError}</div>}
+      {importMessage && <div className="success">{importMessage}</div>}
 
       {!filtersOpen && hasActiveFilters && (
         <div className="filter-chip-list">
