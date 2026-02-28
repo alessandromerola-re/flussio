@@ -62,19 +62,6 @@ const UsersAdminPage = () => {
     }
   };
 
-  const handleCreateCompany = async (event) => {
-    event.preventDefault();
-    if (!companyName.trim()) return;
-    setMessage('');
-    try {
-      const created = await api.createCompany({ name: companyName.trim() });
-      setCompanyName('');
-      setMessage(`Azienda creata: ${created.name}`);
-    } catch (error) {
-      setMessage(getErrorMessage(t, error));
-    }
-  };
-
   return (
     <div className="page users-page">
       <div className="page-header users-page-header">

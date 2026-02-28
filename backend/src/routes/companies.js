@@ -5,6 +5,59 @@ import { writeAuditLog } from '../services/audit.js';
 
 const router = express.Router();
 
+const isMissingColumnError = (error, columnName) =>
+  error?.code === '42703' && String(error?.message || '').includes(columnName);
+
+const seedDefaultRecords = async (client, companyId) => {
+  try {
+    await client.query(
+      `INSERT INTO accounts (company_id, name, external_id, type, opening_balance, balance, is_active)
+       VALUES
+         ($1, 'Cassa', 'cassa', 'cash', 0, 0, true),
+         ($1, 'Banca', 'banca', 'bank', 0, 0, true),
+         ($1, 'Carta', 'carta', 'card', 0, 0, true)
+       ON CONFLICT DO NOTHING`,
+      [companyId]
+    );
+
+    await client.query(
+      `INSERT INTO categories (company_id, name, external_id, direction, color, is_active)
+       VALUES
+         ($1, 'Vendite', 'vendite_income', 'income', '#2ecc71', true),
+         ($1, 'Servizi', 'servizi_income', 'income', '#27ae60', true),
+         ($1, 'Affitto', 'affitto_expense', 'expense', '#e74c3c', true),
+         ($1, 'Utenze', 'utenze_expense', 'expense', '#c0392b', true)
+       ON CONFLICT DO NOTHING`,
+      [companyId]
+    );
+  } catch (error) {
+    if (!isMissingColumnError(error, 'external_id')) {
+      throw error;
+    }
+
+    await client.query(
+      `INSERT INTO accounts (company_id, name, type, opening_balance, balance, is_active)
+       VALUES
+         ($1, 'Cassa', 'cash', 0, 0, true),
+         ($1, 'Banca', 'bank', 0, 0, true),
+         ($1, 'Carta', 'card', 0, 0, true)
+       ON CONFLICT DO NOTHING`,
+      [companyId]
+    );
+
+    await client.query(
+      `INSERT INTO categories (company_id, name, direction, color, is_active)
+       VALUES
+         ($1, 'Vendite', 'income', '#2ecc71', true),
+         ($1, 'Servizi', 'income', '#27ae60', true),
+         ($1, 'Affitto', 'expense', '#e74c3c', true),
+         ($1, 'Utenze', 'expense', '#c0392b', true)
+       ON CONFLICT DO NOTHING`,
+      [companyId]
+    );
+  }
+};
+
 const requireSuperAdmin = (req, res) => {
   if (req.user?.is_super_admin !== true) {
     sendError(res, 403, 'FORBIDDEN', 'Operation not allowed.');
@@ -45,26 +98,7 @@ router.post('/', async (req, res) => {
     const shouldSeedDefaults = seed_defaults === true;
 
     if (shouldSeedDefaults) {
-      await client.query(
-        `INSERT INTO accounts (company_id, name, external_id, type, opening_balance, balance, is_active)
-         VALUES
-           ($1, 'Cassa', 'cassa', 'cash', 0, 0, true),
-           ($1, 'Banca', 'banca', 'bank', 0, 0, true),
-           ($1, 'Carta', 'carta', 'card', 0, 0, true)
-         ON CONFLICT DO NOTHING`,
-        [company.id]
-      );
-
-      await client.query(
-        `INSERT INTO categories (company_id, name, external_id, direction, color, is_active)
-         VALUES
-           ($1, 'Vendite', 'vendite_income', 'income', '#2ecc71', true),
-           ($1, 'Servizi', 'servizi_income', 'income', '#27ae60', true),
-           ($1, 'Affitto', 'affitto_expense', 'expense', '#e74c3c', true),
-           ($1, 'Utenze', 'utenze_expense', 'expense', '#c0392b', true)
-         ON CONFLICT DO NOTHING`,
-        [company.id]
-      );
+      await seedDefaultRecords(client, company.id);
     }
 
     try {
