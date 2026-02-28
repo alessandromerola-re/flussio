@@ -121,7 +121,7 @@ router.get('/', async (req, res) => {
       WHERE rt.company_id = $1
       ORDER BY rt.next_run_at ASC, rt.id DESC
       `,
-      [req.user.company_id]
+      [req.companyId]
     );
     return res.json(result.rows);
   } catch (error) {
@@ -134,7 +134,7 @@ router.get('/:id', async (req, res) => {
   try {
     const result = await query(
       'SELECT * FROM recurring_templates WHERE id = $1 AND company_id = $2',
-      [req.params.id, req.user.company_id]
+      [req.params.id, req.companyId]
     );
     if (result.rowCount === 0) {
       return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
@@ -148,7 +148,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const payload = normalizeTemplatePayload(req.body);
-  const validation = await validatePayload(payload, req.user.company_id);
+  const validation = await validatePayload(payload, req.companyId);
   if (!validation.valid) {
     const messageByCode = {
       RECURRING_INVALID_FREQUENCY: 'Frequenza ricorrenza non valida.',
@@ -177,7 +177,7 @@ router.post('/', async (req, res) => {
       RETURNING *
       `,
       [
-        req.user.company_id,
+        req.companyId,
         payload.title,
         payload.frequency,
         payload.interval,
@@ -198,7 +198,7 @@ router.post('/', async (req, res) => {
       ]
     );
 
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'create', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
     return res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -208,7 +208,7 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   const payload = normalizeTemplatePayload(req.body);
-  const validation = await validatePayload(payload, req.user.company_id);
+  const validation = await validatePayload(payload, req.companyId);
   if (!validation.valid) {
     const messageByCode = {
       RECURRING_INVALID_FREQUENCY: 'Frequenza ricorrenza non valida.',
@@ -269,7 +269,7 @@ router.put('/:id', async (req, res) => {
         payload.frequency === 'yearly' ? payload.yearly_anchor_mm : null,
         payload.frequency === 'yearly' ? payload.yearly_anchor_dd : null,
         req.params.id,
-        req.user.company_id,
+        req.companyId,
       ]
     );
 
@@ -277,7 +277,7 @@ router.put('/:id', async (req, res) => {
       return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
 
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'update', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'update', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
     return res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -289,12 +289,12 @@ router.delete('/:id', async (req, res) => {
   try {
     const result = await query(
       'UPDATE recurring_templates SET is_active = false, updated_at = NOW() WHERE id = $1 AND company_id = $2 RETURNING id',
-      [req.params.id, req.user.company_id]
+      [req.params.id, req.companyId]
     );
     if (result.rowCount === 0) {
       return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     console.error(error);
@@ -304,7 +304,7 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/:id/generate-now', async (req, res) => {
   try {
-    const result = await generateTemplateNow(Number(req.params.id), req.user.company_id);
+    const result = await generateTemplateNow(Number(req.params.id), req.companyId);
     if (result.notFound) {
       return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
@@ -313,7 +313,7 @@ router.post('/:id/generate-now', async (req, res) => {
       return res.json({ status: 'skipped', code: 'RECURRING_ALREADY_GENERATED', reason: result.reason });
     }
 
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'generate', entityType: 'recurring_templates', entityId: req.params.id, meta: result });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'generate', entityType: 'recurring_templates', entityId: req.params.id, meta: result });
     return res.json({ status: 'created', ...result });
   } catch (error) {
     console.error(error);
@@ -323,7 +323,7 @@ router.post('/:id/generate-now', async (req, res) => {
 
 router.post('/generate-due', async (req, res) => {
   try {
-    const result = await generateDueTemplates({ companyId: req.user.company_id, runType: 'manual' });
+    const result = await generateDueTemplates({ companyId: req.companyId, runType: 'manual' });
     return res.json(result);
   } catch (error) {
     console.error(error);

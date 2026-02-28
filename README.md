@@ -58,6 +58,15 @@ You can also set `FRONTEND_HOST_PORT` in root `.env`.
 
 DEV seed stores password as bcrypt hash. Login uses bcrypt verification only.
 
+
+## Multi-company context (active company)
+
+- After login, API returns:
+  - `companies`: list of accessible companies
+  - `default_company_id`: default active company for the session
+- Frontend stores active company and sends `X-Company-Id` on every authenticated API request.
+- You can switch company from the **Azienda** selector in the top bar; UI reloads `/dashboard` so company-scoped data/branding (logo) refreshes correctly.
+
 ## Manual migrations (Approach A)
 
 Init SQL runs only on first bootstrap of an empty Postgres volume (`database/init`).
@@ -76,6 +85,23 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/006_20260216__recurring_templates_and_runs.sql
 ```
 
+
+
+## CSV import/export (master data + movements)
+
+Supported entities:
+- `accounts`, `categories`, `contacts`, `jobs`, `properties`, `recurring_templates`, `transactions`
+
+Endpoints:
+- `GET /api/export/<entity>.csv`
+- `POST /api/import/<entity>` (multipart `file`)
+
+Rules:
+- UTF-8 CSV with header row
+- dates in `YYYY-MM-DD`
+- decimals with dot (`.`)
+- import mode is create/update by stable key (`external_id` or `code` for jobs)
+- transaction import resolves references by external key; invalid references are reported per-row in import summary.
 
 ## Movements filters (API)
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../services/api.js';
+import { api, getIsSuperAdmin, getRole } from '../services/api.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 
 const maxMb = 20;
@@ -15,6 +15,12 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const [csvFile, setCsvFile] = useState(null);
   const [csvMessage, setCsvMessage] = useState('');
   const [csvError, setCsvError] = useState('');
+  const [companies, setCompanies] = useState([]);
+  const [companyName, setCompanyName] = useState('');
+  const [companySeedDefaults, setCompanySeedDefaults] = useState(true);
+  const [companyMessage, setCompanyMessage] = useState('');
+  const [companyError, setCompanyError] = useState('');
+  const isSuperAdmin = getRole() === 'super_admin' || getIsSuperAdmin();
 
   const loadBranding = async () => {
     const data = await api.getBranding();
@@ -36,6 +42,7 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
 
   useEffect(() => {
     loadBranding().catch((loadError) => setError(getErrorMessage(t, loadError)));
+    loadCompanies().catch((loadError) => setCompanyError(getErrorMessage(t, loadError)));
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
@@ -89,6 +96,32 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
       setCsvMessage(t('pages.settings.importResult', { imported: result.imported || 0, skipped: result.skipped || 0 }));
     } catch (importError) {
       setCsvError(getErrorMessage(t, importError));
+    }
+  };
+
+
+  const loadCompanies = async () => {
+    if (!isSuperAdmin) return;
+    const list = await api.getCompanies();
+    setCompanies(list || []);
+  };
+
+  const handleCreateCompany = async (event) => {
+    event.preventDefault();
+    setCompanyError('');
+    setCompanyMessage('');
+    if (!companyName.trim()) {
+      setCompanyError(t('errors.VALIDATION_MISSING_FIELDS'));
+      return;
+    }
+
+    try {
+      await api.createCompany({ name: companyName.trim(), seed_defaults: companySeedDefaults });
+      setCompanyName('');
+      await loadCompanies();
+      setCompanyMessage(t('pages.settings.companyCreated')); 
+    } catch (createError) {
+      setCompanyError(getErrorMessage(t, createError));
     }
   };
 
@@ -148,6 +181,49 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
         {csvMessage && <div className="success">{csvMessage}</div>}
         {csvError && <div className="error">{csvError}</div>}
       </div>
+
+
+      {isSuperAdmin && (
+        <div className="card" style={{ maxWidth: 680, marginTop: '1rem' }}>
+          <h2>{t('pages.settings.companiesTitle')}</h2>
+          <form onSubmit={handleCreateCompany}>
+            <label>
+              {t('pages.settings.companyName')}
+              <input
+                type="text"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                required
+              />
+            </label>
+            <label className="checkbox-row" style={{ marginTop: '0.5rem' }}>
+              <input
+                type="checkbox"
+                checked={companySeedDefaults}
+                onChange={(event) => setCompanySeedDefaults(event.target.checked)}
+              />
+              {t('pages.settings.seedDefaults')}
+            </label>
+            <div className="row-actions">
+              <button type="submit">{t('pages.settings.createCompany')}</button>
+            </div>
+          </form>
+
+          {companyMessage && <div className="success">{companyMessage}</div>}
+          {companyError && <div className="error">{companyError}</div>}
+
+          <ul className="list" style={{ marginTop: '0.75rem' }}>
+            {companies.map((company) => (
+              <li key={company.id} className="list-item-row">
+                <div>
+                  <strong>{company.name}</strong>
+                  <div className="muted">#{company.id}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
     </div>
   );
