@@ -168,7 +168,7 @@ const deleteCurrentLogo = async (companyId) => {
 
 router.get('/branding', async (req, res) => {
   try {
-    const meta = await readBrandingMeta(req.user.company_id);
+    const meta = await readBrandingMeta(req.companyId);
     return res.json({ has_logo: Boolean(meta?.file_name), updated_at: meta?.updated_at || null });
   } catch (error) {
     console.error(error);
@@ -178,12 +178,12 @@ router.get('/branding', async (req, res) => {
 
 router.get('/branding/logo', async (req, res) => {
   try {
-    const meta = await readBrandingMeta(req.user.company_id);
+    const meta = await readBrandingMeta(req.companyId);
     if (!meta?.file_name) {
       return sendError(res, 404, 'NOT_FOUND', 'Logo non trovato.');
     }
 
-    const fullPath = path.join(getBrandingDir(req.user.company_id), meta.file_name);
+    const fullPath = path.join(getBrandingDir(req.companyId), meta.file_name);
     res.setHeader('Content-Type', meta.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${safeFileName(meta.file_name)}"`);
     return res.sendFile(fullPath);
@@ -215,10 +215,10 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
   }
 
   try {
-    const brandingDir = getBrandingDir(req.user.company_id);
+    const brandingDir = getBrandingDir(req.companyId);
     await fs.mkdir(brandingDir, { recursive: true });
 
-    await deleteCurrentLogo(req.user.company_id);
+    await deleteCurrentLogo(req.companyId);
 
     const extension = parsedFile.mimeType === 'image/png' ? 'png' : parsedFile.mimeType === 'image/webp' ? 'webp' : 'jpg';
     const generatedName = `${crypto.randomUUID()}_${safeFileName(parsedFile.originalName)}.${extension}`;
@@ -233,14 +233,14 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
       updated_at: new Date().toISOString(),
     };
 
-    await fs.writeFile(getMetadataPath(req.user.company_id), JSON.stringify(metadata, null, 2));
+    await fs.writeFile(getMetadataPath(req.companyId), JSON.stringify(metadata, null, 2));
 
     await writeAuditLog({
-      companyId: req.user.company_id,
+      companyId: req.companyId,
       userId: req.user.user_id,
       action: 'update',
       entityType: 'branding',
-      entityId: req.user.company_id,
+      entityId: req.companyId,
       meta: { file_name: generatedName },
     });
 
@@ -253,17 +253,17 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
 
 router.delete('/branding/logo', requirePermission('users_manage'), async (req, res) => {
   try {
-    const previous = await deleteCurrentLogo(req.user.company_id);
+    const previous = await deleteCurrentLogo(req.companyId);
     if (!previous) {
       return res.status(204).send();
     }
 
     await writeAuditLog({
-      companyId: req.user.company_id,
+      companyId: req.companyId,
       userId: req.user.user_id,
       action: 'delete',
       entityType: 'branding',
-      entityId: req.user.company_id,
+      entityId: req.companyId,
       meta: { file_name: previous.file_name },
     });
 
@@ -312,10 +312,10 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
   }
 
   const [accountsResult, categoriesResult, contactsResult, jobsResult] = await Promise.all([
-    query('SELECT id, name FROM accounts WHERE company_id = $1', [req.user.company_id]),
-    query('SELECT id, name FROM categories WHERE company_id = $1', [req.user.company_id]),
-    query('SELECT id, name FROM contacts WHERE company_id = $1', [req.user.company_id]),
-    query('SELECT id, name, title FROM jobs WHERE company_id = $1', [req.user.company_id]),
+    query('SELECT id, name FROM accounts WHERE company_id = $1', [req.companyId]),
+    query('SELECT id, name FROM categories WHERE company_id = $1', [req.companyId]),
+    query('SELECT id, name FROM contacts WHERE company_id = $1', [req.companyId]),
+    query('SELECT id, name, title FROM jobs WHERE company_id = $1', [req.companyId]),
   ]);
 
   const accountByName = new Map(accountsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
@@ -395,7 +395,7 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
         `INSERT INTO transactions (company_id, date, type, amount_total, description, category_id, contact_id, property_id, job_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id`,
-        [req.user.company_id, date, type, signedAmount, description || null, categoryId, contactId, null, jobId]
+        [req.companyId, date, type, signedAmount, description || null, categoryId, contactId, null, jobId]
       );
 
       for (const entry of accountEntries) {
@@ -405,7 +405,7 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
         );
         await client.query(
           'UPDATE accounts SET balance = balance + $1 WHERE id = $2 AND company_id = $3',
-          [getDirectionDelta(entry.direction, entry.amount), entry.account_id, req.user.company_id]
+          [getDirectionDelta(entry.direction, entry.amount), entry.account_id, req.companyId]
         );
       }
 
@@ -414,7 +414,7 @@ router.post('/movements/import-csv', requirePermission('users_manage'), rawUploa
 
     await client.query('COMMIT');
     await writeAuditLog({
-      companyId: req.user.company_id,
+      companyId: req.companyId,
       userId: req.user.user_id,
       action: 'import',
       entityType: 'movements',
