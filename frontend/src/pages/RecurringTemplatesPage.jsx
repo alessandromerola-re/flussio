@@ -37,6 +37,8 @@ const RecurringTemplatesPage = () => {
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState([]);
 
   const loadData = async () => {
     const [templatesData, categoriesData, contactsData, propertiesData, jobsData, accountsData] = await Promise.all([
@@ -110,6 +112,49 @@ const RecurringTemplatesPage = () => {
     }
   };
 
+
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const blob = await api.exportEntityCsv('recurring_templates');
+      downloadBlob(blob, 'recurring_templates.csv');
+    } catch (exportError) {
+      setError(getErrorMessage(t, exportError));
+    }
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0] || null;
+    setImportFile(file);
+    if (!file) {
+      setImportPreview([]);
+      return;
+    }
+    const text = await file.text();
+    setImportPreview(text.split(/\r?\n/).filter((line) => line.trim()).slice(0, 6));
+  };
+
+  const handleImportCsv = async () => {
+    if (!importFile) return;
+    try {
+      const out = await api.importEntityCsv('recurring_templates', importFile);
+      setMessage(`OK: ${out.ok} | creati: ${out.created} | aggiornati: ${out.updated} | errori: ${out.errors}`);
+      await loadData();
+    } catch (importError) {
+      setError(getErrorMessage(t, importError));
+    }
+  };
+
   const handleGenerateDue = async () => {
     try {
       const result = await api.generateRecurringDue();
@@ -131,7 +176,11 @@ const RecurringTemplatesPage = () => {
 
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
         {canPermission('write') && <button type="button" onClick={handleGenerateDue}>{t('buttons.generateDue')}</button>}
+        <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>
+        {canPermission('write') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
+        {canPermission('write') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={!importFile}>Importa CSV</button>}
       </div>
+      {importPreview.length > 0 && <pre className="card" style={{ maxHeight: 140, overflow: 'auto' }}>{importPreview.join('\n')}</pre>}
 
       <div className="grid-two">
         <form className="card" onSubmit={handleSave}>
