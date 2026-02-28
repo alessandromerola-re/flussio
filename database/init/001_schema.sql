@@ -32,6 +32,7 @@ CREATE TABLE accounts (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  external_id TEXT,
   type TEXT NOT NULL,
   opening_balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
   balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -43,6 +44,7 @@ CREATE TABLE categories (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  external_id TEXT,
   direction TEXT NOT NULL CHECK (direction IN ('income', 'expense')),
   parent_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   color TEXT,
@@ -54,6 +56,7 @@ CREATE TABLE contacts (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  external_id TEXT,
   email TEXT,
   phone TEXT,
   default_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
@@ -65,6 +68,7 @@ CREATE TABLE properties (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  external_id TEXT,
   notes TEXT,
   contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
@@ -91,6 +95,7 @@ CREATE TABLE recurring_templates (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
+  external_id TEXT,
   frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
   interval INTEGER NOT NULL DEFAULT 1,
   start_date DATE,
@@ -118,6 +123,7 @@ CREATE TABLE transactions (
   date DATE NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
   amount_total NUMERIC(12, 2) NOT NULL,
+  external_id TEXT,
   description TEXT,
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
@@ -210,6 +216,12 @@ CREATE INDEX idx_audit_company_created ON audit_log(company_id, created_at DESC)
 CREATE INDEX idx_password_reset_user ON password_reset_tokens(user_id, created_at DESC);
 CREATE INDEX idx_user_companies_company ON user_companies(company_id);
 CREATE INDEX idx_user_companies_user ON user_companies(user_id);
+CREATE UNIQUE INDEX idx_accounts_company_external_id ON accounts(company_id, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_categories_company_external_id ON categories(company_id, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_contacts_company_external_id ON contacts(company_id, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_properties_company_external_id ON properties(company_id, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_recurring_templates_company_external_id ON recurring_templates(company_id, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_transactions_company_external_id ON transactions(company_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX idx_contracts_company_property ON contracts(company_id, property_id);
 
 COMMIT;

@@ -86,6 +86,23 @@ psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/
 ```
 
 
+
+## CSV import/export (master data + movements)
+
+Supported entities:
+- `accounts`, `categories`, `contacts`, `jobs`, `properties`, `recurring_templates`, `transactions`
+
+Endpoints:
+- `GET /api/export/<entity>.csv`
+- `POST /api/import/<entity>` (multipart `file`)
+
+Rules:
+- UTF-8 CSV with header row
+- dates in `YYYY-MM-DD`
+- decimals with dot (`.`)
+- import mode is create/update by stable key (`external_id` or `code` for jobs)
+- transaction import resolves references by external key; invalid references are reported per-row in import summary.
+
 ## Movements filters (API)
 
 `GET /api/transactions` supports these query params:

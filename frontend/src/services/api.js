@@ -166,6 +166,12 @@ export const api = {
     const queryString = toQueryString(filters);
     return request(`/transactions/export${queryString}`, { responseType: 'blob', includeHeaders: true });
   },
+  exportEntityCsv: (entity) => request(`/export/${entity}.csv`, { responseType: 'blob', includeHeaders: true }),
+  importEntityCsv: (entity, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request(`/import/${entity}`, { method: 'POST', body: formData });
+  },
   createTransaction: (payload) => request('/transactions', { method: 'POST', body: JSON.stringify(payload) }),
   updateTransaction: (id, payload) => request(`/transactions/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),

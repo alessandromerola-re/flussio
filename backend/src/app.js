@@ -17,6 +17,7 @@ import recurringTemplatesRoutes from './routes/recurringTemplates.js';
 import usersRoutes from './routes/users.js';
 import scaffoldingRoutes from './routes/scaffolding.js';
 import settingsRoutes from './routes/settings.js';
+import importExportRoutes from './routes/importExport.js';
 import { authMiddleware } from './middleware/auth.js';
 import { companyContextMiddleware } from './middleware/companyContext.js';
 import { requireMethodPermission } from './middleware/permissions.js';
@@ -65,6 +66,8 @@ app.use('/api/recurring-templates', authMiddleware, companyContextMiddleware, re
 app.use('/api/users', authMiddleware, companyContextMiddleware, usersRoutes);
 app.use('/api/scaffolding', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read' }), scaffoldingRoutes);
 app.use('/api/settings', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read' }), settingsRoutes);
+app.use('/api/import', authMiddleware, companyContextMiddleware, importExportRoutes);
+app.use('/api/export', authMiddleware, companyContextMiddleware, importExportRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error_code: 'NOT_FOUND' });
