@@ -43,6 +43,10 @@ const RegistryPage = () => {
   const [loadError, setLoadError] = useState('');
   const [jobFormError, setJobFormError] = useState('');
   const [createModalTab, setCreateModalTab] = useState('');
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importSummary, setImportSummary] = useState('');
 
   const loadData = async () => {
     setLoadError('');
@@ -210,6 +214,61 @@ const RegistryPage = () => {
     setProperties(await api.getProperties());
   };
 
+
+  const entityForTab = {
+    accounts: 'accounts',
+    categories: 'categories',
+    contacts: 'contacts',
+    jobs: 'jobs',
+    properties: 'properties',
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const entity = entityForTab[tab];
+      const blob = await api.exportEntityCsv(entity);
+      downloadBlob(blob, `${entity}.csv`);
+    } catch (error) {
+      setLoadError(getErrorMessage(t, error));
+    }
+  };
+
+  const handleImportFileChange = async (event) => {
+    const file = event.target.files?.[0] || null;
+    setImportFile(file);
+    setImportSummary('');
+    if (!file) {
+      setImportPreview([]);
+      return;
+    }
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter((line) => line.trim()).slice(0, 6);
+    setImportPreview(lines);
+  };
+
+  const submitImportCsv = async () => {
+    if (!importFile) return;
+    try {
+      const entity = entityForTab[tab];
+      const result = await api.importEntityCsv(entity, importFile);
+      setImportSummary(`OK: ${result.ok} | creati: ${result.created} | aggiornati: ${result.updated} | errori: ${result.errors}`);
+      await loadData();
+    } catch (error) {
+      setImportSummary(getErrorMessage(t, error));
+    }
+  };
+
   const handleDelete = async (type, id) => {
     if (!window.confirm(t('modals.confirmDelete'))) return;
     const actions = {
@@ -227,11 +286,15 @@ const RegistryPage = () => {
     <div className="page">
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
-        {canPermission('write') && (
-          <button type="button" className="desktop-only registry-new-button" onClick={() => openCreateModal(tab)}>
-            {t('buttons.new')}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>
+          {canPermission('write') && <button type="button" className="ghost" onClick={() => setImportModalOpen(true)}>Importa CSV</button>}
+          {canPermission('write') && (
+            <button type="button" className="desktop-only registry-new-button" onClick={() => openCreateModal(tab)}>
+              {t('buttons.new')}
+            </button>
+          )}
+        </div>
       </div>
 
       {loadError && <div className="error">{loadError}</div>}
@@ -470,6 +533,24 @@ const RegistryPage = () => {
           </ul>
         </div>
       )}
+
+
+      <Modal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)}>
+        <div className="modal-content">
+          <h3>Importa CSV ({entityForTab[tab]})</h3>
+          <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} />
+          {importPreview.length > 0 && (
+            <pre style={{ maxHeight: 160, overflow: 'auto', background: '#f7f7f7', padding: 8, marginTop: 8 }}>
+              {importPreview.join('\n')}
+            </pre>
+          )}
+          {importSummary && <div className="muted" style={{ marginTop: 8 }}>{importSummary}</div>}
+          <div className="modal-actions">
+            <button type="button" onClick={submitImportCsv} disabled={!importFile}>Importa (Crea/Aggiorna)</button>
+            <button type="button" className="ghost" onClick={() => setImportModalOpen(false)}>{t('buttons.close')}</button>
+          </div>
+        </div>
+      </Modal>
 
       {canPermission('write') && <FloatingAddButton onClick={() => openCreateModal(tab)} label={t('buttons.new')} />}
 

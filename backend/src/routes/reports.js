@@ -68,7 +68,7 @@ router.get('/job/:jobId/summary', async (req, res) => {
   }
 
   try {
-    const job = await getJobForCompany(jobId, req.user.company_id);
+    const job = await getJobForCompany(jobId, req.companyId);
     if (!job) {
       return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
@@ -86,7 +86,7 @@ router.get('/job/:jobId/summary', async (req, res) => {
         AND t.type IN ('income', 'expense')
         ${whereDateSql}
       `,
-      [req.user.company_id, jobId, ...dateFilters.params]
+      [req.companyId, jobId, ...dateFilters.params]
     );
 
     const breakdownResult = await query(
@@ -105,7 +105,7 @@ router.get('/job/:jobId/summary', async (req, res) => {
       GROUP BY t.category_id, c.name, c.direction, t.type
       ORDER BY direction, category_name
       `,
-      [req.user.company_id, jobId, ...dateFilters.params]
+      [req.companyId, jobId, ...dateFilters.params]
     );
 
     const incomeCents = Number(totalsResult.rows[0]?.income_cents || 0);
@@ -138,7 +138,7 @@ router.get('/job/:jobId/export.csv', requirePermission('export'), async (req, re
   }
 
   try {
-    const job = await getJobForCompany(jobId, req.user.company_id);
+    const job = await getJobForCompany(jobId, req.companyId);
     if (!job) {
       return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
@@ -173,7 +173,7 @@ router.get('/job/:jobId/export.csv', requirePermission('export'), async (req, re
         ${whereDateSql}
       ORDER BY t.date DESC, t.id DESC
       `,
-      [req.user.company_id, jobId, ...dateFilters.params]
+      [req.companyId, jobId, ...dateFilters.params]
     );
 
     const header = 'date;type;amount_total;account_name;category;contact;commessa;description';

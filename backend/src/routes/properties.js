@@ -42,7 +42,7 @@ router.get('/', async (req, res) => {
       WHERE p.company_id = $1
       ORDER BY p.name
       `,
-      [req.user.company_id]
+      [req.companyId]
     );
     return res.json(result.rows);
   } catch (error) {
@@ -53,7 +53,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const payload = normalizePropertyPayload(req.body);
-  if (!(await validatePropertyPayload(payload, req.user.company_id))) {
+  if (!(await validatePropertyPayload(payload, req.companyId))) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
   try {
@@ -63,7 +63,7 @@ router.post('/', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
       `,
-      [req.user.company_id, payload.name, payload.notes, payload.contact_id, payload.is_active]
+      [req.companyId, payload.name, payload.notes, payload.contact_id, payload.is_active]
     );
     return res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -76,7 +76,7 @@ router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const payload = normalizePropertyPayload(req.body);
 
-  if (!(await validatePropertyPayload(payload, req.user.company_id))) {
+  if (!(await validatePropertyPayload(payload, req.companyId))) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
@@ -88,7 +88,7 @@ router.put('/:id', async (req, res) => {
       WHERE id = $5 AND company_id = $6
       RETURNING *
       `,
-      [payload.name, payload.notes, payload.contact_id, payload.is_active, id, req.user.company_id]
+      [payload.name, payload.notes, payload.contact_id, payload.is_active, id, req.companyId]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
@@ -105,7 +105,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const result = await query('DELETE FROM properties WHERE id = $1 AND company_id = $2', [
       id,
-      req.user.company_id,
+      req.companyId,
     ]);
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
