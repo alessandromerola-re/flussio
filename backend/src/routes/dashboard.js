@@ -109,7 +109,7 @@ router.get('/summary', async (req, res) => {
         WHERE t.company_id = $1
           AND t.date BETWEEN $2 AND $3
         `,
-        [req.user.company_id, range.from, range.to]
+        [req.companyId, range.from, range.to]
       ),
       query(
         `
@@ -121,7 +121,7 @@ router.get('/summary', async (req, res) => {
         WHERE t.company_id = $1
           AND t.date BETWEEN $2 AND $3
         `,
-        [req.user.company_id, previousRange.from, previousRange.to]
+        [req.companyId, previousRange.from, previousRange.to]
       ),
     ]);
 
@@ -142,7 +142,7 @@ router.get('/summary', async (req, res) => {
       GROUP BY 1
       ORDER BY 1
       `,
-      [req.user.company_id, range.from, range.to]
+      [req.companyId, range.from, range.to]
     );
 
     const byBucketMap = new Map(byBucketResult.rows.map((row) => [row.bucket, row]));
@@ -259,7 +259,7 @@ router.post('/pie', async (req, res) => {
       GROUP BY 1, 2
       ORDER BY value_cents DESC
       `,
-      [req.user.company_id, range.from, range.to, kind]
+      [req.companyId, range.from, range.to, kind]
     );
 
     const allRows = result.rows.map((row) => ({
