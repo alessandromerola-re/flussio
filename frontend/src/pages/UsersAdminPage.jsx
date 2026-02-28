@@ -17,6 +17,13 @@ const UsersAdminPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [companies, setCompanies] = useState([]);
 
+  // Backward compatibility guard: older cached bundles still referenced company
+  // creation local state from an intermediate Users page implementation.
+  // Keep these bindings to avoid runtime crashes with stale JS chunks.
+  const [companyName, setCompanyName] = useState('');
+  void companyName;
+  void setCompanyName;
+
   // Backward compatibility guard: older cached bundles referenced this handler
   // while company creation has been moved to Settings page only.
   const handleCreateCompany = (event) => {
