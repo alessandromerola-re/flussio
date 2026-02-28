@@ -17,6 +17,13 @@ const UsersAdminPage = () => {
   const [companyName, setCompanyName] = useState('');
   const isSuperAdmin = localStorage.getItem('flussio_role') === 'super_admin';
 
+  // Backward-compatibility guard: older cached bundles referenced a company-creation
+  // handler in this page. Company creation now lives only in Settings (Super Admin).
+  // Keeping this no-op prevents runtime crashes if stale JSX is still served.
+  const handleCreateCompany = (event) => {
+    event?.preventDefault?.();
+  };
+
   const loadUsers = async () => {
     if (!canPermission('users_manage')) return;
     setUsers(await api.getUsers());
