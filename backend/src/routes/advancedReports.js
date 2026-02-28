@@ -10,7 +10,7 @@ const router = express.Router();
 const isSavedReportsTableMissing = (error) => error?.code === '42P01';
 
 router.post('/run', async (req, res) => {
-  const normalized = validateAndNormalizeSpec(req.body, req.user.company_id);
+  const normalized = validateAndNormalizeSpec(req.body, req.companyId);
   if (normalized.error) {
     return sendError(res, 400, normalized.error.code, 'Spec report non valida.', { field: normalized.error.field });
   }
@@ -39,7 +39,7 @@ router.post('/run', async (req, res) => {
 });
 
 router.post('/export.csv', requirePermission('export'), async (req, res) => {
-  const normalized = validateAndNormalizeSpec(req.body, req.user.company_id);
+  const normalized = validateAndNormalizeSpec(req.body, req.companyId);
   if (normalized.error) {
     return sendError(res, 400, normalized.error.code, 'Spec report non valida.', { field: normalized.error.field });
   }
@@ -69,7 +69,7 @@ router.get('/saved', async (req, res) => {
         AND (is_shared = true OR created_by_user_id = $2)
       ORDER BY updated_at DESC, id DESC
       `,
-      [req.user.company_id, req.user.user_id]
+      [req.companyId, req.user.user_id]
     );
     return res.json(result.rows);
   } catch (error) {
@@ -83,7 +83,7 @@ router.get('/saved', async (req, res) => {
 
 router.post('/saved', requirePermission('export'), async (req, res) => {
   const { name, is_shared: isSharedInput } = req.body || {};
-  const normalized = validateAndNormalizeSpec(req.body?.spec_json, req.user.company_id);
+  const normalized = validateAndNormalizeSpec(req.body?.spec_json, req.companyId);
   if (!name || typeof name !== 'string' || normalized.error) {
     return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Dati report non validi.');
   }
@@ -95,7 +95,7 @@ router.post('/saved', requirePermission('export'), async (req, res) => {
       VALUES ($1, $2, $3::jsonb, $4, $5)
       RETURNING id, name, is_shared, created_at, updated_at, created_by_user_id
       `,
-      [req.user.company_id, name.trim(), JSON.stringify(normalized), req.user.user_id, Boolean(isSharedInput)]
+      [req.companyId, name.trim(), JSON.stringify(normalized), req.user.user_id, Boolean(isSharedInput)]
     );
     return res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -110,7 +110,7 @@ router.post('/saved', requirePermission('export'), async (req, res) => {
 router.put('/saved/:id', requirePermission('export'), async (req, res) => {
   const id = Number(req.params.id);
   const { name, is_shared: isSharedInput } = req.body || {};
-  const normalized = validateAndNormalizeSpec(req.body?.spec_json, req.user.company_id);
+  const normalized = validateAndNormalizeSpec(req.body?.spec_json, req.companyId);
   if (!Number.isInteger(id) || !name || typeof name !== 'string' || normalized.error) {
     return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Dati report non validi.');
   }
@@ -118,7 +118,7 @@ router.put('/saved/:id', requirePermission('export'), async (req, res) => {
   try {
     const existing = await query(
       'SELECT id, created_by_user_id FROM saved_reports WHERE id = $1 AND company_id = $2 LIMIT 1',
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     if (!existing.rowCount) {
@@ -141,7 +141,7 @@ router.put('/saved/:id', requirePermission('export'), async (req, res) => {
       WHERE id = $4 AND company_id = $5
       RETURNING id, name, is_shared, created_at, updated_at, created_by_user_id
       `,
-      [name.trim(), JSON.stringify(normalized), Boolean(isSharedInput), id, req.user.company_id]
+      [name.trim(), JSON.stringify(normalized), Boolean(isSharedInput), id, req.companyId]
     );
 
     return res.json(result.rows[0]);
@@ -163,7 +163,7 @@ router.delete('/saved/:id', requirePermission('export'), async (req, res) => {
   try {
     const existing = await query(
       'SELECT id, created_by_user_id FROM saved_reports WHERE id = $1 AND company_id = $2 LIMIT 1',
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     if (!existing.rowCount) {
@@ -176,7 +176,7 @@ router.delete('/saved/:id', requirePermission('export'), async (req, res) => {
       return sendError(res, 403, 'FORBIDDEN', 'Operazione non consentita.');
     }
 
-    await query('DELETE FROM saved_reports WHERE id = $1 AND company_id = $2', [id, req.user.company_id]);
+    await query('DELETE FROM saved_reports WHERE id = $1 AND company_id = $2', [id, req.companyId]);
     return res.status(204).send();
   } catch (error) {
     if (isSavedReportsTableMissing(error)) {

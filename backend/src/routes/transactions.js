@@ -279,7 +279,7 @@ const validateTransactionRefs = async (client, companyId, { category_id, contact
 };
 
 router.get('/export', async (req, res) => {
-  const filters = buildTransactionsFilters(req.query, req.user.company_id, {
+  const filters = buildTransactionsFilters(req.query, req.companyId, {
     defaultLimit: 5000,
     maxLimit: 5000,
   });
@@ -333,7 +333,7 @@ router.get('/export', async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-  const filters = buildTransactionsFilters(req.query, req.user.company_id);
+  const filters = buildTransactionsFilters(req.query, req.companyId);
   if (filters.error) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
@@ -427,13 +427,13 @@ router.post('/', async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
-    await validateTransactionRefs(client, req.user.company_id, {
+    await validateTransactionRefs(client, req.companyId, {
       category_id,
       contact_id,
       property_id,
       job_id,
     });
-    await lockCompanyAccounts(client, req.user.company_id, uniqueAccountIds);
+    await lockCompanyAccounts(client, req.companyId, uniqueAccountIds);
 
     const transactionResult = await client.query(
       `
@@ -442,7 +442,7 @@ router.post('/', async (req, res) => {
       RETURNING *
       `,
       [
-        req.user.company_id,
+        req.companyId,
         date,
         type,
         normalizedAmountTotal,
@@ -471,12 +471,12 @@ router.post('/', async (req, res) => {
         SET balance = balance + $1
         WHERE id = $2 AND company_id = $3
         `,
-        [getAccountDelta(account.direction, account.amount), account.account_id, req.user.company_id]
+        [getAccountDelta(account.direction, account.amount), account.account_id, req.companyId]
       );
     }
 
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'create', entityType: 'movements', entityId: transaction.id, meta: { type: transaction.type } });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'movements', entityId: transaction.id, meta: { type: transaction.type } });
     return res.status(201).json(transaction);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -562,7 +562,7 @@ router.put('/:id', async (req, res) => {
 
     const transactionResult = await client.query(
       'SELECT id FROM transactions WHERE id = $1 AND company_id = $2 FOR UPDATE',
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
     if (transactionResult.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -577,20 +577,20 @@ router.put('/:id', async (req, res) => {
       WHERE ta.transaction_id = $1 AND a.company_id = $2
       ORDER BY ta.account_id
       `,
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     const oldAccountIds = currentEntriesResult.rows.map((entry) => entry.account_id);
     const newAccountIds = parsedAccounts.map((entry) => entry.account_id);
     const allAccountIds = [...new Set([...oldAccountIds, ...newAccountIds])].sort((a, b) => a - b);
 
-    await validateTransactionRefs(client, req.user.company_id, {
+    await validateTransactionRefs(client, req.companyId, {
       category_id,
       contact_id,
       property_id,
       job_id,
     });
-    await lockCompanyAccounts(client, req.user.company_id, allAccountIds);
+    await lockCompanyAccounts(client, req.companyId, allAccountIds);
 
     for (const entry of currentEntriesResult.rows) {
       await client.query(
@@ -599,7 +599,7 @@ router.put('/:id', async (req, res) => {
         SET balance = balance - $1
         WHERE id = $2 AND company_id = $3
         `,
-        [getAccountDelta(entry.direction, Number(entry.amount)), entry.account_id, req.user.company_id]
+        [getAccountDelta(entry.direction, Number(entry.amount)), entry.account_id, req.companyId]
       );
     }
 
@@ -627,7 +627,7 @@ router.put('/:id', async (req, res) => {
         property_id,
         job_id,
         id,
-        req.user.company_id,
+        req.companyId,
       ]
     );
 
@@ -648,12 +648,12 @@ router.put('/:id', async (req, res) => {
         SET balance = balance + $1
         WHERE id = $2 AND company_id = $3
         `,
-        [getAccountDelta(account.direction, account.amount), account.account_id, req.user.company_id]
+        [getAccountDelta(account.direction, account.amount), account.account_id, req.companyId]
       );
     }
 
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'update', entityType: 'movements', entityId: id, meta: { type } });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'update', entityType: 'movements', entityId: id, meta: { type } });
     return res.json(updatedResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -675,7 +675,7 @@ router.delete('/:id', async (req, res) => {
 
     const transactionResult = await client.query(
       'SELECT id FROM transactions WHERE id = $1 AND company_id = $2 FOR UPDATE',
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
     if (transactionResult.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -690,15 +690,15 @@ router.delete('/:id', async (req, res) => {
       WHERE ta.transaction_id = $1 AND a.company_id = $2
       ORDER BY ta.account_id
       `,
-      [id, req.user.company_id]
+      [id, req.companyId]
     );
 
     const accountIds = [...new Set(entriesResult.rows.map((entry) => entry.account_id))];
-    await lockCompanyAccounts(client, req.user.company_id, accountIds);
+    await lockCompanyAccounts(client, req.companyId, accountIds);
 
     await client.query('DELETE FROM transactions WHERE id = $1 AND company_id = $2', [
       id,
-      req.user.company_id,
+      req.companyId,
     ]);
 
     for (const entry of entriesResult.rows) {
@@ -708,12 +708,12 @@ router.delete('/:id', async (req, res) => {
         SET balance = balance - $1
         WHERE id = $2 AND company_id = $3
         `,
-        [getAccountDelta(entry.direction, Number(entry.amount)), entry.account_id, req.user.company_id]
+        [getAccountDelta(entry.direction, Number(entry.amount)), entry.account_id, req.companyId]
       );
     }
 
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.user.company_id, userId: req.user.user_id, action: 'delete', entityType: 'movements', entityId: id, meta: {} });
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'movements', entityId: id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     await client.query('ROLLBACK');

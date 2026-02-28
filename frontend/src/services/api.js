@@ -2,6 +2,35 @@ const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export const getToken = () => localStorage.getItem('flussio_token');
 export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
+export const getActiveCompanyId = () => localStorage.getItem('flussio_company_id');
+
+export const setActiveCompanyId = (id) => {
+  if (id == null || id === '') {
+    localStorage.removeItem('flussio_company_id');
+    return;
+  }
+  localStorage.setItem('flussio_company_id', String(id));
+};
+
+
+const parseJwtPayload = (token) => {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+};
+
+export const getIsSuperAdmin = () => {
+  const payload = parseJwtPayload(getToken());
+  return payload?.is_super_admin === true;
+};
 
 export const setToken = (token, role = null) => {
   localStorage.setItem('flussio_token', token);
@@ -13,6 +42,8 @@ export const setToken = (token, role = null) => {
 export const clearToken = () => {
   localStorage.removeItem('flussio_token');
   localStorage.removeItem('flussio_role');
+  localStorage.removeItem('flussio_company_id');
+  localStorage.removeItem('flussio_companies');
 };
 
 const toQueryString = (params = {}) => {
@@ -39,6 +70,11 @@ const request = async (path, options = {}) => {
   const token = getToken();
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+  }
+
+  const activeCompanyId = getActiveCompanyId();
+  if (activeCompanyId) {
+    headers['X-Company-Id'] = activeCompanyId;
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
@@ -90,6 +126,8 @@ const request = async (path, options = {}) => {
 
 export const api = {
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  getCompanies: () => request('/companies'),
+  createCompany: (payload) => request('/companies', { method: 'POST', body: JSON.stringify(payload) }),
   getAccounts: () => request('/accounts'),
   createAccount: (payload) => request('/accounts', { method: 'POST', body: JSON.stringify(payload) }),
   updateAccount: (id, payload) => request(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
@@ -148,6 +186,12 @@ export const api = {
     const queryString = toQueryString(filters);
     return request(`/transactions/export${queryString}`, { responseType: 'blob', includeHeaders: true });
   },
+  exportEntityCsv: (entity) => request(`/export/${entity}.csv`, { responseType: 'blob', includeHeaders: true }),
+  importEntityCsv: (entity, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request(`/import/${entity}`, { method: 'POST', body: formData });
+  },
   createTransaction: (payload) => request('/transactions', { method: 'POST', body: JSON.stringify(payload) }),
   updateTransaction: (id, payload) => request(`/transactions/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteTransaction: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
@@ -162,6 +206,7 @@ export const api = {
   getDashboardSummary: (params = {}) => request(`/dashboard/summary${toQueryString(params)}`),
   getDashboardPie: (payload) => request('/dashboard/pie', { method: 'POST', body: JSON.stringify(payload) }),
   getUsers: () => request('/users'),
+  getUser: (id) => request(`/users/${id}`),
   createUser: (payload) => request('/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (id, payload) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   createResetToken: (id) => request(`/users/${id}/reset-password-token`, { method: 'POST' }),

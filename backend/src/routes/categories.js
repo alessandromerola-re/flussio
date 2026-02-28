@@ -6,7 +6,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   const { direction } = req.query;
   try {
-    const params = [req.user.company_id];
+    const params = [req.companyId];
     let sql =
       'SELECT id, name, direction, parent_id, color, is_active FROM categories WHERE company_id = $1';
     if (direction) {
@@ -30,7 +30,7 @@ router.post('/', async (req, res) => {
   try {
     const result = await query(
       'INSERT INTO categories (company_id, name, direction, parent_id, color, is_active) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [req.user.company_id, name, direction, parent_id, color, is_active]
+      [req.companyId, name, direction, parent_id, color, is_active]
     );
     return res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -45,7 +45,7 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await query(
       'UPDATE categories SET name = $1, direction = $2, parent_id = $3, color = $4, is_active = $5 WHERE id = $6 AND company_id = $7 RETURNING *',
-      [name, direction, parent_id, color, is_active, id, req.user.company_id]
+      [name, direction, parent_id, color, is_active, id, req.companyId]
     );
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
@@ -62,7 +62,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const result = await query('DELETE FROM categories WHERE id = $1 AND company_id = $2', [
       id,
-      req.user.company_id,
+      req.companyId,
     ]);
     if (result.rowCount === 0) {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
