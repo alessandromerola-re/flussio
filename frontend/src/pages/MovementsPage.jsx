@@ -177,10 +177,6 @@ const MovementsPage = () => {
       return [];
     }
 
-    if (form.type === 'income' || form.type === 'expense') {
-      return categories.filter((cat) => normalizeDirection(cat.direction) === form.type);
-    }
-
     return categories.filter((cat) => ['income', 'expense'].includes(normalizeDirection(cat.direction)));
   }, [categories, form.type]);
 
@@ -204,9 +200,14 @@ const MovementsPage = () => {
       }
 
       visited.add(category.id);
+      const direction = normalizeDirection(category.direction);
+      const directionLabel = direction === 'income' || direction === 'expense'
+        ? ` (${t(`pages.movements.${direction}`)})`
+        : '';
+
       options.push({
         id: category.id,
-        label: `${'— '.repeat(depth)}${category.name}`,
+        label: `${'— '.repeat(depth)}${category.name}${directionLabel}`,
       });
 
       const children = byParentId.get(category.id) || [];
@@ -227,7 +228,7 @@ const MovementsPage = () => {
     }
 
     return options;
-  }, [movementCategories]);
+  }, [movementCategories, t]);
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -245,7 +246,7 @@ const MovementsPage = () => {
     setForm((prev) => ({
       ...prev,
       category_id: value,
-      type: prev.type || (selectedDirection === 'income' || selectedDirection === 'expense' ? selectedDirection : prev.type),
+      type: selectedDirection === 'income' || selectedDirection === 'expense' ? selectedDirection : prev.type,
     }));
   };
 
