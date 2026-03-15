@@ -11,7 +11,7 @@ import FloatingAddButton from '../components/FloatingAddButton.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
-  type: '',
+  type: 'expense',
   amount_total: '',
   description: '',
   account_in: '',
