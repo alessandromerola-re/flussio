@@ -11,7 +11,7 @@ import FloatingAddButton from '../components/FloatingAddButton.jsx';
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
-  type: '',
+  type: 'expense',
   amount_total: '',
   description: '',
   account_in: '',
@@ -281,7 +281,7 @@ const MovementsPage = () => {
     setShowContactResults(false);
     if (contact.default_category_id && form.type !== 'transfer') {
       const match = categories.find((cat) => cat.id === contact.default_category_id);
-      if (match && match.direction === form.type) {
+      if (match && normalizeDirection(match.direction) === form.type) {
         handleChange('category_id', contact.default_category_id);
       }
     }
