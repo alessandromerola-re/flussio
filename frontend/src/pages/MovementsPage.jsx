@@ -173,11 +173,11 @@ const MovementsPage = () => {
   }, [selected]);
 
   const movementCategories = useMemo(() => {
-    if (form.type === 'income' || form.type === 'expense') {
-      return categories.filter((cat) => normalizeDirection(cat.direction) === form.type);
+    if (form.type === 'transfer') {
+      return [];
     }
 
-    return [];
+    return categories.filter((cat) => ['income', 'expense'].includes(normalizeDirection(cat.direction)));
   }, [categories, form.type]);
 
   const movementCategoryOptions = useMemo(() => {
@@ -200,9 +200,14 @@ const MovementsPage = () => {
       }
 
       visited.add(category.id);
+      const direction = normalizeDirection(category.direction);
+      const directionLabel = direction === 'income' || direction === 'expense'
+        ? ` (${t(`pages.movements.${direction}`)})`
+        : '';
+
       options.push({
         id: category.id,
-        label: `${'— '.repeat(depth)}${category.name}`,
+        label: `${'— '.repeat(depth)}${category.name}${directionLabel}`,
       });
 
       const children = byParentId.get(category.id) || [];
@@ -223,10 +228,26 @@ const MovementsPage = () => {
     }
 
     return options;
-  }, [movementCategories]);
+  }, [movementCategories, t]);
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCategoryChange = (value) => {
+    if (!value) {
+      handleChange('category_id', '');
+      return;
+    }
+
+    const selectedCategory = categories.find((cat) => String(cat.id) === String(value));
+    const selectedDirection = normalizeDirection(selectedCategory?.direction);
+
+    setForm((prev) => ({
+      ...prev,
+      category_id: value,
+      type: selectedDirection === 'income' || selectedDirection === 'expense' ? selectedDirection : prev.type,
+    }));
   };
 
   const handleTypeChange = (value) => {
@@ -281,7 +302,7 @@ const MovementsPage = () => {
     setShowContactResults(false);
     if (contact.default_category_id && form.type !== 'transfer') {
       const match = categories.find((cat) => cat.id === contact.default_category_id);
-      if (match && match.direction === form.type) {
+      if (match && normalizeDirection(match.direction) === form.type) {
         handleChange('category_id', contact.default_category_id);
       }
     }
@@ -698,7 +719,8 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.type')}
-              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)}>
+              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)} required>
+                <option value="" disabled>{t('forms.select')}</option>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -762,7 +784,7 @@ const MovementsPage = () => {
             {form.type !== 'transfer' && (
               <label>
                 {t('pages.movements.category')}
-                <select value={form.category_id} onChange={(event) => handleChange('category_id', event.target.value)}>
+                <select value={form.category_id} onChange={(event) => handleCategoryChange(event.target.value)}>
                   <option value="">{t('common.none')}</option>
                   {movementCategoryOptions.map((category) => (
                     <option key={category.id} value={category.id}>{category.label}</option>
