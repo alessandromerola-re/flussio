@@ -305,5 +305,6 @@
   "pages.users.editUser": "Edit user",
   "pages.users.companyAccess": "Company access",
   "pages.users.selectCompany": "Select company",
-  "pages.users.addCompanyAccess": "Add company access"
+  "pages.users.addCompanyAccess": "Add company access",
+  "forms.select": "Select..."
 }

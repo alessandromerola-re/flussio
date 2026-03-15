@@ -305,5 +305,6 @@
   "pages.users.editUser": "Modifica utente",
   "pages.users.companyAccess": "Accesso aziende",
   "pages.users.selectCompany": "Seleziona azienda",
-  "pages.users.addCompanyAccess": "Aggiungi accesso azienda"
+  "pages.users.addCompanyAccess": "Aggiungi accesso azienda",
+  "forms.select": "Seleziona..."
 }
