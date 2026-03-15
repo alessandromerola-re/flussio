@@ -173,11 +173,15 @@ const MovementsPage = () => {
   }, [selected]);
 
   const movementCategories = useMemo(() => {
+    if (form.type === 'transfer') {
+      return [];
+    }
+
     if (form.type === 'income' || form.type === 'expense') {
       return categories.filter((cat) => normalizeDirection(cat.direction) === form.type);
     }
 
-    return [];
+    return categories.filter((cat) => ['income', 'expense'].includes(normalizeDirection(cat.direction)));
   }, [categories, form.type]);
 
   const movementCategoryOptions = useMemo(() => {
@@ -227,6 +231,22 @@ const MovementsPage = () => {
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCategoryChange = (value) => {
+    if (!value) {
+      handleChange('category_id', '');
+      return;
+    }
+
+    const selectedCategory = categories.find((cat) => String(cat.id) === String(value));
+    const selectedDirection = normalizeDirection(selectedCategory?.direction);
+
+    setForm((prev) => ({
+      ...prev,
+      category_id: value,
+      type: prev.type || (selectedDirection === 'income' || selectedDirection === 'expense' ? selectedDirection : prev.type),
+    }));
   };
 
   const handleTypeChange = (value) => {
@@ -698,7 +718,8 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.type')}
-              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)}>
+              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)} required>
+                <option value="" disabled>{t('forms.select')}</option>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -762,7 +783,7 @@ const MovementsPage = () => {
             {form.type !== 'transfer' && (
               <label>
                 {t('pages.movements.category')}
-                <select value={form.category_id} onChange={(event) => handleChange('category_id', event.target.value)}>
+                <select value={form.category_id} onChange={(event) => handleCategoryChange(event.target.value)}>
                   <option value="">{t('common.none')}</option>
                   {movementCategoryOptions.map((category) => (
                     <option key={category.id} value={category.id}>{category.label}</option>
