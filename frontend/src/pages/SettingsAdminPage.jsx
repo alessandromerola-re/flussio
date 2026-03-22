@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, getIsSuperAdmin, getRole } from '../services/api.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
@@ -9,12 +9,15 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const { t } = useTranslation();
   const [hasLogo, setHasLogo] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const previewUrlRef = useRef('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [brandingLoading, setBrandingLoading] = useState(false);
   const [csvFile, setCsvFile] = useState(null);
   const [csvMessage, setCsvMessage] = useState('');
   const [csvError, setCsvError] = useState('');
+  const logoInputRef = useRef(null);
   const [companies, setCompanies] = useState([]);
   const [companyName, setCompanyName] = useState('');
   const [companySeedDefaults, setCompanySeedDefaults] = useState(true);
@@ -41,10 +44,14 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   };
 
   useEffect(() => {
+    previewUrlRef.current = previewUrl;
+  }, [previewUrl]);
+
+  useEffect(() => {
     loadBranding().catch((loadError) => setError(getErrorMessage(t, loadError)));
     loadCompanies().catch((loadError) => setCompanyError(getErrorMessage(t, loadError)));
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
 
@@ -63,14 +70,20 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
       return;
     }
 
+    setBrandingLoading(true);
     try {
       await api.uploadBrandLogo(selectedFile);
       await loadBranding();
       setSelectedFile(null);
+      if (logoInputRef.current) {
+        logoInputRef.current.value = '';
+      }
       setMessage(t('pages.settings.saved'));
       onBrandingChanged?.();
     } catch (uploadError) {
       setError(getErrorMessage(t, uploadError));
+    } finally {
+      setBrandingLoading(false);
     }
   };
 
@@ -128,13 +141,20 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const handleDelete = async () => {
     setError('');
     setMessage('');
+    setBrandingLoading(true);
     try {
       await api.deleteBrandLogo();
       await loadBranding();
+      setSelectedFile(null);
+      if (logoInputRef.current) {
+        logoInputRef.current.value = '';
+      }
       setMessage(t('pages.settings.deleted'));
       onBrandingChanged?.();
     } catch (deleteError) {
       setError(getErrorMessage(t, deleteError));
+    } finally {
+      setBrandingLoading(false);
     }
   };
 
@@ -154,11 +174,22 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
         <form onSubmit={handleUpload}>
           <label>
             Logo
-            <input type="file" accept="image/png,image/jpeg,image/webp,image/*" onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} />
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+              onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+            />
           </label>
           <div className="row-actions">
-            <button type="submit">{t('pages.settings.uploadLogo')}</button>
-            {hasLogo && <button type="button" className="danger" onClick={handleDelete}>{t('pages.settings.removeLogo')}</button>}
+            <button type="submit" disabled={!selectedFile || brandingLoading}>
+              {brandingLoading ? t('common.loading') : t('pages.settings.uploadLogo')}
+            </button>
+            {hasLogo && (
+              <button type="button" className="danger" onClick={handleDelete} disabled={brandingLoading}>
+                {t('pages.settings.removeLogo')}
+              </button>
+            )}
           </div>
         </form>
 
