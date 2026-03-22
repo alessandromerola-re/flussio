@@ -177,6 +177,10 @@ const MovementsPage = () => {
       return [];
     }
 
+    if (form.type === 'income' || form.type === 'expense') {
+      return categories.filter((cat) => normalizeDirection(cat.direction) === form.type);
+    }
+
     return categories.filter((cat) => ['income', 'expense'].includes(normalizeDirection(cat.direction)));
   }, [categories, form.type]);
 
