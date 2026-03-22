@@ -292,7 +292,7 @@
   "pages.dashboard.topExpensesByCategory": "Top 10 expenses by category",
   "pages.dashboard.netMonthlyTrend": "Monthly net trend",
   "pages.login.welcomeTitle": "Welcome to Flussio",
-  "pages.login.welcomeText": "Manage transactions, reports and registries with a mobile-first workflow.",
+  "pages.login.welcomeText": "Manage transactions, reports and registries in a simple, collaborative way.",
   "forms.rememberMe": "Remember me",
   "forms.forgotPassword": "Forgot password?",
   "pages.users.status": "Status",
@@ -306,5 +306,16 @@
   "pages.users.companyAccess": "Company access",
   "pages.users.selectCompany": "Select company",
   "pages.users.addCompanyAccess": "Add company access",
-  "forms.select": "Select..."
+  "forms.select": "Select...",
+  "pages.login.protectedBadge": "Protected service",
+  "pages.login.supportText": "A reliable workspace for teams and administration, designed to stay clear on desktop and immediate on mobile.",
+  "pages.login.insightLabel": "Secure access",
+  "pages.login.insightText": "Credentials and session handling stay streamlined for quick, controlled sign-in.",
+  "pages.login.firstAccessTitle": "First time on Flussio?",
+  "pages.login.firstAccessText": "Sign in with the credentials provided by your administrator.",
+  "pages.login.privacy": "Privacy",
+  "pages.login.support": "Support",
+  "pages.login.footerLabel": "Support links",
+  "forms.showPassword": "Show",
+  "forms.hidePassword": "Hide"
 }
