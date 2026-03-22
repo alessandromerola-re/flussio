@@ -5,6 +5,7 @@ import express from 'express';
 import { getClient, query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
 import { sendError } from '../utils/httpErrors.js';
+import { parseMultipartFile, safeFileName } from '../utils/multipart.js';
 
 const router = express.Router();
 const uploadsRoot = path.resolve(process.cwd(), 'uploads');
@@ -12,50 +13,7 @@ const attachmentMaxMb = Number(process.env.ATTACHMENT_MAX_MB || 20);
 const uploadLimitBytes = Math.max(1, attachmentMaxMb) * 1024 * 1024;
 const rawUpload = express.raw({ type: 'multipart/form-data', limit: `${uploadLimitBytes}b` });
 
-const safeFileName = (name) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
-const parseMultipartFile = (req) => {
-  const contentType = req.headers['content-type'] || '';
-  const boundaryMatch = contentType.match(/boundary=(.+)$/);
-  if (!boundaryMatch || !Buffer.isBuffer(req.body)) {
-    return null;
-  }
-
-  const boundaryValue = boundaryMatch[1].replace(/^"|"$/g, '');
-  const boundary = `--${boundaryValue}`;
-  const bodyString = req.body.toString('binary');
-  const partName = 'name="file"';
-  const partStart = bodyString.indexOf(partName);
-  if (partStart === -1) {
-    return null;
-  }
-
-  const headerEnd = bodyString.indexOf('\r\n\r\n', partStart);
-  if (headerEnd === -1) {
-    return null;
-  }
-
-  const headerChunk = bodyString.slice(partStart, headerEnd);
-  const fileNameMatch = headerChunk.match(/filename="([^"]+)"/i);
-  if (!fileNameMatch) {
-    return null;
-  }
-
-  const mimeTypeMatch = headerChunk.match(/Content-Type:\s*([^\r\n]+)/i);
-  const dataStart = headerEnd + 4;
-  const nextBoundary = bodyString.indexOf(`\r\n${boundary}`, dataStart);
-  if (nextBoundary === -1) {
-    return null;
-  }
-
-  const fileBuffer = req.body.subarray(dataStart, nextBoundary);
-  return {
-    originalName: fileNameMatch[1]?.trim(),
-    mimeType: mimeTypeMatch?.[1]?.trim() || 'application/octet-stream',
-    size: fileBuffer.length,
-    buffer: fileBuffer,
-  };
-};
 
 const getTransactionForCompany = async (client, transactionId, companyId) => {
   const result = await client.query('SELECT id FROM transactions WHERE id = $1 AND company_id = $2', [

@@ -7,6 +7,7 @@ import { sendError } from '../utils/httpErrors.js';
 import { writeAuditLog } from '../services/audit.js';
 import { getClient, query } from '../db/index.js';
 import { parseCsvDateToISO } from '../utils/dateParse.js';
+import { parseMultipartFile, safeFileName } from '../utils/multipart.js';
 
 const router = express.Router();
 
@@ -17,51 +18,6 @@ const rawUpload = express.raw({ type: 'multipart/form-data', limit: `${uploadLim
 
 const allowedMime = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const metadataFileName = 'branding.json';
-
-const safeFileName = (name) => name.replace(/[^a-zA-Z0-9._-]/g, '_');
-
-const parseMultipartFile = (req) => {
-  const contentType = req.headers['content-type'] || '';
-  const boundaryMatch = contentType.match(/boundary=(.+)$/);
-  if (!boundaryMatch || !Buffer.isBuffer(req.body)) {
-    return null;
-  }
-
-  const boundaryValue = boundaryMatch[1].replace(/^"|"$/g, '');
-  const boundary = `--${boundaryValue}`;
-  const bodyString = req.body.toString('binary');
-  const partName = 'name="file"';
-  const partStart = bodyString.indexOf(partName);
-  if (partStart === -1) {
-    return null;
-  }
-
-  const headerEnd = bodyString.indexOf('\r\n\r\n', partStart);
-  if (headerEnd === -1) {
-    return null;
-  }
-
-  const headerChunk = bodyString.slice(partStart, headerEnd);
-  const fileNameMatch = headerChunk.match(/filename="([^"]+)"/i);
-  if (!fileNameMatch) {
-    return null;
-  }
-
-  const mimeTypeMatch = headerChunk.match(/Content-Type:\s*([^\r\n]+)/i);
-  const dataStart = headerEnd + 4;
-  const nextBoundary = bodyString.indexOf(`\r\n${boundary}`, dataStart);
-  if (nextBoundary === -1) {
-    return null;
-  }
-
-  const fileBuffer = req.body.subarray(dataStart, nextBoundary);
-  return {
-    originalName: fileNameMatch[1]?.trim(),
-    mimeType: mimeTypeMatch?.[1]?.trim()?.toLowerCase() || 'application/octet-stream',
-    size: fileBuffer.length,
-    buffer: fileBuffer,
-  };
-};
 
 
 const decodeCsvBuffer = (buffer) => {
@@ -218,14 +174,11 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
     const brandingDir = getBrandingDir(req.companyId);
     await fs.mkdir(brandingDir, { recursive: true });
 
-    await deleteCurrentLogo(req.companyId);
-
+    const previousMeta = await readBrandingMeta(req.companyId);
     const extension = parsedFile.mimeType === 'image/png' ? 'png' : parsedFile.mimeType === 'image/webp' ? 'webp' : 'jpg';
-    const generatedName = `${crypto.randomUUID()}_${safeFileName(parsedFile.originalName)}.${extension}`;
+    const originalBaseName = path.basename(parsedFile.originalName, path.extname(parsedFile.originalName)) || 'logo';
+    const generatedName = `${crypto.randomUUID()}_${safeFileName(originalBaseName)}.${extension}`;
     const fullPath = path.join(brandingDir, generatedName);
-
-    await fs.writeFile(fullPath, parsedFile.buffer);
-
     const metadata = {
       file_name: generatedName,
       mime_type: parsedFile.mimeType,
@@ -233,7 +186,21 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
       updated_at: new Date().toISOString(),
     };
 
-    await fs.writeFile(getMetadataPath(req.companyId), JSON.stringify(metadata, null, 2));
+    try {
+      await fs.writeFile(fullPath, parsedFile.buffer);
+      await fs.writeFile(getMetadataPath(req.companyId), JSON.stringify(metadata, null, 2));
+    } catch (writeError) {
+      await fs.unlink(fullPath).catch((unlinkError) => {
+        if (unlinkError.code !== 'ENOENT') throw unlinkError;
+      });
+      throw writeError;
+    }
+
+    if (previousMeta?.file_name && previousMeta.file_name !== generatedName) {
+      await fs.unlink(path.join(brandingDir, previousMeta.file_name)).catch((unlinkError) => {
+        if (unlinkError.code !== 'ENOENT') throw unlinkError;
+      });
+    }
 
     await writeAuditLog({
       companyId: req.companyId,
