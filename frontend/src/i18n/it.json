@@ -292,7 +292,7 @@
   "pages.dashboard.topExpensesByCategory": "Top 10 spese per categoria",
   "pages.dashboard.netMonthlyTrend": "Netto mensile",
   "pages.login.welcomeTitle": "Benvenuto in Flussio",
-  "pages.login.welcomeText": "Gestione movimenti, report e anagrafiche ottimizzata per mobile e collaborazione.",
+  "pages.login.welcomeText": "Gestisci movimenti, report e anagrafiche in modo semplice e collaborativo.",
   "forms.rememberMe": "Ricordami",
   "forms.forgotPassword": "Password dimenticata?",
   "pages.users.status": "Stato",
@@ -306,5 +306,16 @@
   "pages.users.companyAccess": "Accesso aziende",
   "pages.users.selectCompany": "Seleziona azienda",
   "pages.users.addCompanyAccess": "Aggiungi accesso azienda",
-  "forms.select": "Seleziona..."
+  "forms.select": "Seleziona...",
+  "pages.login.protectedBadge": "Servizio protetto",
+  "pages.login.supportText": "Uno spazio di lavoro affidabile per team e amministrazione, progettato per restare chiaro su desktop e immediato su mobile.",
+  "pages.login.insightLabel": "Accesso sicuro",
+  "pages.login.insightText": "Credenziali e sessione gestite in modo lineare per un accesso rapido e controllato.",
+  "pages.login.firstAccessTitle": "Prima volta su Flussio?",
+  "pages.login.firstAccessText": "Accedi con le credenziali fornite dal tuo amministratore.",
+  "pages.login.privacy": "Privacy",
+  "pages.login.support": "Supporto",
+  "pages.login.footerLabel": "Link di supporto",
+  "forms.showPassword": "Mostra",
+  "forms.hidePassword": "Nascondi"
 }
