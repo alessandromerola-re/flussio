@@ -336,5 +336,8 @@
   "pages.jobs.costConsumptionPct": "% cost consumption",
   "pages.jobs.marginVsTargetPct": "% margin vs target",
   "pages.jobs.reportSummarySection": "Expected vs actual summary (report)",
-  "pages.jobs.plannedMiniLine": "Planned: {{revenue}} / {{cost}} / {{margin}}"
+  "pages.jobs.plannedMiniLine": "Planned: {{revenue}} / {{cost}} / {{margin}}",
+  "pages.settings.companyDeleted": "Company \"{{name}}\" deleted.",
+  "pages.settings.confirmDeleteCompany1": "You are about to delete company \"{{name}}\". Continue?",
+  "pages.settings.confirmDeleteCompany2": "Please confirm deletion of \"{{name}}\". This action cannot be undone."
 }

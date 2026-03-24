@@ -17,18 +17,6 @@ const UsersAdminPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [companies, setCompanies] = useState([]);
 
-  // Backward compatibility guard: older cached bundles still referenced company
-  // creation local state from an intermediate Users page implementation.
-  // Keep these bindings to avoid runtime crashes with stale JS chunks.
-  const [companyName, setCompanyName] = useState('');
-  void companyName;
-  void setCompanyName;
-
-  // Backward compatibility guard: older cached bundles referenced this handler
-  // while company creation has been moved to Settings page only.
-  const handleCreateCompany = (event) => {
-    event?.preventDefault?.();
-  };
 
   const isSuperAdmin = getIsSuperAdmin();
   const activeCompanyId = Number(getActiveCompanyId());
@@ -184,27 +172,6 @@ const UsersAdminPage = () => {
       </div>
 
       {message && <div className="muted users-feedback">{message}</div>}
-
-      {isSuperAdmin && (
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <form onSubmit={handleCreateCompany} className="users-create-form">
-            <h3>Crea azienda</h3>
-            <label>
-              Nome azienda
-              <input
-                type="text"
-                value={companyName}
-                onChange={(event) => setCompanyName(event.target.value)}
-                placeholder="Nuova azienda"
-                required
-              />
-            </label>
-            <div className="modal-actions">
-              <button type="submit">Crea</button>
-            </div>
-          </form>
-        </div>
-      )}
 
       <div className="card users-card">
         <div className="users-table-head">

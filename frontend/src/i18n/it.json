@@ -336,5 +336,8 @@
   "pages.jobs.costConsumptionPct": "% costi assorbiti",
   "pages.jobs.marginVsTargetPct": "% margine vs obiettivo",
   "pages.jobs.reportSummarySection": "Sintesi previsto vs reale (report)",
-  "pages.jobs.plannedMiniLine": "Previsto: {{revenue}} / {{cost}} / {{margin}}"
+  "pages.jobs.plannedMiniLine": "Previsto: {{revenue}} / {{cost}} / {{margin}}",
+  "pages.settings.companyDeleted": "Azienda \"{{name}}\" eliminata.",
+  "pages.settings.confirmDeleteCompany1": "Stai per eliminare l'azienda \"{{name}}\". Vuoi continuare?",
+  "pages.settings.confirmDeleteCompany2": "Confermi definitivamente l'eliminazione di \"{{name}}\"? Questa azione è irreversibile."
 }

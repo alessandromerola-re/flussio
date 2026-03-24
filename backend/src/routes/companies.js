@@ -135,4 +135,25 @@ router.post('/', async (req, res) => {
   }
 });
 
+
+router.delete('/:id', async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+
+  const companyId = Number(req.params.id);
+  if (!Number.isInteger(companyId)) {
+    return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Company id is required.');
+  }
+
+  try {
+    const result = await query('DELETE FROM companies WHERE id = $1 RETURNING id', [companyId]);
+    if (result.rowCount === 0) {
+      return sendError(res, 404, 'NOT_FOUND', 'Company not found.');
+    }
+    return res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, 'SERVER_ERROR', 'Internal server error.');
+  }
+});
+
 export default router;

@@ -138,6 +138,26 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
     }
   };
 
+
+  const handleDeleteCompany = async (company) => {
+    setCompanyError('');
+    setCompanyMessage('');
+
+    const firstConfirm = window.confirm(t('pages.settings.confirmDeleteCompany1', { name: company.name }));
+    if (!firstConfirm) return;
+
+    const secondConfirm = window.confirm(t('pages.settings.confirmDeleteCompany2', { name: company.name }));
+    if (!secondConfirm) return;
+
+    try {
+      await api.deleteCompany(company.id);
+      await loadCompanies();
+      setCompanyMessage(t('pages.settings.companyDeleted', { name: company.name }));
+    } catch (deleteError) {
+      setCompanyError(getErrorMessage(t, deleteError));
+    }
+  };
+
   const handleDelete = async () => {
     setError('');
     setMessage('');
@@ -249,6 +269,11 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
                 <div>
                   <strong>{company.name}</strong>
                   <div className="muted">#{company.id}</div>
+                </div>
+                <div className="row-actions">
+                  <button type="button" className="danger" onClick={() => handleDeleteCompany(company)}>
+                    {t('buttons.delete')}
+                  </button>
                 </div>
               </li>
             ))}
