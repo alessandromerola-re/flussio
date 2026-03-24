@@ -35,3 +35,28 @@ test('parseMultipartFile supports filename* uploads and infers mime type when mi
   assert.equal(parsed.size, 7);
   assert.equal(parsed.buffer.toString('latin1'), 'PNGDATA');
 });
+
+
+test('parseMultipartFile accepts boundary followed by extra content-type params', () => {
+  const boundary = '----flussioBoundary';
+  const payload = [
+    `--${boundary}`,
+    'Content-Disposition: form-data; name="file"; filename="logo.webp"',
+    'Content-Type: application/octet-stream',
+    '',
+    'WEBPDATA',
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+
+  const parsed = parseMultipartFile(buildRequest({
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}; charset=utf-8` },
+    body: Buffer.from(payload, 'latin1'),
+  }));
+
+  assert.ok(parsed);
+  assert.equal(parsed.originalName, 'logo.webp');
+  assert.equal(parsed.mimeType, 'image/webp');
+  assert.equal(parsed.size, 8);
+  assert.equal(parsed.buffer.toString('latin1'), 'WEBPDATA');
+});

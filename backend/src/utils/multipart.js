@@ -32,7 +32,17 @@ const extractFileNameFromHeaders = (headerChunk = '') => {
     return quotedMatch[1].trim();
   }
 
+  const bareMatch = headerChunk.match(/filename=([^;\r\n]+)/i);
+  if (bareMatch?.[1]) {
+    return bareMatch[1].trim().replace(/^"|"$/g, '');
+  }
+
   return null;
+};
+
+const extractBoundary = (contentType = '') => {
+  const match = String(contentType).match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  return (match?.[1] || match?.[2] || '').trim();
 };
 
 export const inferMimeTypeFromName = (fileName = '', fallback = 'application/octet-stream') => {
@@ -42,26 +52,26 @@ export const inferMimeTypeFromName = (fileName = '', fallback = 'application/oct
 
 export const parseMultipartFile = (req) => {
   const contentType = req.headers['content-type'] || '';
-  const boundaryMatch = contentType.match(/boundary=(.+)$/i);
-  if (!boundaryMatch || !Buffer.isBuffer(req.body)) {
+  const boundaryValue = extractBoundary(contentType);
+  if (!boundaryValue || !Buffer.isBuffer(req.body)) {
     return null;
   }
 
-  const boundaryValue = boundaryMatch[1].replace(/^"|"$/g, '');
   const boundary = `--${boundaryValue}`;
   const bodyString = req.body.toString('latin1');
-  const partName = 'name="file"';
-  const partStart = bodyString.indexOf(partName);
-  if (partStart === -1) {
+  const partMatch = bodyString.match(/Content-Disposition:\s*form-data;[^\r\n]*name="file"[^\r\n]*/i);
+  if (!partMatch || partMatch.index == null) {
     return null;
   }
 
-  const headerEnd = bodyString.indexOf('\r\n\r\n', partStart);
+  const partStart = bodyString.lastIndexOf(boundary, partMatch.index);
+  const headerStart = partStart >= 0 ? partStart + boundary.length + 2 : partMatch.index;
+  const headerEnd = bodyString.indexOf('\r\n\r\n', headerStart);
   if (headerEnd === -1) {
     return null;
   }
 
-  const headerChunk = bodyString.slice(partStart, headerEnd);
+  const headerChunk = bodyString.slice(headerStart, headerEnd);
   const originalName = extractFileNameFromHeaders(headerChunk);
   if (!originalName) {
     return null;
