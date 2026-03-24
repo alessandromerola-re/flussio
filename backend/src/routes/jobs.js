@@ -6,20 +6,30 @@ import { sendError } from '../utils/httpErrors.js';
 const router = express.Router();
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
-const parseNullableNumber = (value) => {
-  if (value == null || value === '') {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
 const parseNullableInteger = (value) => {
   if (value == null || value === '') {
     return null;
   }
   const parsed = Number(value);
   return Number.isInteger(parsed) ? parsed : null;
+};
+
+const parseNullableCents = (value) => {
+  if (value == null || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+};
+
+const safePct = (numerator, denominator) => {
+  if (!Number.isFinite(denominator) || denominator <= 0) {
+    return null;
+  }
+  if (!Number.isFinite(numerator)) {
+    return null;
+  }
+  return Number(((numerator / denominator) * 100).toFixed(2));
 };
 
 const normalizeJobPayload = (payload = {}) => {
@@ -36,7 +46,8 @@ const normalizeJobPayload = (payload = {}) => {
     contact_id: parseNullableInteger(payload.contact_id),
     is_active: payload.is_active ?? true,
     is_closed: payload.is_closed ?? false,
-    budget: parseNullableNumber(payload.budget),
+    expected_revenue_cents: parseNullableCents(payload.expectedRevenueCents),
+    expected_cost_cents: parseNullableCents(payload.expectedCostCents),
     start_date: startDateRaw || null,
     end_date: endDateRaw || null,
   };
@@ -49,7 +60,8 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
     contact_id: contactId,
     is_active: isActive,
     is_closed: isClosed,
-    budget,
+    expected_revenue_cents: expectedRevenueCents,
+    expected_cost_cents: expectedCostCents,
     start_date: startDate,
     end_date: endDate,
   } = payload;
@@ -58,8 +70,12 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
     return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS' };
   }
 
-  if (budget != null && budget < 0) {
-    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'budget' };
+  if (expectedRevenueCents != null && expectedRevenueCents < 0) {
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'expectedRevenueCents' };
+  }
+
+  if (expectedCostCents != null && expectedCostCents < 0) {
+    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'expectedCostCents' };
   }
 
   if (startDate && !isoDateRegex.test(startDate)) {
@@ -105,6 +121,22 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
   return { valid: true };
 };
 
+const jobSelectFields = `
+  j.id,
+  j.name,
+  j.code,
+  j.title,
+  j.notes,
+  j.contact_id,
+  j.is_active,
+  j.is_closed,
+  j.start_date,
+  j.end_date,
+  j.expected_revenue_cents AS "expectedRevenueCents",
+  j.expected_cost_cents AS "expectedCostCents",
+  c.name AS contact_name
+`;
+
 router.get('/', async (req, res) => {
   const activeRaw = req.query.active == null ? '' : String(req.query.active).trim().toLowerCase();
   const includeClosedRaw = req.query.include_closed == null ? '' : String(req.query.include_closed).trim().toLowerCase();
@@ -112,18 +144,12 @@ router.get('/', async (req, res) => {
   const where = ['j.company_id = $1'];
   const params = [req.companyId];
 
-  // Backward compatibility:
-  // - active=0 historically meant "do not filter by active"
-  // - active=1 meant active only
-  // - active=false means inactive only
   if (['1', 'true', 'yes'].includes(activeRaw)) {
     where.push('j.is_active = true');
   } else if (['false', 'no'].includes(activeRaw)) {
     where.push('j.is_active = false');
   }
 
-  // include_closed=0 => open jobs only
-  // include_closed=1 => include all (no filter)
   if (['0', 'false', 'no'].includes(includeClosedRaw)) {
     where.push('j.is_closed = false');
   }
@@ -132,18 +158,7 @@ router.get('/', async (req, res) => {
     const result = await query(
       `
       SELECT
-        j.id,
-        j.name,
-        j.code,
-        j.title,
-        j.notes,
-        j.contact_id,
-        j.is_active,
-        j.is_closed,
-        j.budget,
-        j.start_date,
-        j.end_date,
-        c.name AS contact_name
+        ${jobSelectFields}
       FROM jobs j
       LEFT JOIN contacts c ON c.id = j.contact_id
       WHERE ${where.join(' AND ')}
@@ -158,25 +173,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-
-
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await query(
+    const jobResult = await query(
       `
       SELECT
-        j.id,
-        j.code,
-        j.title,
-        j.notes,
-        j.contact_id,
-        j.is_active,
-        j.is_closed,
-        j.budget,
-        j.start_date,
-        j.end_date,
-        c.name AS contact_name
+        ${jobSelectFields}
       FROM jobs j
       LEFT JOIN contacts c ON c.id = j.contact_id
       WHERE j.id = $1
@@ -186,12 +189,46 @@ router.get('/:id', async (req, res) => {
       [id, req.companyId]
     );
 
-    if (result.rowCount === 0) {
+    if (jobResult.rowCount === 0) {
       return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
     }
 
+    const totalsResult = await query(
+      `
+      SELECT
+        COALESCE(SUM(CASE WHEN t.type = 'income' THEN ROUND(t.amount_total * 100)::bigint ELSE 0 END), 0) AS income_cents,
+        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN ABS(ROUND(t.amount_total * 100)::bigint) ELSE 0 END), 0) AS expense_cents
+      FROM transactions t
+      WHERE t.company_id = $1
+        AND t.job_id = $2
+        AND t.type IN ('income', 'expense')
+      `,
+      [req.companyId, id]
+    );
 
-    return res.json(result.rows[0]);
+    const job = jobResult.rows[0];
+    const totalIncomeCents = Number(totalsResult.rows[0]?.income_cents || 0);
+    const totalExpenseCents = Number(totalsResult.rows[0]?.expense_cents || 0);
+    const actualMarginCents = totalIncomeCents - totalExpenseCents;
+
+    const expectedRevenueCents = job.expectedRevenueCents == null ? null : Number(job.expectedRevenueCents);
+    const expectedCostCents = job.expectedCostCents == null ? null : Number(job.expectedCostCents);
+    const expectedMarginCents =
+      expectedRevenueCents == null || expectedCostCents == null ? null : expectedRevenueCents - expectedCostCents;
+
+    return res.json({
+      ...job,
+      totalIncomeCents,
+      totalExpenseCents,
+      actualMarginCents,
+      expectedMarginCents,
+      revenueVarianceCents: expectedRevenueCents == null ? null : totalIncomeCents - expectedRevenueCents,
+      costVarianceCents: expectedCostCents == null ? null : totalExpenseCents - expectedCostCents,
+      marginVarianceCents: expectedMarginCents == null ? null : actualMarginCents - expectedMarginCents,
+      revenueCompletionPct: expectedRevenueCents == null ? null : safePct(totalIncomeCents, expectedRevenueCents),
+      costConsumptionPct: expectedCostCents == null ? null : safePct(totalExpenseCents, expectedCostCents),
+      marginVsTargetPct: expectedMarginCents == null || expectedMarginCents <= 0 ? null : safePct(actualMarginCents, expectedMarginCents),
+    });
   } catch (error) {
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
@@ -223,12 +260,25 @@ router.post('/', async (req, res) => {
         contact_id,
         is_active,
         is_closed,
-        budget,
+        expected_revenue_cents,
+        expected_cost_cents,
         start_date,
         end_date
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      RETURNING *
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING
+        id,
+        name,
+        code,
+        title,
+        notes,
+        contact_id,
+        is_active,
+        is_closed,
+        start_date,
+        end_date,
+        expected_revenue_cents AS "expectedRevenueCents",
+        expected_cost_cents AS "expectedCostCents"
       `,
       [
         req.companyId,
@@ -239,7 +289,8 @@ router.post('/', async (req, res) => {
         payload.contact_id,
         payload.is_active,
         payload.is_closed,
-        payload.budget,
+        payload.expected_revenue_cents,
+        payload.expected_cost_cents,
         payload.start_date,
         payload.end_date,
       ]
@@ -285,12 +336,25 @@ router.put('/:id', async (req, res) => {
         contact_id = $5,
         is_active = $6,
         is_closed = $7,
-        budget = $8,
-        start_date = $9,
-        end_date = $10
-      WHERE id = $11
-        AND company_id = $12
-      RETURNING *
+        expected_revenue_cents = $8,
+        expected_cost_cents = $9,
+        start_date = $10,
+        end_date = $11
+      WHERE id = $12
+        AND company_id = $13
+      RETURNING
+        id,
+        name,
+        code,
+        title,
+        notes,
+        contact_id,
+        is_active,
+        is_closed,
+        start_date,
+        end_date,
+        expected_revenue_cents AS "expectedRevenueCents",
+        expected_cost_cents AS "expectedCostCents"
       `,
       [
         payload.name,
@@ -300,7 +364,8 @@ router.put('/:id', async (req, res) => {
         payload.contact_id,
         payload.is_active,
         payload.is_closed,
-        payload.budget,
+        payload.expected_revenue_cents,
+        payload.expected_cost_cents,
         payload.start_date,
         payload.end_date,
         id,

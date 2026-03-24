@@ -58,6 +58,8 @@ const ensurePhase2Schema = async () => {
     await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS code TEXT');
     await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_closed BOOLEAN NOT NULL DEFAULT false');
     await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS budget NUMERIC(12, 2)');
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS expected_revenue_cents BIGINT');
+    await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS expected_cost_cents BIGINT');
     await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS start_date DATE');
     await query('ALTER TABLE jobs ADD COLUMN IF NOT EXISTS end_date DATE');
     await query('UPDATE jobs SET title = COALESCE(title, name) WHERE title IS NULL');

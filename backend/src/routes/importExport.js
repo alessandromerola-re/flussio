@@ -64,8 +64,8 @@ const exportEntity = async (entity, companyId) => {
     return { headers: ['external_id', 'name', 'email', 'phone', 'is_active'], rows: r.rows.map((x) => [x.external_id || slug(x.name), x.name, x.email || '', x.phone || '', x.is_active]) };
   }
   if (entity === 'jobs') {
-    const r = await query('SELECT code,title,name,notes,is_active,is_closed,budget,start_date,end_date FROM jobs WHERE company_id=$1 ORDER BY id', [companyId]);
-    return { headers: ['code', 'title', 'name', 'notes', 'is_active', 'is_closed', 'budget', 'start_date', 'end_date'], rows: r.rows.map((x) => [x.code || slug(x.title || x.name), x.title || '', x.name || '', x.notes || '', x.is_active, x.is_closed, x.budget != null ? Number(x.budget).toFixed(2) : '', x.start_date || '', x.end_date || '']) };
+    const r = await query('SELECT code,title,name,notes,is_active,is_closed,expected_revenue_cents,expected_cost_cents,start_date,end_date FROM jobs WHERE company_id=$1 ORDER BY id', [companyId]);
+    return { headers: ['code', 'title', 'name', 'notes', 'is_active', 'is_closed', 'expected_revenue_cents', 'expected_cost_cents', 'start_date', 'end_date'], rows: r.rows.map((x) => [x.code || slug(x.title || x.name), x.title || '', x.name || '', x.notes || '', x.is_active, x.is_closed, x.expected_revenue_cents ?? '', x.expected_cost_cents ?? '', x.start_date || '', x.end_date || '']) };
   }
   if (entity === 'properties') {
     const r = await query(`SELECT p.external_id,p.name,p.notes,p.is_active,c.external_id AS contact_external_id,c.name AS contact_name
@@ -180,10 +180,10 @@ router.post('/:entity', rawUpload, async (req, res) => {
           const code = row[idx('code')] || slug(row[idx('title')] || row[idx('name')]);
           const found = await client.query('SELECT id FROM jobs WHERE company_id=$1 AND code=$2', [req.companyId, code]);
           if (found.rowCount) {
-            await client.query('UPDATE jobs SET title=$1,name=$2,notes=$3,is_active=$4,is_closed=$5,budget=$6,start_date=$7,end_date=$8 WHERE id=$9', [row[idx('title')] || row[idx('name')], row[idx('name')] || row[idx('title')], row[idx('notes')] || null, asBool(row[idx('is_active')]), asBool(row[idx('is_closed')], false), row[idx('budget')] ? asNum(row[idx('budget')]) : null, row[idx('start_date')] || null, row[idx('end_date')] || null, found.rows[0].id]);
+            await client.query('UPDATE jobs SET title=$1,name=$2,notes=$3,is_active=$4,is_closed=$5,expected_revenue_cents=$6,expected_cost_cents=$7,start_date=$8,end_date=$9 WHERE id=$10', [row[idx('title')] || row[idx('name')], row[idx('name')] || row[idx('title')], row[idx('notes')] || null, asBool(row[idx('is_active')]), asBool(row[idx('is_closed')], false), row[idx('expected_revenue_cents')] ? Math.round(asNum(row[idx('expected_revenue_cents')])) : null, row[idx('expected_cost_cents')] ? Math.round(asNum(row[idx('expected_cost_cents')])) : null, row[idx('start_date')] || null, row[idx('end_date')] || null, found.rows[0].id]);
             updated += 1;
           } else {
-            await client.query('INSERT INTO jobs (company_id,code,title,name,notes,is_active,is_closed,budget,start_date,end_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [req.companyId, code, row[idx('title')] || row[idx('name')], row[idx('name')] || row[idx('title')], row[idx('notes')] || null, asBool(row[idx('is_active')]), asBool(row[idx('is_closed')], false), row[idx('budget')] ? asNum(row[idx('budget')]) : null, row[idx('start_date')] || null, row[idx('end_date')] || null]);
+            await client.query('INSERT INTO jobs (company_id,code,title,name,notes,is_active,is_closed,expected_revenue_cents,expected_cost_cents,start_date,end_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', [req.companyId, code, row[idx('title')] || row[idx('name')], row[idx('name')] || row[idx('title')], row[idx('notes')] || null, asBool(row[idx('is_active')]), asBool(row[idx('is_closed')], false), row[idx('expected_revenue_cents')] ? Math.round(asNum(row[idx('expected_revenue_cents')])) : null, row[idx('expected_cost_cents')] ? Math.round(asNum(row[idx('expected_cost_cents')])) : null, row[idx('start_date')] || null, row[idx('end_date')] || null]);
             created += 1;
           }
         } else if (entity === 'properties') {
