@@ -86,6 +86,8 @@ CREATE TABLE jobs (
   is_active BOOLEAN NOT NULL DEFAULT true,
   is_closed BOOLEAN NOT NULL DEFAULT false,
   budget NUMERIC(12, 2),
+  expected_revenue_cents BIGINT CHECK (expected_revenue_cents IS NULL OR expected_revenue_cents >= 0),
+  expected_cost_cents BIGINT CHECK (expected_cost_cents IS NULL OR expected_cost_cents >= 0),
   start_date DATE,
   end_date DATE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()

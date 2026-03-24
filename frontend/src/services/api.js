@@ -128,6 +128,7 @@ export const api = {
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   getCompanies: () => request('/companies'),
   createCompany: (payload) => request('/companies', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteCompany: (id) => request(`/companies/${id}`, { method: 'DELETE' }),
   getAccounts: () => request('/accounts'),
   createAccount: (payload) => request('/accounts', { method: 'POST', body: JSON.stringify(payload) }),
   updateAccount: (id, payload) => request(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
