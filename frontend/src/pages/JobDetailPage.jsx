@@ -3,14 +3,19 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
-import { getErrorMessage } from '../utils/errorMessages.js';
+import { formatCurrencyFromCents } from '../utils/currency.js';
 
 const defaultFilters = {
   date_from: '',
   date_to: '',
 };
 
-const formatCurrencyFromCents = (valueCents) => `€ ${(Number(valueCents || 0) / 100).toFixed(2)}`;
+const formatCurrencyOrNotSet = (value, fallback) => formatCurrencyFromCents(value) || fallback;
+const formatPctOrNotSet = (value, fallback) => (value == null ? fallback : `${Number(value).toFixed(2)}%`);
+const varianceClass = (value) => {
+  if (value == null || value === 0) return '';
+  return value > 0 ? 'positive' : 'negative';
+};
 
 const JobDetailPage = () => {
   const { t } = useTranslation();
@@ -33,7 +38,7 @@ const JobDetailPage = () => {
       ]);
       setJob(jobData);
       setSummary(summaryData);
-    } catch (loadError) {
+    } catch {
       setError(t('errors.SERVER_ERROR'));
     } finally {
       setLoading(false);
@@ -85,10 +90,22 @@ const JobDetailPage = () => {
             <span className={`badge ${job.is_closed ? 'badge-neutral' : 'badge-positive'}`}>{statusLabel}</span>
           </div>
 
-          <div className="row-actions" style={{ marginBottom: '1rem' }}>
-            <button type="button" onClick={() => navigate(`/movements?job_id=${job.id}`)}>
-              {t('buttons.goToMovements')}
-            </button>
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <h2>{t('pages.jobs.headerTitle')}</h2>
+            <div className="form-grid">
+              <div><strong>{t('forms.jobCode')}:</strong> {job.code || t('common.notSet')}</div>
+              <div><strong>{t('forms.jobTitle')}:</strong> {job.title || t('common.notSet')}</div>
+              <div><strong>{t('forms.jobStatus')}:</strong> {statusLabel}</div>
+              <div><strong>{t('forms.referenceContact')}:</strong> {job.contact_name || t('common.notSet')}</div>
+              <div><strong>{t('forms.jobStartDate')}:</strong> {job.start_date || t('common.notSet')}</div>
+              <div><strong>{t('forms.jobEndDate')}:</strong> {job.end_date || t('common.notSet')}</div>
+              <div className="full"><strong>{t('forms.notes')}:</strong> {job.notes || t('common.notSet')}</div>
+            </div>
+            <div className="row-actions" style={{ marginTop: '1rem' }}>
+              <button type="button" onClick={() => navigate(`/movements?job_id=${job.id}`)}>
+                {t('buttons.goToMovements')}
+              </button>
+            </div>
           </div>
 
           <div className="card" style={{ marginBottom: '1rem' }}>
@@ -119,16 +136,43 @@ const JobDetailPage = () => {
 
           <div className="grid-two">
             <div className="card">
-              <h3>{t('pages.jobs.totalIncome')}</h3>
-              <strong>{formatCurrencyFromCents(summary.totals.income_cents)}</strong>
+              <h3>{t('pages.jobs.expectedSection')}</h3>
+              <div>{t('pages.jobs.expectedRevenue')}: <strong>{formatCurrencyOrNotSet(job.expectedRevenueCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.expectedCost')}: <strong>{formatCurrencyOrNotSet(job.expectedCostCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.expectedMargin')}: <strong>{formatCurrencyOrNotSet(job.expectedMarginCents, t('common.notSet'))}</strong></div>
             </div>
             <div className="card">
-              <h3>{t('pages.jobs.totalExpense')}</h3>
-              <strong>{formatCurrencyFromCents(summary.totals.expense_cents)}</strong>
+              <h3>{t('pages.jobs.actualSection')}</h3>
+              <div>{t('pages.jobs.totalIncome')}: <strong>{formatCurrencyOrNotSet(job.totalIncomeCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.totalExpense')}: <strong>{formatCurrencyOrNotSet(job.totalExpenseCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.actualMargin')}: <strong>{formatCurrencyOrNotSet(job.actualMarginCents, t('common.notSet'))}</strong></div>
             </div>
             <div className="card">
-              <h3>{t('pages.jobs.totalMargin')}</h3>
-              <strong>{formatCurrencyFromCents(summary.totals.margin_cents)}</strong>
+              <h3>{t('pages.jobs.varianceSection')}</h3>
+              <div>{t('pages.jobs.revenueVariance')}: <strong className={varianceClass(job.revenueVarianceCents)}>{formatCurrencyOrNotSet(job.revenueVarianceCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(job.costVarianceCents)}>{formatCurrencyOrNotSet(job.costVarianceCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.marginVariance')}: <strong className={varianceClass(job.marginVarianceCents)}>{formatCurrencyOrNotSet(job.marginVarianceCents, t('common.notSet'))}</strong></div>
+            </div>
+            <div className="card">
+              <h3>{t('pages.jobs.progressSection')}</h3>
+              <div>{t('pages.jobs.revenueCompletionPct')}: <strong>{formatPctOrNotSet(job.revenueCompletionPct, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.costConsumptionPct')}: <strong>{formatPctOrNotSet(job.costConsumptionPct, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.marginVsTargetPct')}: <strong>{formatPctOrNotSet(job.marginVsTargetPct, t('common.notSet'))}</strong></div>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginTop: '1rem' }}>
+            <h2>{t('pages.jobs.reportSummarySection')}</h2>
+            <div className="grid-two" style={{ gap: '0.75rem' }}>
+              <div>{t('pages.jobs.expectedRevenue')}: <strong>{formatCurrencyOrNotSet(summary.expected?.revenue_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.expectedCost')}: <strong>{formatCurrencyOrNotSet(summary.expected?.cost_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.expectedMargin')}: <strong>{formatCurrencyOrNotSet(summary.expected?.margin_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.totalIncome')}: <strong>{formatCurrencyOrNotSet(summary.totals.income_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.totalExpense')}: <strong>{formatCurrencyOrNotSet(summary.totals.expense_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.actualMargin')}: <strong>{formatCurrencyOrNotSet(summary.totals.margin_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.revenueVariance')}: <strong className={varianceClass(summary.variances?.revenue_cents)}>{formatCurrencyOrNotSet(summary.variances?.revenue_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(summary.variances?.cost_cents)}>{formatCurrencyOrNotSet(summary.variances?.cost_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.marginVariance')}: <strong className={varianceClass(summary.variances?.margin_cents)}>{formatCurrencyOrNotSet(summary.variances?.margin_cents, t('common.notSet'))}</strong></div>
             </div>
           </div>
 
@@ -147,7 +191,7 @@ const JobDetailPage = () => {
                   <tr key={`${row.direction}-${row.category_id || 'none'}-${row.category_name}`}>
                     <td>{row.category_name}</td>
                     <td>{row.direction === 'income' ? t('pages.movements.income') : t('pages.movements.expense')}</td>
-                    <td align="right">{formatCurrencyFromCents(row.amount_cents)}</td>
+                    <td align="right">{formatCurrencyOrNotSet(row.amount_cents, t('common.notSet'))}</td>
                   </tr>
                 ))}
                 {summary.by_category.length === 0 && (

@@ -6,6 +6,7 @@ import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import Modal from '../components/Modal.jsx';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
+import { formatCurrencyFromCents, parseEuroInputToCents } from '../utils/currency.js';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = { name: '', direction: 'income', parent_id: '', color: '#2ecc71', is_active: true };
@@ -18,7 +19,8 @@ const initialJob = {
   contact_id: '',
   is_closed: false,
   is_active: true,
-  budget: '',
+  expectedRevenue: '',
+  expectedCost: '',
   start_date: '',
   end_date: '',
 };
@@ -184,7 +186,8 @@ const RegistryPage = () => {
       contact_id: jobForm.contact_id ? Number(jobForm.contact_id) : null,
       is_closed: jobForm.is_closed,
       is_active: jobForm.is_active,
-      budget: jobForm.budget === '' ? null : Number(jobForm.budget),
+      expectedRevenueCents: parseEuroInputToCents(jobForm.expectedRevenue),
+      expectedCostCents: parseEuroInputToCents(jobForm.expectedCost),
       start_date: jobForm.start_date || null,
       end_date: jobForm.end_date || null,
     };
@@ -466,6 +469,16 @@ const RegistryPage = () => {
                   <strong>{job.title || job.name}</strong>
                   <div className="muted">{job.code || '—'}</div>
                   <div className="muted">{job.is_closed ? t('labels.jobClosed') : t('labels.jobOpen')}</div>
+                  <div className="muted">
+                    {t('pages.jobs.plannedMiniLine', {
+                      revenue: formatCurrencyFromCents(job.expectedRevenueCents) || t('common.notSet'),
+                      cost: formatCurrencyFromCents(job.expectedCostCents) || t('common.notSet'),
+                      margin:
+                        job.expectedRevenueCents == null || job.expectedCostCents == null
+                          ? t('common.notSet')
+                          : formatCurrencyFromCents(Number(job.expectedRevenueCents) - Number(job.expectedCostCents)),
+                    })}
+                  </div>
                 </div>
                 <div className="row-actions">
                   <button type="button" className="ghost" onClick={() => navigate(`/jobs/${job.id}`)}>{t('buttons.details')}</button>
@@ -481,7 +494,8 @@ const RegistryPage = () => {
                           contact_id: job.contact_id ? String(job.contact_id) : '',
                           is_closed: Boolean(job.is_closed),
                           is_active: Boolean(job.is_active),
-                          budget: job.budget ?? '',
+                          expectedRevenue: job.expectedRevenueCents != null ? (Number(job.expectedRevenueCents) / 100).toFixed(2) : '',
+                          expectedCost: job.expectedCostCents != null ? (Number(job.expectedCostCents) / 100).toFixed(2) : '',
                           start_date: job.start_date ? String(job.start_date).slice(0, 10) : '',
                           end_date: job.end_date ? String(job.end_date).slice(0, 10) : '',
                         });
@@ -552,7 +566,7 @@ const RegistryPage = () => {
         </div>
       </Modal>
 
-      {canPermission('write') && <FloatingAddButton onClick={() => openCreateModal(tab)} label={t('buttons.new')} />}
+      {canPermission('write') && !createModalTab && <FloatingAddButton onClick={() => openCreateModal(tab)} label={t('buttons.new')} />}
 
       <Modal isOpen={Boolean(createModalTab)} onClose={closeCreateModal}>
         <div className="modal-content">
@@ -595,7 +609,8 @@ const RegistryPage = () => {
               <label>{t('forms.jobCode')}<input type="text" value={jobForm.code} onChange={(event) => setJobForm({ ...jobForm, code: event.target.value })} /></label>
               <label>{t('forms.jobTitle')}<input type="text" value={jobForm.title} onChange={(event) => setJobForm({ ...jobForm, title: event.target.value })} required /></label>
               <label>{t('forms.jobStatus')}<select value={jobForm.is_closed ? 'closed' : 'open'} onChange={(event) => setJobForm({ ...jobForm, is_closed: event.target.value === 'closed' })}><option value="open">{t('labels.jobOpen')}</option><option value="closed">{t('labels.jobClosed')}</option></select></label>
-              <label>{t('forms.jobBudget')}<input type="number" step="0.01" min="0" value={jobForm.budget} onChange={(event) => setJobForm({ ...jobForm, budget: event.target.value })} /></label>
+              <label>{t('forms.jobExpectedRevenue')}<input type="number" step="0.01" min="0" placeholder="0,00" value={jobForm.expectedRevenue} onChange={(event) => setJobForm({ ...jobForm, expectedRevenue: event.target.value })} /></label>
+              <label>{t('forms.jobExpectedCost')}<input type="number" step="0.01" min="0" placeholder="0,00" value={jobForm.expectedCost} onChange={(event) => setJobForm({ ...jobForm, expectedCost: event.target.value })} /></label>
               <label>{t('forms.jobStartDate')}<input type="date" value={jobForm.start_date} onChange={(event) => setJobForm({ ...jobForm, start_date: event.target.value })} /></label>
               <label>{t('forms.jobEndDate')}<input type="date" value={jobForm.end_date} onChange={(event) => setJobForm({ ...jobForm, end_date: event.target.value })} /></label>
               <label>{t('forms.notes')}<input type="text" value={jobForm.notes} onChange={(event) => setJobForm({ ...jobForm, notes: event.target.value })} /></label>
