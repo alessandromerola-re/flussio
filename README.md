@@ -1,16 +1,8 @@
 # Flussio
 
-Flussio is a lightweight accounting web app (Phase 1 MVP) for managing:
-- registry data (accounts, categories, contacts, properties)
-- movements (income, expense, transfer)
-- dashboard metrics
+Flussio is a lightweight accounting web app.
 
-Stack:
-- Frontend: React + Vite
-- Backend: Node.js + Express
-- Database: PostgreSQL 18
-
-## Quickstart (Docker)
+## Local development
 
 ```bash
 cp backend/.env.example backend/.env
@@ -20,322 +12,69 @@ docker compose up -d --build
 
 Default URLs:
 - Frontend: http://localhost:9808
-- Backend API: http://localhost:4000
+- Backend: http://localhost:4000
 
+DEV seed is available only when `ENABLE_DEV_SEED=true`.
 
+## Production (download & install bundle)
 
-## Postgres 18 upgrade note
+Production deployment is **image-based** (`ghcr.io/<owner>/<repo>-backend:<tag>` and `ghcr.io/<owner>/<repo>-frontend:<tag>`), no local build required.
 
-Dopo questo upgrade eseguire `docker compose down -v` prima del primo `up` in locale.
+1. Open a GitHub Release tag (for example `v1.1.0`).
+2. Download `flussio-production-bundle-<version>.zip`.
+3. Extract it.
+4. Copy `.env.example.prod` to `.env` and set strong secrets.
+5. Run `./install.sh`.
 
-Questo è necessario perché con Postgres 18+ l’immagine Docker ufficiale ha cambiato PGDATA/VOLUME (`/var/lib/postgresql`), quindi il volume precedente va ricreato e ri-montato correttamente.
+Main production files live in `deploy/production/`:
+- `docker-compose.prod.yml` (Linux with named volumes)
+- `docker-compose.prod.qnap.yml` (QNAP bind mounts)
+- `.env.example.prod`
+- install/backup/restore/schema-check scripts
+- operational docs (`docs/`)
 
+## QNAP
 
-## Frontend host port configuration
+Use `docker-compose.prod.qnap.yml` and set these paths in `.env`:
+- `QNAP_DB_PATH`
+- `QNAP_UPLOADS_PATH`
+- `QNAP_BACKUPS_PATH`
 
-The frontend host port is configurable via env var in compose mapping:
-
-```yaml
-${FRONTEND_HOST_PORT:-9808}:80
-```
-
-Examples:
-
-```bash
-# default (9808)
-docker compose up -d --build
-
-# custom
-FRONTEND_HOST_PORT=9000 docker compose up -d --build
-```
-
-You can also set `FRONTEND_HOST_PORT` in root `.env`.
-
-## DEV login (seed)
-
-- Email: `dev@flussio.local`
-- Password: `flussio123`
-
-DEV seed stores password as bcrypt hash. Login uses bcrypt verification only.
-
-
-## Multi-company context (active company)
-
-- After login, API returns:
-  - `companies`: list of accessible companies
-  - `default_company_id`: default active company for the session
-- Frontend stores active company and sends `X-Company-Id` on every authenticated API request.
-- You can switch company from the **Azienda** selector in the top bar; UI reloads `/dashboard` so company-scoped data/branding (logo) refreshes correctly.
-
-## Manual migrations (Approach A)
-
-Init SQL runs only on first bootstrap of an empty Postgres volume (`database/init`).
-Incremental changes are SQL files in `database/migrations` and must be applied manually.
-
-Apply migrations manually in order (existing installations):
+Start command:
 
 ```bash
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_20260215__opening_balance_and_recalc.sql
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_20260215__hash_dev_seed_password.sql
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/002_jobs_and_transactions_job_id.sql
-# optional but recommended if you used properties as jobs in phase 1
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/003_optional_migrate_properties_to_jobs.sql
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/004_20260216__attachments_metadata.sql
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/005_20260216__extend_jobs_and_reports_index.sql
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/006_20260216__recurring_templates_and_runs.sql
+docker compose -f docker-compose.prod.qnap.yml up -d
 ```
 
+## Migrations and schema updates
 
+Backend runs a deterministic SQL migration runner at startup with a `schema_migrations` tracking table.
 
-## CSV import/export (master data + movements)
+- Fresh DB: baseline schema migration is applied automatically.
+- Legacy DB (without tracking table): migrations are adopted into `schema_migrations` to keep upgrades controlled.
+- New release migrations are applied once and tracked by checksum.
 
-Supported entities:
-- `accounts`, `categories`, `contacts`, `jobs`, `properties`, `recurring_templates`, `transactions`
+## Bootstrap admin
 
-Endpoints:
-- `GET /api/export/<entity>.csv`
-- `POST /api/import/<entity>` (multipart `file`)
+Set these variables in production `.env`:
+- `BOOTSTRAP_ADMIN_EMAIL`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `BOOTSTRAP_ADMIN_NAME`
+- `BOOTSTRAP_COMPANY_NAME`
 
-Rules:
-- UTF-8 CSV with header row
-- dates in `YYYY-MM-DD`
-- decimals with dot (`.`)
-- import mode is create/update by stable key (`external_id` or `code` for jobs)
-- transaction import resolves references by external key; invalid references are reported per-row in import summary.
+Bootstrap admin is created only if no users exist (idempotent).
 
-## Movements filters (API)
+## Backup and restore
 
-`GET /api/transactions` supports these query params:
-- `date_from=YYYY-MM-DD`
-- `date_to=YYYY-MM-DD`
-- `type=income|expense|transfer`
-- `account_id=<number>`
-- `category_id=<number>`
-- `contact_id=<number>`
-- `property_id=<number>`
-- `job_id=<number>`
-- `q=<text search in description>`
-- `is_recurring=1|0`
-- `has_attachments=1|0`
-- `limit` (default `30`, max `200`)
-- `offset` (default `0`, max `5000`)
-
-Examples:
+From production bundle directory:
 
 ```bash
-curl "http://localhost:4000/api/transactions?limit=5"
-curl "http://localhost:4000/api/transactions?date_from=2026-01-01&date_to=2026-01-31&type=income"
+./backup.sh
+./restore-test.sh ./data/backups/<backup-file>.sql.gz
+./check-schema.sh
 ```
 
-## Movements CSV export
+## GitHub Actions and releases
 
-Endpoint:
-- `GET /api/transactions/export` (same filters as `/api/transactions`)
-
-Run locally:
-
-```bash
-curl -L -H "Authorization: Bearer <TOKEN>"   "http://localhost:4000/api/transactions/export?date_from=2026-01-01&type=expense"   -o flussio_movimenti.csv
-```
-
-CSV columns:
-`date;type;amount_total;account_names;category;contact;commessa;description`
-
-Date format standard for movements CSV export/import: `YYYY-MM-DD` (example: `2026-02-19`).
-
-## Attachments usage
-
-In movement details modal:
-- upload attachments (`pdf`, images, doc/docx, xls/xlsx)
-- preview images/PDF directly in modal
-- download attachments
-- delete attachments
-
-Upload size limit: 20MB per file (configurable with `ATTACHMENT_MAX_MB`, default `20`).
-
-Nginx and backend are aligned by default:
-- Nginx: `client_max_body_size 20M`
-- Backend: `ATTACHMENT_MAX_MB=20`
-
-This ensures uploads up to ~19MB are accepted, while oversize files are rejected with `FILE_TOO_LARGE` and `max_mb` details.
-
-## Phase 1 smoke test checklist
-
-1. Login with `dev@flussio.local / flussio123`
-2. Registry CRUD:
-   - accounts
-   - categories
-   - contacts
-   - properties
-3. Movements:
-   - create income/expense/transfer
-   - delete a movement
-   - verify account balances are coherent after create/delete
-4. Attachments in movement details (if enabled in UI):
-   - upload
-   - download
-   - delete
-
-## CI
-
-GitHub Actions workflow (`.github/workflows/docker-image.yml`) does:
-1. backend install + tests
-2. frontend install + build
-3. build/push multi-arch Docker images:
-   - `ghcr.io/<owner>/<repo>-backend`
-   - `ghcr.io/<owner>/<repo>-frontend`
-
-## Backend tests
-
-Run locally:
-
-```bash
-cd backend
-npm ci
-DATABASE_URL=postgres://flussio:flussio@localhost:5432/flussio_test JWT_SECRET=test_secret npm test
-```
-
-Test coverage includes:
-- auth login with bcrypt user
-- movement create/delete with balance update/revert checks
-
-
-## Sprint 1 – Job reports
-
-Apply the migration for extended jobs/report indexes:
-
-```bash
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/005_20260216__extend_jobs_and_reports_index.sql
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/006_20260216__recurring_templates_and_runs.sql
-```
-
-Report endpoints:
-
-```bash
-# Summary JSON
-curl -H "Authorization: Bearer <TOKEN>" \
-  "http://localhost:4000/api/reports/job/1/summary?date_from=2026-01-01&date_to=2026-12-31"
-
-# CSV export for one job
-curl -L -H "Authorization: Bearer <TOKEN>" \
-  "http://localhost:4000/api/reports/job/1/export.csv?date_from=2026-01-01&date_to=2026-12-31" \
-  -o flussio_job_1.csv
-```
-
-Manual verification checklist:
-1. Create a job with code, budget, and dates.
-2. Create income/expense/transfer movements linked to that job.
-3. Open job detail: totals are correct (transfer excluded from margin).
-4. Verify category breakdown values.
-5. Click "Go to movements": movements page opens with job filter pre-selected.
-6. Export job CSV downloads correctly.
-
-
-## Recurring templates (Phase 2 PR#1)
-
-Environment flags:
-
-```bash
-RECURRING_GENERATOR_ENABLED=true
-RECURRING_GENERATOR_INTERVAL_MIN=5
-```
-
-Scheduling rules (Europe/Rome):
-- Monthly generation always runs on day 1 at 00:05.
-- If monthly `start_date` is day 1, first run is that date at 00:05.
-- Otherwise first monthly run is day 1 of next month at 00:05.
-
-Endpoints:
-
-```bash
-# list/create/update/delete templates
-GET    /api/recurring-templates
-POST   /api/recurring-templates
-GET    /api/recurring-templates/:id
-PUT    /api/recurring-templates/:id
-DELETE /api/recurring-templates/:id
-
-# generate one template now
-POST   /api/recurring-templates/:id/generate-now
-
-# generate all due templates
-POST   /api/recurring-templates/generate-due
-```
-
-Quick curl checks:
-
-```bash
-curl -X POST -H "Authorization: Bearer <TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Canone mensile","frequency":"monthly","interval":1,"amount":850,"movement_type":"income"}' \
-  http://localhost:4000/api/recurring-templates
-
-curl -X POST -H "Authorization: Bearer <TOKEN>" \
-  http://localhost:4000/api/recurring-templates/1/generate-now
-
-curl -X POST -H "Authorization: Bearer <TOKEN>" \
-  http://localhost:4000/api/recurring-templates/generate-due
-```
-
-Manual QA checklist:
-1. Create a monthly template and generate now.
-2. Trigger generate-now twice in same cycle and verify second call is skipped.
-3. Verify generated movement has recurring badge in Movements list/detail.
-4. Test yearly template with 29/02 anchor and verify fallback to 28/02 in non-leap year.
-5. Set end_date in the past and verify template stops generating.
-
-
-## Roles and audit (Phase 2 PR#2)
-
-Roles supported:
-- `admin`
-- `editor`
-- `operatore`
-- `viewer`
-
-Permission model (enforced backend):
-- viewer: read only
-- operatore: read + write, no sensitive delete, no exports
-- editor: read + write + sensitive delete + exports
-- admin: all + users management
-
-Audit log:
-- table: `audit_log`
-- tracks create/update/delete on movements/jobs/recurring_templates/attachments
-
-Migration:
-
-```bash
-psql "postgres://flussio:flussio@localhost:5432/flussio" -f database/migrations/007_20260216__roles_audit_and_scaffolding.sql
-```
-
-## PR#3 scaffolding
-
-Enabled scaffolding includes:
-- Admin users API (`/api/users`)
-- Password reset token scaffold (`/api/users/:id/reset-password-token`)
-- Roadmap scaffold endpoint (`/api/scaffolding/roadmap`)
-- Placeholder DB schema for contracts and reset tokens
-
-Env:
-
-```bash
-RESET_EMAIL_ENABLED=false
-ATTACHMENT_MAX_MB=20
-SHOW_ROADMAP=false
-DEV_SCHEMA_AUTO_PATCH=false
-VITE_SHOW_ROADMAP=false
-```
-
-If `RESET_EMAIL_ENABLED=false`, admin reset endpoint returns token for dev/manual flow.
-
-
-## Branding logo (admin)
-
-- Endpoint read metadata: `GET /api/settings/branding`
-- Endpoint read logo blob: `GET /api/settings/branding/logo`
-- Endpoint upload logo (admin): `POST /api/settings/branding/logo` (`multipart/form-data`, field `file`)
-- Endpoint delete logo (admin): `DELETE /api/settings/branding/logo`
-
-Accepted logo formats: PNG/JPG/WEBP.
-Maximum size is aligned with attachments (`ATTACHMENT_MAX_MB`, default `20`).
+- `.github/workflows/docker-image.yml` runs tests and publishes backend/frontend GHCR images on `main` and release tags.
+- `.github/workflows/release-bundle.yml` builds and uploads `flussio-production-bundle-<version>.zip` to the GitHub Release when a `v*` tag is pushed.
