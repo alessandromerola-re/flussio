@@ -1,5 +1,10 @@
 # Backup, restore test and schema checks
 
+Scripts support Linux and QNAP compose variants.
+
+- Default compose file: `docker-compose.prod.yml`
+- Override: `FLUSSIO_COMPOSE_FILE=docker-compose.prod.qnap.yml`
+
 ## Backup
 ```bash
 ./backup.sh
@@ -11,9 +16,6 @@
 ```
 
 ## Schema check
-Run from the bundle root:
-
 ```bash
-docker compose -f docker-compose.prod.yml cp check_schema.sql db:/work/check_schema.sql
-docker compose -f docker-compose.prod.yml exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /work/check_schema.sql
+./check-schema.sh
 ```

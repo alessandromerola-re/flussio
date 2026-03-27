@@ -17,6 +17,41 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 )
 `;
 
+const EXPECTED_TABLES = [
+  'companies',
+  'users',
+  'user_companies',
+  'accounts',
+  'categories',
+  'contacts',
+  'properties',
+  'jobs',
+  'transactions',
+  'transaction_accounts',
+  'attachments',
+  'recurring_templates',
+  'recurring_runs',
+  'audit_log',
+  'password_reset_tokens',
+  'contracts',
+  'saved_reports',
+];
+
+const EXPECTED_COLUMNS = [
+  ['users', 'is_super_admin'],
+  ['users', 'is_active'],
+  ['users', 'role'],
+  ['jobs', 'title'],
+  ['jobs', 'code'],
+  ['jobs', 'expected_revenue_cents'],
+  ['jobs', 'expected_cost_cents'],
+  ['transactions', 'job_id'],
+  ['transactions', 'recurring_template_id'],
+  ['attachments', 'original_name'],
+  ['attachments', 'storage_path'],
+  ['accounts', 'opening_balance'],
+];
+
 const advisoryLockKey = 74201931;
 
 const checksumOf = (content) => crypto.createHash('sha256').update(content).digest('hex');
@@ -51,6 +86,35 @@ const runSqlMigration = async (client, migrationsDir, migration) => {
   }
 };
 
+const verifyLegacySchemaCompleteness = async (client) => {
+  const missingTables = [];
+  for (const tableName of EXPECTED_TABLES) {
+    const result = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [`public.${tableName}`]);
+    if (!result.rows[0]?.exists) {
+      missingTables.push(tableName);
+    }
+  }
+
+  const missingColumns = [];
+  for (const [tableName, columnName] of EXPECTED_COLUMNS) {
+    const result = await client.query(
+      `SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+      ) AS exists`,
+      [tableName, columnName]
+    );
+    if (!result.rows[0]?.exists) {
+      missingColumns.push(`${tableName}.${columnName}`);
+    }
+  }
+
+  return { missingTables, missingColumns };
+};
+
 export const runMigrations = async () => {
   let files;
   try {
@@ -78,21 +142,28 @@ export const runMigrations = async () => {
     await client.query('SELECT pg_advisory_lock($1)', [advisoryLockKey]);
     await client.query(TRACKING_TABLE_SQL);
 
-    const hasLegacySchemaResult = await client.query(`SELECT to_regclass('public.users') IS NOT NULL AS has_users`);
-    const hasLegacySchema = hasLegacySchemaResult.rows[0]?.has_users === true;
+    const hasUsersTableResult = await client.query(`SELECT to_regclass('public.users') IS NOT NULL AS has_users`);
+    const hasUsersTable = hasUsersTableResult.rows[0]?.has_users === true;
 
     const appliedResult = await client.query('SELECT filename, checksum FROM schema_migrations');
     const appliedMap = new Map(appliedResult.rows.map((row) => [row.filename, row.checksum]));
 
-    if (appliedMap.size === 0 && hasLegacySchema) {
-      for (const migration of migrations) {
-        await markAsApplied(client, migration, 'adopted_from_legacy_installation');
+    if (appliedMap.size === 0 && hasUsersTable) {
+      const schemaCheck = await verifyLegacySchemaCompleteness(client);
+      if (schemaCheck.missingTables.length > 0 || schemaCheck.missingColumns.length > 0) {
+        throw new Error(
+          `Legacy schema is incomplete; refusing automatic adoption. Missing tables: ${schemaCheck.missingTables.join(', ') || 'none'}. Missing columns: ${schemaCheck.missingColumns.join(', ') || 'none'}.`
+        );
       }
-      console.log(`Adopted ${migrations.length} migrations from legacy schema.`);
+
+      for (const migration of migrations) {
+        await markAsApplied(client, migration, 'adopted_from_verified_legacy_installation');
+      }
+      console.log(`Adopted ${migrations.length} migrations from verified legacy schema.`);
       return;
     }
 
-    if (appliedMap.size === 0 && !hasLegacySchema) {
+    if (appliedMap.size === 0 && !hasUsersTable) {
       const baseline = migrations.find((migration) => migration.filename.startsWith('000_'));
       if (!baseline) {
         throw new Error('Fresh installation requires a baseline migration starting with 000_.');

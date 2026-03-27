@@ -26,6 +26,21 @@ Production deployment is **image-based** (`ghcr.io/<owner>/<repo>-backend:<tag>`
 4. Copy `.env.example.prod` to `.env` and set strong secrets.
 5. Run `./install.sh`.
 
+### Linux vs QNAP compose
+
+Scripts default to Linux compose:
+- `docker-compose.prod.yml`
+
+To use QNAP variant:
+
+```bash
+export FLUSSIO_COMPOSE_FILE=docker-compose.prod.qnap.yml
+./install.sh
+./backup.sh
+./restore-test.sh <backup.sql.gz>
+./check-schema.sh
+```
+
 Main production files live in `deploy/production/`:
 - `docker-compose.prod.yml` (Linux with named volumes)
 - `docker-compose.prod.qnap.yml` (QNAP bind mounts)
@@ -33,25 +48,13 @@ Main production files live in `deploy/production/`:
 - install/backup/restore/schema-check scripts
 - operational docs (`docs/`)
 
-## QNAP
-
-Use `docker-compose.prod.qnap.yml` and set these paths in `.env`:
-- `QNAP_DB_PATH`
-- `QNAP_UPLOADS_PATH`
-- `QNAP_BACKUPS_PATH`
-
-Start command:
-
-```bash
-docker compose -f docker-compose.prod.qnap.yml up -d
-```
-
 ## Migrations and schema updates
 
 Backend runs a deterministic SQL migration runner at startup with a `schema_migrations` tracking table.
 
 - Fresh DB: baseline schema migration is applied automatically.
-- Legacy DB (without tracking table): migrations are adopted into `schema_migrations` to keep upgrades controlled.
+- Legacy DB without tracking table: adoption is allowed only after schema completeness checks (tables + required columns).
+- Incomplete legacy schema: backend startup fails with explicit error (no unsafe auto-adoption).
 - New release migrations are applied once and tracked by checksum.
 
 ## Bootstrap admin
@@ -76,5 +79,5 @@ From production bundle directory:
 
 ## GitHub Actions and releases
 
-- `.github/workflows/docker-image.yml` runs tests and publishes backend/frontend GHCR images on `main` and release tags.
-- `.github/workflows/release-bundle.yml` builds and uploads `flussio-production-bundle-<version>.zip` to the GitHub Release when a `v*` tag is pushed.
+- `.github/workflows/docker-image.yml` runs CI for PR/main and publishes GHCR images on `main`.
+- `.github/workflows/release-bundle.yml` (on `v*` tag) runs tests, publishes GHCR tag images, then generates and uploads `flussio-production-bundle-<version>.zip`.

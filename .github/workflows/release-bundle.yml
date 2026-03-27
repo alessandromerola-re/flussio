@@ -1,4 +1,4 @@
-name: Release production bundle
+name: Release images + production bundle
 
 on:
   push:
@@ -7,10 +7,114 @@ on:
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
-  bundle:
+  test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: flussio
+          POSTGRES_PASSWORD: flussio
+          POSTGRES_DB: flussio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U flussio -d flussio_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Check init schema duplicates
+        run: python scripts/check_init_schema_duplicates.py
+
+      - name: Check dashboard duplicate declarations
+        run: python scripts/check_dashboard_duplicates.py
+
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          JWT_SECRET: test_secret
+          DATABASE_URL: postgres://flussio:flussio@localhost:5432/flussio_test
+        run: npm test
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - image_suffix: backend
+            context: .
+            dockerfile: ./backend/Dockerfile
+          - image_suffix: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags/labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image_suffix }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+
+  release-bundle:
+    runs-on: ubuntu-latest
+    needs: build-and-push
     steps:
       - name: Checkout
         uses: actions/checkout@v4

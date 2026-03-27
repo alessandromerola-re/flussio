@@ -5,10 +5,11 @@
 - [ ] `.env` contains strong secrets and explicit `CORS_ORIGINS`.
 - [ ] `BOOTSTRAP_ADMIN_*` configured.
 - [ ] Backup path is writable.
+- [ ] `FLUSSIO_COMPOSE_FILE` selected if QNAP variant is used.
 
 ## First start
-- [ ] `docker compose -f docker-compose.prod.yml up -d` executed.
-- [ ] `docker compose -f docker-compose.prod.yml ps` all services healthy.
+- [ ] `./install.sh` executed successfully.
+- [ ] `docker compose -f <selected-compose-file> ps` all services healthy.
 - [ ] Bootstrap admin login works.
 
 ## Core smoke test (initial perimeter)
@@ -22,4 +23,4 @@
 ## Operations
 - [ ] Run `./backup.sh` and verify output file.
 - [ ] Run `./restore-test.sh <backup-file>` successfully.
-- [ ] Run schema check (see BACKUP_AND_RESTORE.md).
+- [ ] Run `./check-schema.sh`.

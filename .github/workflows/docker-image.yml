@@ -3,7 +3,6 @@ name: CI + Build Docker images
 on:
   push:
     branches: ["main"]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -38,7 +37,7 @@ jobs:
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install backend dependencies
         working-directory: ./backend
@@ -103,7 +102,6 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha
-            type=ref,event=tag
 
       - name: Build and push
         uses: docker/build-push-action@v6

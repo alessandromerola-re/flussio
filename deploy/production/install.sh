@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+COMPOSE_FILE_PATH="${FLUSSIO_COMPOSE_FILE:-${COMPOSE_FILE:-docker-compose.prod.yml}}"
+
 if [[ ! -f ".env" ]]; then
   echo "[ERROR] Missing .env file. Copy .env.example.prod to .env and fill mandatory values."
+  exit 1
+fi
+
+if [[ ! -f "$COMPOSE_FILE_PATH" ]]; then
+  echo "[ERROR] Compose file not found: $COMPOSE_FILE_PATH"
   exit 1
 fi
 
@@ -12,10 +19,11 @@ else
   COMPOSE_CMD="docker compose"
 fi
 
+echo "[INFO] Using compose file: $COMPOSE_FILE_PATH"
 echo "[INFO] Pulling pinned images from GHCR..."
-$COMPOSE_CMD -f docker-compose.prod.yml pull
+$COMPOSE_CMD -f "$COMPOSE_FILE_PATH" pull
 
-echo "[INFO] Starting Flussio production stack..."
-$COMPOSE_CMD -f docker-compose.prod.yml up -d
+echo "[INFO] Starting Flussio stack..."
+$COMPOSE_CMD -f "$COMPOSE_FILE_PATH" up -d
 
-echo "[INFO] Done. Run: $COMPOSE_CMD -f docker-compose.prod.yml ps"
+echo "[INFO] Done. Run: $COMPOSE_CMD -f $COMPOSE_FILE_PATH ps"
