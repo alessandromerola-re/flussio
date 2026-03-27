@@ -2,14 +2,15 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install --omit=dev
+COPY backend/package.json backend/package-lock.json ./
+RUN npm ci --omit=dev
 
-COPY src ./src
+COPY backend/src ./src
+COPY backend/migrations ./migrations
 
 ENV NODE_ENV=production
 
-RUN mkdir -p /app/uploads \
+RUN mkdir -p /app/uploads /app/backups \
   && addgroup -S appgroup \
   && adduser -S appuser -G appgroup \
   && chown -R appuser:appgroup /app

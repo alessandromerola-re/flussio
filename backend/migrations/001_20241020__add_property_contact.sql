@@ -1,0 +1,2 @@
+ALTER TABLE properties
+ADD COLUMN contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL;

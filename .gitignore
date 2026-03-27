@@ -9,3 +9,5 @@ node_modules
 backend/uploads
 frontend/dist
 .DS_Store
+
+!deploy/production/.env.example.prod
