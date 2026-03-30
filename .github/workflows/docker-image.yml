@@ -37,6 +37,14 @@ jobs:
       - name: Validate production bundle sources
         run: ./scripts/validate_production_bundle.sh
 
+      - name: Validate raw blob line counts
+        run: |
+          [[ "$(git show HEAD:deploy/production/docker-compose.prod.yml | wc -l)" -ge 20 ]]
+          [[ "$(git show HEAD:deploy/production/docker-compose.prod.qnap.yml | wc -l)" -ge 20 ]]
+          [[ "$(git show HEAD:deploy/production/.env.example.prod | wc -l)" -ge 10 ]]
+          [[ "$(git show HEAD:scripts/validate_production_bundle.sh | wc -l)" -ge 15 ]]
+
+
       - name: Show bundle file line stats
         run: |
           wc -l deploy/production/docker-compose.prod.yml

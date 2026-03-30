@@ -25,12 +25,17 @@ doc_files=(
 
 required_files=("${essential_files[@]}" "${doc_files[@]}")
 
+repo_relpath() {
+  local abs="$1"
+  abs="${abs#${ROOT_DIR}/}"
+  printf '%s' "$abs"
+}
+
 for file in "${required_files[@]}"; do
   if [[ ! -f "$file" ]]; then
     echo "[ERROR] Missing required production file: $file"
     exit 1
   fi
-
 done
 
 # Hard minimum line counts to catch quasi-monoriga regressions.
@@ -44,10 +49,16 @@ declare -A min_lines=(
 for file in "${!min_lines[@]}"; do
   line_count="$(wc -l < "$file")"
   if (( line_count < min_lines[$file] )); then
-    echo "[ERROR] File has unexpectedly few lines ($line_count < ${min_lines[$file]}): $file"
+    echo "[ERROR] Working tree file has unexpectedly few lines ($line_count < ${min_lines[$file]}): $file"
     exit 1
   fi
 
+  rel_file="$(repo_relpath "$file")"
+  blob_line_count="$(git show "HEAD:${rel_file}" | wc -l)"
+  if (( blob_line_count < min_lines[$file] )); then
+    echo "[ERROR] Git raw blob has unexpectedly few lines ($blob_line_count < ${min_lines[$file]}): $rel_file"
+    exit 1
+  fi
 done
 
 for file in "${bundle_files[@]}"; do
