@@ -1,0 +1,5 @@
+# Enforce LF for production release bundle artifacts and shell scripts.
+deploy/production/*.yml text eol=lf
+deploy/production/*.prod text eol=lf
+deploy/production/*.sh text eol=lf
+scripts/*.sh text eol=lf
