@@ -2,7 +2,6 @@ name: flussio
 
 # Flussio production stack (Linux/QNAP standard Docker host)
 # Persistence is managed with named volumes only.
-
 services:
   db:
     image: postgres:18
@@ -58,7 +57,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - '${FRONTEND_HOST_PORT:-9808}:80'
+      - "${FRONTEND_HOST_PORT:-9808}:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
       interval: 15s

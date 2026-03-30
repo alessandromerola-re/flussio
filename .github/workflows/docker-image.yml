@@ -37,6 +37,13 @@ jobs:
       - name: Validate production bundle sources
         run: ./scripts/validate_production_bundle.sh
 
+      - name: Show bundle file line stats
+        run: |
+          wc -l deploy/production/docker-compose.prod.yml
+          wc -l deploy/production/docker-compose.prod.qnap.yml
+          wc -l deploy/production/.env.example.prod
+          wc -l scripts/validate_production_bundle.sh
+
       - name: Validate production compose parseability
         run: |
           docker compose -f deploy/production/docker-compose.prod.yml config >/dev/null

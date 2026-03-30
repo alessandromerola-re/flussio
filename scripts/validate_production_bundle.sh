@@ -34,6 +34,7 @@ for file in "${required_files[@]}"; do
     echo "[ERROR] File appears to contain escaped newlines (\\n): $file"
     exit 1
   fi
+
 done
 
 # Hard minimum line counts to catch "quasi-monoriga" regressions.
@@ -50,6 +51,13 @@ for file in "${!min_lines[@]}"; do
     echo "[ERROR] File has unexpectedly few lines ($line_count < ${min_lines[$file]}): $file"
     exit 1
   fi
+
+  max_line_len="$(awk '{ if (length > max) max = length } END { print max + 0 }' "$file")"
+  if (( max_line_len > 400 )); then
+    echo "[ERROR] File has unexpectedly long line ($max_line_len chars): $file"
+    exit 1
+  fi
+
 done
 
 echo "[INFO] Required files are multiline and present."
