@@ -34,6 +34,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Validate production bundle sources
+        run: ./scripts/validate_production_bundle.sh
+
+      - name: Show bundle file line stats
+        run: |
+          wc -l deploy/production/docker-compose.prod.yml
+          wc -l deploy/production/docker-compose.prod.qnap.yml
+          wc -l deploy/production/.env.example.prod
+          wc -l scripts/validate_production_bundle.sh
+
+      - name: Validate production compose parseability
+        run: |
+          docker compose -f deploy/production/docker-compose.prod.yml config >/dev/null
+          docker compose -f deploy/production/docker-compose.prod.qnap.yml config >/dev/null
+
+      - name: Validate production scripts syntax
+        run: |
+          bash -n deploy/production/install.sh
+          bash -n deploy/production/backup.sh
+          bash -n deploy/production/check-schema.sh
+          bash -n deploy/production/restore-test.sh
+          bash -n deploy/production/generate-secrets.sh
+
       - name: Setup Node 22
         uses: actions/setup-node@v5
         with:

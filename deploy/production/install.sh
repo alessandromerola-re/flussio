@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Optional helper wrapper.
+# Official install path is documented as direct docker compose commands.
+
 COMPOSE_FILE_PATH="${FLUSSIO_COMPOSE_FILE:-${COMPOSE_FILE:-docker-compose.prod.yml}}"
 
 if [[ ! -f ".env" ]]; then
@@ -19,7 +22,10 @@ else
   COMPOSE_CMD="docker compose"
 fi
 
-echo "[INFO] Using compose file: $COMPOSE_FILE_PATH"
+echo "[INFO] Optional helper detected. Recommended manual commands are:"
+echo "       $COMPOSE_CMD -f $COMPOSE_FILE_PATH pull"
+echo "       $COMPOSE_CMD -f $COMPOSE_FILE_PATH up -d"
+
 echo "[INFO] Pulling pinned images from GHCR..."
 $COMPOSE_CMD -f "$COMPOSE_FILE_PATH" pull
 
