@@ -1,3 +1,5 @@
+name: flussio
+
 services:
   db:
     image: postgres:18
@@ -8,8 +10,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
-      - uploads_data:/srv/flussio/uploads
-      - backups_data:/srv/flussio/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -65,5 +65,8 @@ services:
 
 volumes:
   db_data:
+    name: flussio_db_data
   uploads_data:
+    name: flussio_uploads
   backups_data:
+    name: flussio_backups

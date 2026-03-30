@@ -2,7 +2,7 @@
 set -euo pipefail
 
 COMPOSE_FILE_PATH="${FLUSSIO_COMPOSE_FILE:-${COMPOSE_FILE:-docker-compose.prod.yml}}"
-BACKUP_FILE="${1:-./data/backups/flussio-backup-$(date +%Y%m%d-%H%M%S).sql.gz}"
+BACKUP_FILE="${1:-./flussio-backup-$(date +%Y%m%d-%H%M%S).sql.gz}"
 
 if [[ ! -f "$COMPOSE_FILE_PATH" ]]; then
   echo "[ERROR] Compose file not found: $COMPOSE_FILE_PATH"

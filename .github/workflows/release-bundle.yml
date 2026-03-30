@@ -119,6 +119,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Validate production bundle sources
+        run: ./scripts/validate_production_bundle.sh
+
       - name: Prepare production bundle
         env:
           VERSION: ${{ github.ref_name }}
