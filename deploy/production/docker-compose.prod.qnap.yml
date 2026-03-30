@@ -1,5 +1,8 @@
 name: flussio
 
+# QNAP variant intentionally aligned with Linux production compose.
+# Persistence is managed with named volumes only.
+
 services:
   db:
     image: postgres:18

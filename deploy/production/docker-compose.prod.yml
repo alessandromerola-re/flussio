@@ -1,5 +1,8 @@
 name: flussio
 
+# Flussio production stack (Linux/QNAP standard Docker host)
+# Persistence is managed with named volumes only.
+
 services:
   db:
     image: postgres:18

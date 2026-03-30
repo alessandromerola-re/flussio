@@ -36,6 +36,22 @@ for file in "${required_files[@]}"; do
   fi
 done
 
+# Hard minimum line counts to catch "quasi-monoriga" regressions.
+declare -A min_lines=(
+  ["$PROD_DIR/docker-compose.prod.yml"]=30
+  ["$PROD_DIR/docker-compose.prod.qnap.yml"]=30
+  ["$PROD_DIR/.env.example.prod"]=15
+  ["$ROOT_DIR/scripts/validate_production_bundle.sh"]=30
+)
+
+for file in "${!min_lines[@]}"; do
+  line_count="$(wc -l < "$file")"
+  if (( line_count < min_lines[$file] )); then
+    echo "[ERROR] File has unexpectedly few lines ($line_count < ${min_lines[$file]}): $file"
+    exit 1
+  fi
+done
+
 echo "[INFO] Required files are multiline and present."
 
 docker compose -f "$PROD_DIR/docker-compose.prod.yml" config >/dev/null
