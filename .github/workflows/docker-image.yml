@@ -34,6 +34,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Validate production bundle sources
+        run: ./scripts/validate_production_bundle.sh
+
       - name: Setup Node 22
         uses: actions/setup-node@v5
         with:
