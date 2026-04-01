@@ -16,7 +16,8 @@ const attachmentMaxMb = Number(process.env.ATTACHMENT_MAX_MB || 20);
 const uploadLimitBytes = Math.max(1, attachmentMaxMb) * 1024 * 1024;
 const rawUpload = express.raw({ type: 'multipart/form-data', limit: `${uploadLimitBytes}b` });
 
-const allowedMime = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const logoAllowedMime = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const faviconAllowedMime = new Set(['image/png', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml']);
 const metadataFileName = 'branding.json';
 
 
@@ -89,11 +90,26 @@ const getDirectionDelta = (direction, amount) => (direction === 'in' ? amount : 
 const getBrandingDir = (companyId) => path.join(uploadsRoot, `company_${companyId}`, 'branding');
 const getMetadataPath = (companyId) => path.join(getBrandingDir(companyId), metadataFileName);
 
+const normalizeAssetMeta = (meta) => {
+  if (!meta) return null;
+  if (meta.logo || meta.favicon) {
+    return {
+      logo: meta.logo || null,
+      favicon: meta.favicon || null,
+    };
+  }
+
+  return {
+    logo: meta.file_name ? meta : null,
+    favicon: null,
+  };
+};
+
 const readBrandingMeta = async (companyId) => {
   try {
     const metadataPath = getMetadataPath(companyId);
     const raw = await fs.readFile(metadataPath, 'utf8');
-    return JSON.parse(raw);
+    return normalizeAssetMeta(JSON.parse(raw));
   } catch (error) {
     if (error.code === 'ENOENT') {
       return null;
@@ -102,30 +118,46 @@ const readBrandingMeta = async (companyId) => {
   }
 };
 
-const deleteCurrentLogo = async (companyId) => {
+const writeBrandingMeta = async (companyId, metadata) => {
+  await fs.writeFile(getMetadataPath(companyId), JSON.stringify(metadata, null, 2));
+};
+
+const deleteAsset = async (companyId, assetKey) => {
   const meta = await readBrandingMeta(companyId);
-  if (!meta) {
+  const currentAsset = meta?.[assetKey];
+  if (!meta || !currentAsset?.file_name) {
     return null;
   }
 
   const brandingDir = getBrandingDir(companyId);
-  if (meta.file_name) {
-    await fs.unlink(path.join(brandingDir, meta.file_name)).catch((error) => {
-      if (error.code !== 'ENOENT') throw error;
-    });
-  }
-
-  await fs.unlink(getMetadataPath(companyId)).catch((error) => {
+  await fs.unlink(path.join(brandingDir, currentAsset.file_name)).catch((error) => {
     if (error.code !== 'ENOENT') throw error;
   });
 
-  return meta;
+  const nextMeta = { ...meta, [assetKey]: null };
+  if (!nextMeta.logo && !nextMeta.favicon) {
+    await fs.unlink(getMetadataPath(companyId)).catch((error) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  } else {
+    await writeBrandingMeta(companyId, nextMeta);
+  }
+
+  return currentAsset;
 };
 
 router.get('/branding', async (req, res) => {
   try {
     const meta = await readBrandingMeta(req.companyId);
-    return res.json({ has_logo: Boolean(meta?.file_name), updated_at: meta?.updated_at || null });
+    return res.json({
+      has_logo: Boolean(meta?.logo?.file_name),
+      logo_updated_at: meta?.logo?.updated_at || null,
+      logo_file_name: meta?.logo?.original_name || null,
+      has_favicon: Boolean(meta?.favicon?.file_name),
+      favicon_updated_at: meta?.favicon?.updated_at || null,
+      favicon_file_name: meta?.favicon?.original_name || null,
+      updated_at: meta?.logo?.updated_at || null,
+    });
   } catch (error) {
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
@@ -135,13 +167,13 @@ router.get('/branding', async (req, res) => {
 router.get('/branding/logo', async (req, res) => {
   try {
     const meta = await readBrandingMeta(req.companyId);
-    if (!meta?.file_name) {
+    if (!meta?.logo?.file_name) {
       return sendError(res, 404, 'NOT_FOUND', 'Logo non trovato.');
     }
 
-    const fullPath = path.join(getBrandingDir(req.companyId), meta.file_name);
-    res.setHeader('Content-Type', meta.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${safeFileName(meta.file_name)}"`);
+    const fullPath = path.join(getBrandingDir(req.companyId), meta.logo.file_name);
+    res.setHeader('Content-Type', meta.logo.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${safeFileName(meta.logo.file_name)}"`);
     return res.sendFile(fullPath);
   } catch (error) {
     console.error(error);
@@ -166,7 +198,7 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
     return sendError(res, 413, 'FILE_TOO_LARGE', 'File troppo grande.', { details: { max_mb: attachmentMaxMb } });
   }
 
-  if (!allowedMime.has(parsedFile.mimeType)) {
+  if (!logoAllowedMime.has(parsedFile.mimeType)) {
     return sendError(res, 400, 'VALIDATION_INVALID_FILE_TYPE', 'Formato logo non supportato. Usa PNG/JPG/WEBP.');
   }
 
@@ -179,16 +211,18 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
     const originalBaseName = path.basename(parsedFile.originalName, path.extname(parsedFile.originalName)) || 'logo';
     const generatedName = `${crypto.randomUUID()}_${safeFileName(originalBaseName)}.${extension}`;
     const fullPath = path.join(brandingDir, generatedName);
-    const metadata = {
+    const logoMetadata = {
       file_name: generatedName,
+      original_name: parsedFile.originalName,
       mime_type: parsedFile.mimeType,
       size: parsedFile.size,
       updated_at: new Date().toISOString(),
     };
+    const metadata = { logo: logoMetadata, favicon: previousMeta?.favicon || null };
 
     try {
       await fs.writeFile(fullPath, parsedFile.buffer);
-      await fs.writeFile(getMetadataPath(req.companyId), JSON.stringify(metadata, null, 2));
+      await writeBrandingMeta(req.companyId, metadata);
     } catch (writeError) {
       await fs.unlink(fullPath).catch((unlinkError) => {
         if (unlinkError.code !== 'ENOENT') throw unlinkError;
@@ -196,8 +230,8 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
       throw writeError;
     }
 
-    if (previousMeta?.file_name && previousMeta.file_name !== generatedName) {
-      await fs.unlink(path.join(brandingDir, previousMeta.file_name)).catch((unlinkError) => {
+    if (previousMeta?.logo?.file_name && previousMeta.logo.file_name !== generatedName) {
+      await fs.unlink(path.join(brandingDir, previousMeta.logo.file_name)).catch((unlinkError) => {
         if (unlinkError.code !== 'ENOENT') throw unlinkError;
       });
     }
@@ -211,7 +245,7 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
       meta: { file_name: generatedName },
     });
 
-    return res.status(201).json({ status: 'saved', updated_at: metadata.updated_at });
+    return res.status(201).json({ status: 'saved', updated_at: logoMetadata.updated_at });
   } catch (error) {
     console.error(error);
     return sendError(res, 500, 'BRANDING_UPLOAD_FAILED', 'Upload logo non riuscito.');
@@ -220,7 +254,7 @@ router.post('/branding/logo', requirePermission('users_manage'), rawUpload, asyn
 
 router.delete('/branding/logo', requirePermission('users_manage'), async (req, res) => {
   try {
-    const previous = await deleteCurrentLogo(req.companyId);
+    const previous = await deleteAsset(req.companyId, 'logo');
     if (!previous) {
       return res.status(204).send();
     }
@@ -232,6 +266,121 @@ router.delete('/branding/logo', requirePermission('users_manage'), async (req, r
       entityType: 'branding',
       entityId: req.companyId,
       meta: { file_name: previous.file_name },
+    });
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
+  }
+});
+
+router.get('/branding/favicon', async (req, res) => {
+  try {
+    const meta = await readBrandingMeta(req.companyId);
+    if (!meta?.favicon?.file_name) {
+      return sendError(res, 404, 'NOT_FOUND', 'Favicon non trovata.');
+    }
+
+    const fullPath = path.join(getBrandingDir(req.companyId), meta.favicon.file_name);
+    res.setHeader('Content-Type', meta.favicon.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${safeFileName(meta.favicon.file_name)}"`);
+    return res.sendFile(fullPath);
+  } catch (error) {
+    console.error(error);
+    if (error.code === 'ENOENT') {
+      return sendError(res, 404, 'NOT_FOUND', 'Favicon non trovata.');
+    }
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
+  }
+});
+
+router.post('/branding/favicon', requirePermission('users_manage'), rawUpload, async (req, res) => {
+  if (!(req.headers['content-type'] || '').includes('multipart/form-data')) {
+    return sendError(res, 400, 'NO_FILE', 'Nessun file selezionato.');
+  }
+
+  const parsedFile = parseMultipartFile(req);
+  if (!parsedFile || !parsedFile.originalName || parsedFile.size === 0) {
+    return sendError(res, 400, 'NO_FILE', 'Nessun file selezionato.');
+  }
+
+  if (parsedFile.size > uploadLimitBytes) {
+    return sendError(res, 413, 'FILE_TOO_LARGE', 'File troppo grande.', { details: { max_mb: attachmentMaxMb } });
+  }
+
+  if (!faviconAllowedMime.has(parsedFile.mimeType)) {
+    return sendError(res, 400, 'VALIDATION_INVALID_FILE_TYPE', 'Formato favicon non supportato. Usa ICO/PNG/SVG.');
+  }
+
+  try {
+    const brandingDir = getBrandingDir(req.companyId);
+    await fs.mkdir(brandingDir, { recursive: true });
+
+    const previousMeta = await readBrandingMeta(req.companyId);
+    const extension = parsedFile.mimeType === 'image/png'
+      ? 'png'
+      : parsedFile.mimeType === 'image/svg+xml'
+        ? 'svg'
+        : 'ico';
+    const originalBaseName = path.basename(parsedFile.originalName, path.extname(parsedFile.originalName)) || 'favicon';
+    const generatedName = `${crypto.randomUUID()}_${safeFileName(originalBaseName)}.${extension}`;
+    const fullPath = path.join(brandingDir, generatedName);
+    const faviconMetadata = {
+      file_name: generatedName,
+      original_name: parsedFile.originalName,
+      mime_type: parsedFile.mimeType,
+      size: parsedFile.size,
+      updated_at: new Date().toISOString(),
+    };
+    const metadata = { logo: previousMeta?.logo || null, favicon: faviconMetadata };
+
+    try {
+      await fs.writeFile(fullPath, parsedFile.buffer);
+      await writeBrandingMeta(req.companyId, metadata);
+    } catch (writeError) {
+      await fs.unlink(fullPath).catch((unlinkError) => {
+        if (unlinkError.code !== 'ENOENT') throw unlinkError;
+      });
+      throw writeError;
+    }
+
+    if (previousMeta?.favicon?.file_name && previousMeta.favicon.file_name !== generatedName) {
+      await fs.unlink(path.join(brandingDir, previousMeta.favicon.file_name)).catch((unlinkError) => {
+        if (unlinkError.code !== 'ENOENT') throw unlinkError;
+      });
+    }
+
+    await writeAuditLog({
+      companyId: req.companyId,
+      userId: req.user.user_id,
+      action: 'update',
+      entityType: 'branding',
+      entityId: req.companyId,
+      meta: { favicon_file_name: generatedName },
+    });
+
+    return res.status(201).json({ status: 'saved', updated_at: faviconMetadata.updated_at });
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, 'BRANDING_UPLOAD_FAILED', 'Upload favicon non riuscito.');
+  }
+});
+
+router.delete('/branding/favicon', requirePermission('users_manage'), async (req, res) => {
+  try {
+    const previous = await deleteAsset(req.companyId, 'favicon');
+    if (!previous) {
+      return res.status(204).send();
+    }
+
+    await writeAuditLog({
+      companyId: req.companyId,
+      userId: req.user.user_id,
+      action: 'delete',
+      entityType: 'branding',
+      entityId: req.companyId,
+      meta: { favicon_file_name: previous.file_name },
     });
 
     return res.status(204).send();

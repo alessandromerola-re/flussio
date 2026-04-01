@@ -215,16 +215,22 @@ export const api = {
 
   getBranding: () => request('/settings/branding'),
   downloadBrandLogo: () => request('/settings/branding/logo', { responseType: 'blob' }),
+  downloadBrandFavicon: () => request('/settings/branding/favicon', { responseType: 'blob' }),
   uploadBrandLogo: (file) => {
     const formData = new FormData();
     formData.append('file', file);
     return request('/settings/branding/logo', { method: 'POST', body: formData });
   },
   deleteBrandLogo: () => request('/settings/branding/logo', { method: 'DELETE' }),
+  uploadBrandFavicon: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request('/settings/branding/favicon', { method: 'POST', body: formData });
+  },
+  deleteBrandFavicon: () => request('/settings/branding/favicon', { method: 'DELETE' }),
   importMovementsCsv: (file) => {
     const formData = new FormData();
     formData.append('file', file);
     return request('/settings/movements/import-csv', { method: 'POST', body: formData });
   },
 };
-

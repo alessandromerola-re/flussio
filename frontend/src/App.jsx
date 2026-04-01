@@ -14,6 +14,7 @@ const App = () => {
   const [language, setLanguageState] = useState(() => localStorage.getItem('flussio_lang') || 'it');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [brandFaviconUrl, setBrandFaviconUrl] = useState('');
   const [companies, setCompanies] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('flussio_companies') || '[]');
@@ -55,12 +56,57 @@ const App = () => {
     }
   };
 
+  const loadBrandingFavicon = async () => {
+    if (!getToken()) {
+      setBrandFaviconUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+      return;
+    }
+
+    try {
+      const branding = await api.getBranding();
+      if (!branding?.has_favicon) {
+        setBrandFaviconUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return '';
+        });
+        return;
+      }
+
+      const blob = await api.downloadBrandFavicon();
+      setBrandFaviconUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+    } catch {
+      setBrandFaviconUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+    }
+  };
+
   useEffect(() => {
     loadBrandingLogo();
+    loadBrandingFavicon();
     return () => {
       if (brandLogoUrl) URL.revokeObjectURL(brandLogoUrl);
+      if (brandFaviconUrl) URL.revokeObjectURL(brandFaviconUrl);
     };
   }, [token]);
+
+  useEffect(() => {
+    const href = brandFaviconUrl || '/favicon.svg';
+    let icon = document.querySelector('link[rel="icon"]');
+    if (!icon) {
+      icon = document.createElement('link');
+      icon.rel = 'icon';
+      document.head.appendChild(icon);
+    }
+    icon.href = href;
+  }, [brandFaviconUrl]);
 
 
   useEffect(() => {
@@ -221,7 +267,15 @@ const App = () => {
 
           <main className="content">
             <Routes>
-              {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo, brandLogoUrl }).map((route) => (
+              {routes({
+                setTokenState,
+                token,
+                onBrandingChanged: () => {
+                  loadBrandingLogo();
+                  loadBrandingFavicon();
+                },
+                brandLogoUrl,
+              }).map((route) => (
                 <Route key={route.path} path={route.path} element={route.element} />
               ))}
             </Routes>
@@ -229,7 +283,15 @@ const App = () => {
         </div>
       ) : (
         <Routes>
-          {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo, brandLogoUrl }).map((route) => (
+          {routes({
+            setTokenState,
+            token,
+            onBrandingChanged: () => {
+              loadBrandingLogo();
+              loadBrandingFavicon();
+            },
+            brandLogoUrl,
+          }).map((route) => (
             <Route key={route.path} path={route.path} element={route.element} />
           ))}
         </Routes>

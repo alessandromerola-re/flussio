@@ -4,6 +4,7 @@ import { api, getIsSuperAdmin, getRole } from '../services/api.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 
 const maxMb = 20;
+const faviconAcceptedTypes = ['image/x-icon', 'image/vnd.microsoft.icon', 'image/png', 'image/svg+xml'];
 
 const SettingsAdminPage = ({ onBrandingChanged }) => {
   const { t } = useTranslation();
@@ -11,6 +12,13 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const [previewUrl, setPreviewUrl] = useState('');
   const previewUrlRef = useRef('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [hasFavicon, setHasFavicon] = useState(false);
+  const [faviconPreviewUrl, setFaviconPreviewUrl] = useState('');
+  const faviconPreviewUrlRef = useRef('');
+  const [selectedFaviconFile, setSelectedFaviconFile] = useState(null);
+  const [faviconName, setFaviconName] = useState('');
+  const [faviconMessage, setFaviconMessage] = useState('');
+  const [faviconError, setFaviconError] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [brandingLoading, setBrandingLoading] = useState(false);
@@ -18,6 +26,7 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const [csvMessage, setCsvMessage] = useState('');
   const [csvError, setCsvError] = useState('');
   const logoInputRef = useRef(null);
+  const faviconInputRef = useRef(null);
   const [companies, setCompanies] = useState([]);
   const [companyName, setCompanyName] = useState('');
   const [companySeedDefaults, setCompanySeedDefaults] = useState(true);
@@ -28,6 +37,8 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   const loadBranding = async () => {
     const data = await api.getBranding();
     setHasLogo(Boolean(data?.has_logo));
+    setHasFavicon(Boolean(data?.has_favicon));
+    setFaviconName(data?.favicon_file_name || '');
 
     if (data?.has_logo) {
       const blob = await api.downloadBrandLogo();
@@ -41,6 +52,19 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
         return '';
       });
     }
+
+    if (data?.has_favicon) {
+      const blob = await api.downloadBrandFavicon();
+      setFaviconPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+    } else {
+      setFaviconPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+    }
   };
 
   useEffect(() => {
@@ -48,10 +72,15 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
   }, [previewUrl]);
 
   useEffect(() => {
+    faviconPreviewUrlRef.current = faviconPreviewUrl;
+  }, [faviconPreviewUrl]);
+
+  useEffect(() => {
     loadBranding().catch((loadError) => setError(getErrorMessage(t, loadError)));
     loadCompanies().catch((loadError) => setCompanyError(getErrorMessage(t, loadError)));
     return () => {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      if (faviconPreviewUrlRef.current) URL.revokeObjectURL(faviconPreviewUrlRef.current);
     };
   }, []);
 
@@ -109,6 +138,63 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
       setCsvMessage(t('pages.settings.importResult', { imported: result.imported || 0, skipped: result.skipped || 0 }));
     } catch (importError) {
       setCsvError(getErrorMessage(t, importError));
+    }
+  };
+
+  const handleUploadFavicon = async (event) => {
+    event.preventDefault();
+    setFaviconError('');
+    setFaviconMessage('');
+
+    if (!selectedFaviconFile) {
+      setFaviconError(t('errors.NO_FILE'));
+      return;
+    }
+
+    if (selectedFaviconFile.size > maxMb * 1024 * 1024) {
+      setFaviconError(t('errors.FILE_TOO_LARGE', { maxMb }));
+      return;
+    }
+
+    if (!faviconAcceptedTypes.includes(selectedFaviconFile.type)) {
+      setFaviconError(t('pages.settings.faviconValidation'));
+      return;
+    }
+
+    setBrandingLoading(true);
+    try {
+      await api.uploadBrandFavicon(selectedFaviconFile);
+      await loadBranding();
+      setSelectedFaviconFile(null);
+      if (faviconInputRef.current) {
+        faviconInputRef.current.value = '';
+      }
+      setFaviconMessage(t('pages.settings.faviconSaved'));
+      onBrandingChanged?.();
+    } catch (uploadError) {
+      setFaviconError(getErrorMessage(t, uploadError));
+    } finally {
+      setBrandingLoading(false);
+    }
+  };
+
+  const handleDeleteFavicon = async () => {
+    setFaviconError('');
+    setFaviconMessage('');
+    setBrandingLoading(true);
+    try {
+      await api.deleteBrandFavicon();
+      await loadBranding();
+      setSelectedFaviconFile(null);
+      if (faviconInputRef.current) {
+        faviconInputRef.current.value = '';
+      }
+      setFaviconMessage(t('pages.settings.faviconDeleted'));
+      onBrandingChanged?.();
+    } catch (deleteError) {
+      setFaviconError(getErrorMessage(t, deleteError));
+    } finally {
+      setBrandingLoading(false);
     }
   };
 
@@ -183,6 +269,7 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
       <div className="page-header"><h1>{t('pages.settings.title')}</h1></div>
       <div className="card" style={{ maxWidth: 680 }}>
         <h2>{t('pages.settings.branding')}</h2>
+        <p className="muted">{t('pages.settings.logoUsage')}</p>
         <p className="muted">{t('pages.settings.logoHint')}</p>
 
         {previewUrl ? (
@@ -215,6 +302,47 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
 
         {message && <div className="success">{message}</div>}
         {error && <div className="error">{error}</div>}
+
+        <hr />
+        <h3>{t('pages.settings.faviconTitle')}</h3>
+        <p className="muted">{t('pages.settings.faviconUsage')}</p>
+        <p className="muted">{t('pages.settings.faviconHint')}</p>
+
+        <div className="favicon-preview-row">
+          {faviconPreviewUrl ? (
+            <img src={faviconPreviewUrl} alt="Favicon" className="favicon-preview" />
+          ) : (
+            <img src="/favicon.svg" alt="Favicon di default" className="favicon-preview" />
+          )}
+          <div className="muted">
+            {faviconName || t('pages.settings.faviconDefaultState')}
+          </div>
+        </div>
+
+        <form onSubmit={handleUploadFavicon}>
+          <label>
+            Favicon
+            <input
+              ref={faviconInputRef}
+              type="file"
+              accept="image/x-icon,image/vnd.microsoft.icon,image/png,image/svg+xml,.ico,.png,.svg"
+              onChange={(event) => setSelectedFaviconFile(event.target.files?.[0] || null)}
+            />
+          </label>
+          <div className="row-actions">
+            <button type="submit" disabled={!selectedFaviconFile || brandingLoading}>
+              {brandingLoading ? t('common.loading') : hasFavicon ? t('pages.settings.replaceFavicon') : t('pages.settings.uploadFavicon')}
+            </button>
+            {hasFavicon && (
+              <button type="button" className="danger" onClick={handleDeleteFavicon} disabled={brandingLoading}>
+                {t('pages.settings.removeFavicon')}
+              </button>
+            )}
+          </div>
+        </form>
+
+        {faviconMessage && <div className="success">{faviconMessage}</div>}
+        {faviconError && <div className="error">{faviconError}</div>}
       </div>
 
       <div className="card" style={{ maxWidth: 680, marginTop: '1rem' }}>
