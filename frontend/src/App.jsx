@@ -3,7 +3,7 @@ import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import routes from './routes.jsx';
 import { api, clearToken, getActiveCompanyId, getToken, setActiveCompanyId } from './services/api.js';
-import { can } from './utils/permissions.js';
+import { can, isRecurringEnabled } from './utils/permissions.js';
 import { setLanguage } from './i18n/index.js';
 import BrandMark from './components/BrandMark.jsx';
 
@@ -116,7 +116,7 @@ const App = () => {
       { path: '/dashboard', label: t('nav.dashboard') },
       { path: '/movements', label: t('nav.movements') },
       { path: '/registry', label: t('nav.registry') },
-      { path: '/recurring', label: t('nav.recurring') },
+      ...(isRecurringEnabled() ? [{ path: '/recurring', label: t('nav.recurring') }] : []),
       { path: '/reports/advanced', label: t('nav.reportsAdvanced') },
       ...(can('manage_users') ? [{ path: '/users', label: t('nav.users') }] : []),
       ...(can('manage_users') ? [{ path: '/settings', label: t('nav.settings') }] : []),
