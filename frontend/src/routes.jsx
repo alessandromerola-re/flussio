@@ -9,7 +9,7 @@ import UsersAdminPage from './pages/UsersAdminPage.jsx';
 import RoadmapPage from './pages/RoadmapPage.jsx';
 import SettingsAdminPage from './pages/SettingsAdminPage.jsx';
 import AdvancedReportsPage from './pages/AdvancedReportsPage.jsx';
-import { can } from './utils/permissions.js';
+import { can, isRecurringEnabled } from './utils/permissions.js';
 
 const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
   {
@@ -38,7 +38,7 @@ const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
   },
   {
     path: '/recurring',
-    element: token ? <RecurringTemplatesPage /> : <Navigate to="/login" replace />,
+    element: token ? (isRecurringEnabled() ? <RecurringTemplatesPage /> : <Navigate to="/dashboard" replace />) : <Navigate to="/login" replace />,
   },
 
   {

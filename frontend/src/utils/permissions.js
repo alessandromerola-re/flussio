@@ -17,6 +17,7 @@ const actionToPermission = {
 
 export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
 export const isRoadmapEnabled = () => String(import.meta.env.VITE_SHOW_ROADMAP || 'false').toLowerCase() === 'true';
+export const isRecurringEnabled = () => String(import.meta.env.VITE_SHOW_RECURRING || 'false').toLowerCase() === 'true';
 
 export const canPermission = (permission, role = getRole()) => Boolean(rolePermissions[role]?.[permission]);
 
