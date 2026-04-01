@@ -49,6 +49,7 @@ const RegistryPage = () => {
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState([]);
   const [importSummary, setImportSummary] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
 
   const loadData = async () => {
     setLoadError('');
@@ -238,12 +239,18 @@ const RegistryPage = () => {
   };
 
   const handleExportCsv = async () => {
+    setExportLoading(true);
     try {
       const entity = entityForTab[tab];
-      const blob = await api.exportEntityCsv(entity);
-      downloadBlob(blob, `${entity}.csv`);
+      const { blob, headers } = await api.exportEntityCsv(entity);
+      const disposition = headers.get('content-disposition') || '';
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const fallbackFilename = `flussio_${entity}_${new Date().toISOString().slice(0, 10)}.csv`;
+      downloadBlob(blob, match?.[1] || fallbackFilename);
     } catch (error) {
       setLoadError(getErrorMessage(t, error));
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -290,7 +297,9 @@ const RegistryPage = () => {
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>
+          <button type="button" className="ghost" onClick={handleExportCsv} disabled={exportLoading}>
+            {exportLoading ? 'Export in corso...' : 'Esporta CSV'}
+          </button>
           {canPermission('write') && <button type="button" className="ghost" onClick={() => setImportModalOpen(true)}>Importa CSV</button>}
           {canPermission('write') && (
             <button type="button" className="desktop-only registry-new-button" onClick={() => openCreateModal(tab)}>
