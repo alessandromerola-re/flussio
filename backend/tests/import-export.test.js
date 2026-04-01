@@ -67,6 +67,14 @@ test.before(async () => {
     'INSERT INTO contacts (company_id, external_id, name, email, phone, default_category_id, is_active) VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING id',
     [companyId, 'ct_mario', 'Mario Rossi', 'mario@example.com', '123', category.rows[0].id]
   );
+  const otherCategory = await query(
+    'INSERT INTO categories (company_id, external_id, name, direction, is_active) VALUES ($1, $2, $3, $4, true) RETURNING id',
+    [otherCompanyId, 'cat_other', 'Categoria Altra Azienda', 'expense']
+  );
+  await query(
+    'INSERT INTO contacts (company_id, external_id, name, email, phone, default_category_id, is_active) VALUES ($1, $2, $3, $4, $5, $6, true)',
+    [companyId, 'ct_cross', 'Contatto Cross Tenant', 'cross@example.com', '999', otherCategory.rows[0].id]
+  );
 
   await query(
     'INSERT INTO accounts (company_id, external_id, name, type, opening_balance, balance, is_active) VALUES ($1, $2, $3, $4, $5, $5, true)',
@@ -121,4 +129,23 @@ test('registry CSV exports return downloadable files with scoped company data', 
       assert.doesNotMatch(response.body, new RegExp(unexpected));
     }
   }
+});
+
+test('contacts export never leaks default category metadata from another company', async () => {
+  const response = await requestCsv('/api/export/contacts.csv', companyId);
+  assert.equal(response.status, 200);
+
+  const lines = response.body.replace(/^\uFEFF/, '').split('\n').filter(Boolean);
+  const headers = lines[0].split(',');
+  const crossContactLine = lines.find((line) => line.includes('Contatto Cross Tenant'));
+  assert.ok(crossContactLine, 'cross-tenant contact row should exist in company export');
+
+  const row = crossContactLine.split(',');
+  const extIdIndex = headers.indexOf('default_category_external_id');
+  const nameIndex = headers.indexOf('default_category_name');
+  assert.ok(extIdIndex >= 0 && nameIndex >= 0, 'default category columns are present');
+  assert.equal(row[extIdIndex], '', 'default_category_external_id must be empty when category is cross-company');
+  assert.equal(row[nameIndex], '', 'default_category_name must be empty when category is cross-company');
+  assert.doesNotMatch(response.body, /Categoria Altra Azienda/);
+  assert.doesNotMatch(response.body, /cat_other/);
 });

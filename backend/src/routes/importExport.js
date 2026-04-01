@@ -73,7 +73,7 @@ const exportEntity = async (entity, companyId) => {
     const r = await query(
       `SELECT c.external_id,c.name,c.email,c.phone,c.is_active,cat.external_id AS default_category_external_id,cat.name AS default_category_name
        FROM contacts c
-       LEFT JOIN categories cat ON cat.id = c.default_category_id
+       LEFT JOIN categories cat ON cat.id = c.default_category_id AND cat.company_id = c.company_id
        WHERE c.company_id=$1
        ORDER BY c.id`,
       [companyId]
