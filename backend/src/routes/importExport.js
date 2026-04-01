@@ -24,6 +24,16 @@ const parseMultipartFile = (req) => {
 };
 
 const slug = (s = '') => String(s).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+const datePart = () => new Date().toISOString().slice(0, 10);
+const exportFilenameByEntity = {
+  accounts: () => `flussio_accounts_${datePart()}.csv`,
+  categories: () => `flussio_categories_${datePart()}.csv`,
+  contacts: () => `flussio_contacts_${datePart()}.csv`,
+  jobs: () => `flussio_jobs_${datePart()}.csv`,
+  properties: () => `flussio_properties_${datePart()}.csv`,
+  recurring_templates: () => `flussio_recurring_templates_${datePart()}.csv`,
+  transactions: () => `flussio_transactions_${datePart()}.csv`,
+};
 const csvEsc = (v) => {
   const s = v == null ? '' : String(v);
   if (/[",\n;]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -60,17 +70,40 @@ const exportEntity = async (entity, companyId) => {
     return { headers: ['external_id', 'name', 'direction', 'color', 'is_active', 'category_parent_external_id'], rows: r.rows.map((x) => [x.external_id || `${slug(x.name)}_${x.direction}`, x.name, x.direction, x.color || '', x.is_active, x.parent_external_id || (x.parent_name ? `${slug(x.parent_name)}_${x.parent_direction}` : '')]) };
   }
   if (entity === 'contacts') {
-    const r = await query('SELECT external_id,name,email,phone,is_active FROM contacts WHERE company_id=$1 ORDER BY id', [companyId]);
-    return { headers: ['external_id', 'name', 'email', 'phone', 'is_active'], rows: r.rows.map((x) => [x.external_id || slug(x.name), x.name, x.email || '', x.phone || '', x.is_active]) };
+    const r = await query(
+      `SELECT c.external_id,c.name,c.email,c.phone,c.is_active,cat.external_id AS default_category_external_id,cat.name AS default_category_name
+       FROM contacts c
+       LEFT JOIN categories cat ON cat.id = c.default_category_id AND cat.company_id = c.company_id
+       WHERE c.company_id=$1
+       ORDER BY c.id`,
+      [companyId]
+    );
+    return {
+      headers: ['external_id', 'name', 'email', 'phone', 'is_active', 'default_category_external_id', 'default_category_name'],
+      rows: r.rows.map((x) => [x.external_id || slug(x.name), x.name, x.email || '', x.phone || '', x.is_active, x.default_category_external_id || '', x.default_category_name || '']),
+    };
   }
   if (entity === 'jobs') {
-    const r = await query('SELECT code,title,name,notes,is_active,is_closed,expected_revenue_cents,expected_cost_cents,start_date,end_date FROM jobs WHERE company_id=$1 ORDER BY id', [companyId]);
-    return { headers: ['code', 'title', 'name', 'notes', 'is_active', 'is_closed', 'expected_revenue_cents', 'expected_cost_cents', 'start_date', 'end_date'], rows: r.rows.map((x) => [x.code || slug(x.title || x.name), x.title || '', x.name || '', x.notes || '', x.is_active, x.is_closed, x.expected_revenue_cents ?? '', x.expected_cost_cents ?? '', x.start_date || '', x.end_date || '']) };
+    const r = await query(
+      `SELECT j.code,j.title,j.name,j.notes,j.is_active,j.is_closed,j.expected_revenue_cents,j.expected_cost_cents,j.start_date,j.end_date,c.name AS contact_name
+       FROM jobs j
+       LEFT JOIN contacts c ON c.id = j.contact_id
+       WHERE j.company_id=$1
+       ORDER BY j.id`,
+      [companyId]
+    );
+    return {
+      headers: ['code', 'title', 'name', 'notes', 'contact_name', 'is_active', 'is_closed', 'expected_revenue_cents', 'expected_cost_cents', 'start_date', 'end_date'],
+      rows: r.rows.map((x) => [x.code || slug(x.title || x.name), x.title || '', x.name || '', x.notes || '', x.contact_name || '', x.is_active, x.is_closed, x.expected_revenue_cents ?? '', x.expected_cost_cents ?? '', x.start_date || '', x.end_date || '']),
+    };
   }
   if (entity === 'properties') {
     const r = await query(`SELECT p.external_id,p.name,p.notes,p.is_active,c.external_id AS contact_external_id,c.name AS contact_name
       FROM properties p LEFT JOIN contacts c ON c.id=p.contact_id WHERE p.company_id=$1 ORDER BY p.id`, [companyId]);
-    return { headers: ['external_id', 'name', 'notes', 'is_active', 'contact_external_id'], rows: r.rows.map((x) => [x.external_id || slug(x.name), x.name, x.notes || '', x.is_active, x.contact_external_id || (x.contact_name ? slug(x.contact_name) : '')]) };
+    return {
+      headers: ['external_id', 'name', 'notes', 'is_active', 'contact_external_id', 'contact_name'],
+      rows: r.rows.map((x) => [x.external_id || slug(x.name), x.name, x.notes || '', x.is_active, x.contact_external_id || (x.contact_name ? slug(x.contact_name) : ''), x.contact_name || '']),
+    };
   }
   if (entity === 'recurring_templates') {
     const r = await query('SELECT external_id,title,frequency,interval,start_date,end_date,is_active,amount,movement_type,notes FROM recurring_templates WHERE company_id=$1 ORDER BY id', [companyId]);
@@ -100,8 +133,9 @@ router.get('/:entity.csv', async (req, res) => {
     const payload = await exportEntity(entity, req.companyId);
     if (!payload) return sendError(res, 404, 'NOT_FOUND', 'Entity not supported');
     const csv = [payload.headers.join(','), ...payload.rows.map((row) => row.map(csvEsc).join(','))].join('\n');
+    const filename = exportFilenameByEntity[entity]?.() || `${entity}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${entity}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.send(`\uFEFF${csv}`);
   } catch (error) {
     console.error(error);
