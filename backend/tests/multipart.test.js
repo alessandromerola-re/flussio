@@ -10,6 +10,7 @@ test('safeFileName normalizes unsupported characters', () => {
 
 test('inferMimeTypeFromName falls back from file extension', () => {
   assert.equal(inferMimeTypeFromName('brand-logo.webp'), 'image/webp');
+  assert.equal(inferMimeTypeFromName('favicon.ico'), 'image/x-icon');
   assert.equal(inferMimeTypeFromName('brand-logo.unknown', 'application/octet-stream'), 'application/octet-stream');
 });
 

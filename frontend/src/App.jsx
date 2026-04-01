@@ -6,6 +6,7 @@ import { api, clearToken, getActiveCompanyId, getToken, setActiveCompanyId } fro
 import { can, isRecurringEnabled } from './utils/permissions.js';
 import { setLanguage } from './i18n/index.js';
 import BrandMark from './components/BrandMark.jsx';
+import { applyBrandingIconsToHead } from './utils/brandingIcons.js';
 
 const App = () => {
   const { t } = useTranslation();
@@ -14,6 +15,8 @@ const App = () => {
   const [language, setLanguageState] = useState(() => localStorage.getItem('flussio_lang') || 'it');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [faviconUrl, setFaviconUrl] = useState('');
+  const [appleTouchUrl, setAppleTouchUrl] = useState('');
   const [companies, setCompanies] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('flussio_companies') || '[]');
@@ -23,9 +26,17 @@ const App = () => {
   });
   const [activeCompanyId, setActiveCompanyIdState] = useState(() => getActiveCompanyId() || '');
 
-  const loadBrandingLogo = async () => {
+  const loadBrandingAssets = async () => {
     if (!getToken()) {
       setBrandLogoUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+      setFaviconUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+      setAppleTouchUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return '';
       });
@@ -39,16 +50,49 @@ const App = () => {
           if (prev) URL.revokeObjectURL(prev);
           return '';
         });
-        return;
+      } else {
+        const blob = await api.downloadBrandLogo();
+        setBrandLogoUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(blob);
+        });
       }
 
-      const blob = await api.downloadBrandLogo();
-      setBrandLogoUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(blob);
-      });
+      if (branding?.icons?.variants?.favicon?.available) {
+        const faviconBlob = await api.downloadBrandIcon('favicon');
+        setFaviconUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(faviconBlob);
+        });
+      } else {
+        setFaviconUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return '';
+        });
+      }
+
+      if (branding?.icons?.variants?.apple_touch_icon?.available) {
+        const appleBlob = await api.downloadBrandIcon('apple-touch-icon');
+        setAppleTouchUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return URL.createObjectURL(appleBlob);
+        });
+      } else {
+        setAppleTouchUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return '';
+        });
+      }
     } catch {
       setBrandLogoUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+      setFaviconUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return '';
+      });
+      setAppleTouchUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return '';
       });
@@ -56,11 +100,17 @@ const App = () => {
   };
 
   useEffect(() => {
-    loadBrandingLogo();
+    loadBrandingAssets();
     return () => {
       if (brandLogoUrl) URL.revokeObjectURL(brandLogoUrl);
+      if (faviconUrl) URL.revokeObjectURL(faviconUrl);
+      if (appleTouchUrl) URL.revokeObjectURL(appleTouchUrl);
     };
   }, [token]);
+
+  useEffect(() => {
+    applyBrandingIconsToHead({ faviconUrl, appleTouchUrl });
+  }, [faviconUrl, appleTouchUrl]);
 
 
   useEffect(() => {
@@ -221,7 +271,7 @@ const App = () => {
 
           <main className="content">
             <Routes>
-              {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo, brandLogoUrl }).map((route) => (
+              {routes({ setTokenState, token, onBrandingChanged: loadBrandingAssets, brandLogoUrl }).map((route) => (
                 <Route key={route.path} path={route.path} element={route.element} />
               ))}
             </Routes>
@@ -229,7 +279,7 @@ const App = () => {
         </div>
       ) : (
         <Routes>
-          {routes({ setTokenState, token, onBrandingChanged: loadBrandingLogo, brandLogoUrl }).map((route) => (
+          {routes({ setTokenState, token, onBrandingChanged: loadBrandingAssets, brandLogoUrl }).map((route) => (
             <Route key={route.path} path={route.path} element={route.element} />
           ))}
         </Routes>

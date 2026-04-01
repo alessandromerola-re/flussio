@@ -5,6 +5,7 @@ const IMAGE_MIME_BY_EXTENSION = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
 };
 
 export const safeFileName = (name = '') => String(name).replace(/[^a-zA-Z0-9._-]/g, '_');
