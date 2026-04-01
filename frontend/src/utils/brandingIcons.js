@@ -2,7 +2,7 @@ const DEFAULT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 6
 
 export const DEFAULT_ICON_DATA_URL = `data:image/svg+xml,${encodeURIComponent(DEFAULT_ICON_SVG)}`;
 
-export const applyBrandingIconsToHead = ({ faviconUrl = '', appleTouchUrl = '' }) => {
+export const applyBrandingIconsToHead = ({ faviconUrl = '', appleTouchUrl = '', manifestUrl = '' }) => {
   const head = document.head;
   if (!head) return;
 
@@ -10,18 +10,26 @@ export const applyBrandingIconsToHead = ({ faviconUrl = '', appleTouchUrl = '' }
     { selector: 'link[data-branding-icon="icon"]', rel: 'icon', href: faviconUrl || DEFAULT_ICON_DATA_URL, type: 'image/svg+xml' },
     { selector: 'link[data-branding-icon="shortcut"]', rel: 'shortcut icon', href: faviconUrl || DEFAULT_ICON_DATA_URL },
     { selector: 'link[data-branding-icon="apple"]', rel: 'apple-touch-icon', href: appleTouchUrl || faviconUrl || DEFAULT_ICON_DATA_URL },
+    { selector: 'link[data-branding-icon="manifest"]', rel: 'manifest', href: manifestUrl || '' },
   ];
 
   links.forEach(({ selector, rel, href, type }) => {
     let node = head.querySelector(selector);
     if (!node) {
       node = document.createElement('link');
-      node.setAttribute('data-branding-icon', selector.includes('apple') ? 'apple' : selector.includes('shortcut') ? 'shortcut' : 'icon');
+      node.setAttribute(
+        'data-branding-icon',
+        selector.includes('apple') ? 'apple' : selector.includes('shortcut') ? 'shortcut' : selector.includes('manifest') ? 'manifest' : 'icon'
+      );
       head.appendChild(node);
     }
 
     node.setAttribute('rel', rel);
-    node.setAttribute('href', href);
+    if (href) {
+      node.setAttribute('href', href);
+    } else {
+      node.removeAttribute('href');
+    }
     if (type && !href.startsWith('blob:')) {
       node.setAttribute('type', type);
     } else {

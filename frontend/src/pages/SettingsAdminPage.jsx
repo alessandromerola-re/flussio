@@ -324,11 +324,14 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
         <div className="muted">
           {t('pages.settings.iconStatus', { status: iconsMeta?.has_custom ? t('pages.settings.custom') : t('pages.settings.defaultLabel') })}
         </div>
+        <div className="muted">
+          {t('pages.settings.currentSourceFile')}: <strong>{iconsMeta?.source_file_name || t('pages.settings.noneSourceFile')}</strong>
+        </div>
         <ul className="muted">
-          <li>favicon: {iconsMeta?.variants?.favicon?.available ? '✓' : 'default'}</li>
-          <li>apple-touch-icon: {iconsMeta?.variants?.apple_touch_icon?.available ? '✓' : 'default'}</li>
-          <li>192x192: {iconsMeta?.variants?.icon_192?.available ? '✓' : 'default'}</li>
-          <li>512x512: {iconsMeta?.variants?.icon_512?.available ? '✓' : 'default'}</li>
+          <li>favicon: {iconsMeta?.variants?.favicon?.mode === 'file' ? t('pages.settings.variantRealFile') : t('pages.settings.variantDefaultFallback')}</li>
+          <li>apple-touch-icon: {iconsMeta?.variants?.apple_touch_icon?.mode === 'file' ? t('pages.settings.variantRealFile') : t('pages.settings.variantDefaultFallback')}</li>
+          <li>192x192: {iconsMeta?.variants?.icon_192?.mode === 'file' ? t('pages.settings.variantRealFile') : t('pages.settings.variantLogicalFallback')}</li>
+          <li>512x512: {iconsMeta?.variants?.icon_512?.mode === 'file' ? t('pages.settings.variantRealFile') : t('pages.settings.variantLogicalFallback')}</li>
         </ul>
         <form onSubmit={handleIconUpload}>
           <label>
@@ -344,12 +347,7 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
             <button type="submit" disabled={!selectedIconFile || iconsLoading}>
               {iconsLoading ? t('common.loading') : iconsMeta?.has_custom ? t('pages.settings.replaceIcons') : t('pages.settings.uploadIcons')}
             </button>
-            {iconsMeta?.has_custom && (
-              <button type="button" className="danger" onClick={handleIconReset} disabled={iconsLoading}>
-                {t('pages.settings.removeIcons')}
-              </button>
-            )}
-            <button type="button" onClick={handleIconReset} disabled={iconsLoading}>
+            <button type="button" className={iconsMeta?.has_custom ? 'danger' : ''} onClick={handleIconReset} disabled={iconsLoading || !iconsMeta?.has_custom}>
               {t('pages.settings.restoreDefaultIcons')}
             </button>
           </div>

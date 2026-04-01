@@ -89,8 +89,14 @@ From production bundle directory:
 - Variants are resolved automatically from the uploaded source and served through backend branding endpoints:
   - `favicon`
   - `apple-touch-icon` (enabled when source is PNG with at least `180x180`)
-  - `192x192` and `512x512` availability flags (enabled when source PNG is large enough)
+  - `192x192` and `512x512` real files only when source PNG is large enough, otherwise explicit logical fallback
 - No binary default assets are tracked in Git by design. When no custom icon exists, frontend falls back to an inlined SVG data URL (text-only).
+- Public bootstrap before login is supported through read-only endpoints:
+  - `GET /api/public/branding`
+  - `GET /api/public/branding/icons/:variant`
+  - `GET /api/public/branding/manifest.webmanifest`
+- The login page/public entrypoint applies branding icons from these public endpoints (no user token required, no sensitive data exposed).
+- `manifest.webmanifest` is intentionally minimal and references 192/512 icons only when those real variants exist.
 
 ### Optional manual binary assets (not included in this repository)
 

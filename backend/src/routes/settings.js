@@ -233,22 +233,34 @@ const toBrandingSummary = (meta) => {
     icons: {
       has_custom: Boolean(icons?.variants?.favicon?.file_name || icons?.variants?.apple_touch_icon?.file_name),
       source_type: icons?.source_type || 'default',
+      source_file_name: icons?.source?.file_name || icons?.variants?.favicon?.file_name || null,
+      source_mime_type: icons?.source?.mime_type || icons?.variants?.favicon?.mime_type || null,
       updated_at: icons?.updated_at || null,
       variants: {
         favicon: {
           available: Boolean(icons?.variants?.favicon?.file_name),
+          mode: icons?.variants?.favicon?.file_name ? 'file' : 'default',
           mime_type: icons?.variants?.favicon?.mime_type || null,
           size: icons?.variants?.favicon?.size || null,
           file_name: icons?.variants?.favicon?.file_name || null,
         },
         apple_touch_icon: {
           available: Boolean(icons?.variants?.apple_touch_icon?.file_name),
+          mode: icons?.variants?.apple_touch_icon?.file_name ? 'file' : 'default',
           mime_type: icons?.variants?.apple_touch_icon?.mime_type || null,
           size: icons?.variants?.apple_touch_icon?.size || null,
           file_name: icons?.variants?.apple_touch_icon?.file_name || null,
         },
-        icon_192: { available: Boolean(icons?.variants?.icon_192?.file_name) },
-        icon_512: { available: Boolean(icons?.variants?.icon_512?.file_name) },
+        icon_192: {
+          available: Boolean(icons?.variants?.icon_192?.file_name),
+          mode: icons?.variants?.icon_192?.file_name ? 'file' : 'fallback',
+          file_name: icons?.variants?.icon_192?.file_name || icons?.variants?.favicon?.file_name || null,
+        },
+        icon_512: {
+          available: Boolean(icons?.variants?.icon_512?.file_name),
+          mode: icons?.variants?.icon_512?.file_name ? 'file' : 'fallback',
+          file_name: icons?.variants?.icon_512?.file_name || icons?.variants?.favicon?.file_name || null,
+        },
       },
     },
   };
@@ -448,6 +460,7 @@ router.post('/branding/icons', requirePermission('users_manage'), rawUpload, asy
         source_type: 'custom',
         updated_at: updatedAt,
         dimensions,
+        source: faviconVariant,
         variants: nextVariants,
       },
     };
