@@ -962,6 +962,30 @@ button.danger {
   background: #fff;
 }
 
+.icon-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.icon-preview {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  margin-top: 0.35rem;
+}
+
+.icon-preview--small {
+  width: 32px;
+  height: 32px;
+}
+
+.icon-preview--large {
+  width: 72px;
+  height: 72px;
+}
+
 .brand-text {
   font-size: 1.15rem;
 }

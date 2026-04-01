@@ -221,10 +221,16 @@ export const api = {
     return request('/settings/branding/logo', { method: 'POST', body: formData });
   },
   deleteBrandLogo: () => request('/settings/branding/logo', { method: 'DELETE' }),
+  downloadBrandIcon: (variant) => request(`/settings/branding/icons/${variant}`, { responseType: 'blob' }),
+  uploadBrandIcons: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request('/settings/branding/icons', { method: 'POST', body: formData });
+  },
+  deleteBrandIcons: () => request('/settings/branding/icons', { method: 'DELETE' }),
   importMovementsCsv: (file) => {
     const formData = new FormData();
     formData.append('file', file);
     return request('/settings/movements/import-csv', { method: 'POST', body: formData });
   },
 };
-

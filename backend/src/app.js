@@ -17,6 +17,7 @@ import recurringTemplatesRoutes from './routes/recurringTemplates.js';
 import usersRoutes from './routes/users.js';
 import scaffoldingRoutes from './routes/scaffolding.js';
 import settingsRoutes from './routes/settings.js';
+import publicBrandingRoutes from './routes/publicBranding.js';
 import importExportRoutes from './routes/importExport.js';
 import { authMiddleware } from './middleware/auth.js';
 import { companyContextMiddleware } from './middleware/companyContext.js';
@@ -50,6 +51,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/public', publicBrandingRoutes);
 app.use('/api/companies', authMiddleware, companiesRoutes);
 
 app.use('/api/accounts', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), accountsRoutes);
