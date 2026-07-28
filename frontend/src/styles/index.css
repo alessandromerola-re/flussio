@@ -614,7 +614,11 @@ button.danger {
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  z-index: 1000;
 }
+
+.desktop-only { display: block; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
 
 .modal-content {
   background: #ffffff;
@@ -729,6 +733,7 @@ button.danger {
 }
 
 @media (max-width: 768px) {
+  .desktop-only { display: none !important; }
   .app-header,
   .topbar {
     flex-direction: column;

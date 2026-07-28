@@ -285,6 +285,24 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+router.patch('/:id/active', async (req, res) => {
+  if (typeof req.body?.is_active !== 'boolean') {
+    return sendError(res, 400, 'VALIDATION_INVALID_ACTIVE_STATE', 'Lo stato della ricorrenza non è valido.');
+  }
+  try {
+    const result = await query(
+      'UPDATE recurring_templates SET is_active = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3 RETURNING *',
+      [req.body.is_active, req.params.id, req.companyId]
+    );
+    if (result.rowCount === 0) return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
+    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: req.body.is_active ? 'activate' : 'deactivate', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
+    return res.json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const result = await query(

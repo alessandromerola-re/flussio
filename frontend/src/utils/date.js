@@ -7,7 +7,7 @@ export const toIsoDatePart = (value) => {
   }
 
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    return formatDateInTimeZone(value);
   }
 
   if (typeof value !== 'string') {
@@ -16,6 +16,15 @@ export const toIsoDatePart = (value) => {
 
   const datePart = value.includes('T') ? value.split('T')[0] : value.slice(0, 10);
   return isoDateRegex.test(datePart) ? datePart : '';
+};
+
+export const formatDateInTimeZone = (date, timeZone = 'Europe/Rome') => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const part = (type) => parts.find((item) => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
 };
 
 export const formatDateIT = (value) => {

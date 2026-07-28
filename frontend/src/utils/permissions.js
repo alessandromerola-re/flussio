@@ -15,7 +15,7 @@ const actionToPermission = {
   manage_users: 'users_manage',
 };
 
-export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
+export const getRole = getStoredRole;
 export const isRoadmapEnabled = () => String(import.meta.env.VITE_SHOW_ROADMAP || 'false').toLowerCase() === 'true';
 export const isRecurringEnabled = () => String(import.meta.env.VITE_SHOW_RECURRING || 'false').toLowerCase() === 'true';
 
@@ -28,3 +28,4 @@ export const can = (action, resource = null, role = getRole()) => {
   const permission = actionToPermission[action] || action;
   return canPermission(permission, role);
 };
+import { getRole as getStoredRole } from '../services/api.js';

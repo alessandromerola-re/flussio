@@ -39,6 +39,7 @@ const RecurringTemplatesPage = () => {
   const [error, setError] = useState('');
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState([]);
+  const [pendingTemplateId, setPendingTemplateId] = useState(null);
 
   const loadData = async () => {
     const [templatesData, categoriesData, contactsData, propertiesData, jobsData, accountsData] = await Promise.all([
@@ -165,18 +166,35 @@ const RecurringTemplatesPage = () => {
     }
   };
 
+  const handleActiveChange = async (template) => {
+    const nextActive = !template.is_active;
+    setPendingTemplateId(template.id);
+    setError('');
+    setTemplates((current) => current.map((item) => item.id === template.id ? { ...item, is_active: nextActive } : item));
+    try {
+      const updated = await api.setRecurringTemplateActive(template.id, nextActive);
+      setTemplates((current) => current.map((item) => item.id === template.id ? { ...item, ...updated } : item));
+      setMessage(nextActive ? 'Ricorrenza attivata.' : 'Ricorrenza disattivata.');
+    } catch (activeError) {
+      setTemplates((current) => current.map((item) => item.id === template.id ? { ...item, is_active: template.is_active } : item));
+      setError(getErrorMessage(t, activeError));
+    } finally {
+      setPendingTemplateId(null);
+    }
+  };
+
   return (
     <div className="page">
       <div className="page-header">
         <h1>{t('pages.recurring.title')}</h1>
       </div>
 
-      {message && <div className="success">{message}</div>}
-      {error && <div className="error">{error}</div>}
+      {message && <div className="success" aria-live="polite">{message}</div>}
+      {error && <div className="error" role="alert">{error}</div>}
 
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
         {canPermission('write') && <button type="button" onClick={handleGenerateDue}>{t('buttons.generateDue')}</button>}
-        <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>
+        {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>}
         {canPermission('write') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
         {canPermission('write') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={!importFile}>Importa CSV</button>}
       </div>
@@ -273,10 +291,9 @@ const RecurringTemplatesPage = () => {
                     {t('buttons.edit')}
                   </button>}
                   {canPermission('write') && <button type="button" className="ghost" onClick={() => handleGenerateNow(template.id)}>{t('buttons.generateNow')}</button>}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={async () => {
-                    await api.deleteRecurringTemplate(template.id);
-                    await loadData();
-                  }}>{template.is_active ? t('buttons.deactivate') : t('buttons.activate')}</button>}
+                  {canPermission('delete_sensitive') && <button type="button" className="danger" disabled={pendingTemplateId === template.id} onClick={() => handleActiveChange(template)}>
+                    {pendingTemplateId === template.id ? t('common.loading') : template.is_active ? t('buttons.deactivate') : t('buttons.activate')}
+                  </button>}
                 </div>
               </li>
             ))}

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "dev": "vite --host",
     "build": "node ./scripts/check-dashboard-duplicates.mjs && vite build",
     "preview": "vite preview --host"

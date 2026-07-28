@@ -64,7 +64,7 @@ app.use('/api/attachments', authMiddleware, companyContextMiddleware, requireMet
 app.use('/api/dashboard', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read', POST: 'read' }), dashboardRoutes);
 app.use('/api/reports', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read' }), reportsRoutes);
 app.use('/api/reports/advanced', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read', POST: 'read' }), advancedReportsRoutes);
-app.use('/api/recurring-templates', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), recurringTemplatesRoutes);
+app.use('/api/recurring-templates', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', PATCH: 'delete_sensitive', DELETE: 'delete_sensitive' }), recurringTemplatesRoutes);
 app.use('/api/users', authMiddleware, companyContextMiddleware, usersRoutes);
 app.use('/api/scaffolding', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read' }), scaffoldingRoutes);
 app.use('/api/settings', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read' }), settingsRoutes);
