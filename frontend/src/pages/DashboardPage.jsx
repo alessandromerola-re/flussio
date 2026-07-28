@@ -82,6 +82,7 @@ const DashboardPage = () => {
   const [showAllTopExpenses, setShowAllTopExpenses] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [sectionErrors, setSectionErrors] = useState({});
   const requestIdRef = useRef(0);
 
   const activeRange = useMemo(() => buildRangeFromPreset(period), [period]);
@@ -98,29 +99,32 @@ const DashboardPage = () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setLoadError('');
-    try {
-      const [nextSummary, nextIncome, nextExpense, nextTop] = await Promise.all([
+    setSectionErrors({});
+    const results = await Promise.allSettled([
         api.getDashboardSummary({ ...activeRange, period }),
         api.getDashboardPie({ ...activeRange, kind: 'income', dimension: incomeDimension, topN: 12 }),
         api.getDashboardPie({ ...activeRange, kind: 'expense', dimension: expenseDimension, topN: 12 }),
         api.getDashboardPie({ ...activeRange, kind: 'expense', dimension: 'category', topN: 10 }),
       ]);
-      if (requestId !== requestIdRef.current) return;
-      setSummary(nextSummary);
-      setIncomePie(nextIncome);
-      setExpensePie(nextExpense);
-      setTopExpenses(nextTop);
-      setShowAllTopExpenses(false);
-    } catch {
-      if (requestId !== requestIdRef.current) return;
+    if (requestId !== requestIdRef.current) return;
+    const [summaryResult, incomeResult, expenseResult, topResult] = results;
+    if (summaryResult.status === 'rejected') {
       setSummary(null);
-      setIncomePie(null);
-      setExpensePie(null);
-      setTopExpenses(null);
       setLoadError('Impossibile caricare i dati della dashboard.');
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+    } else {
+      setSummary(summaryResult.value);
     }
+    const errors = {};
+    const applySection = (result, key, setter) => {
+      if (result.status === 'fulfilled') setter(result.value);
+      else { setter(null); errors[key] = 'Impossibile caricare questa sezione.'; }
+    };
+    applySection(incomeResult, 'income', setIncomePie);
+    applySection(expenseResult, 'expense', setExpensePie);
+    applySection(topResult, 'top', setTopExpenses);
+    setSectionErrors(errors);
+    setShowAllTopExpenses(false);
+    setLoading(false);
   };
 
   useEffect(() => { loadDashboard(); }, [activeRange.from, activeRange.to, period, incomeDimension, expenseDimension]);
@@ -419,7 +423,8 @@ const DashboardPage = () => {
           <h2>Entrate per</h2>
           {renderDimensionTabs(incomeDimension, setIncomeDimension)}
           <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
-            {pieToChartData(incomePie) ? (
+            {sectionErrors.income && <div className="error" role="alert">{sectionErrors.income} <button type="button" onClick={loadDashboard}>Riprova</button></div>}
+            {!sectionErrors.income && (pieToChartData(incomePie) ? (
               shouldFallbackPieToList(incomePie) ? (
                 <ul className="list dashboard-pie-fallback-list">
                   {buildPieTopList(incomePie).map((item) => (
@@ -432,7 +437,7 @@ const DashboardPage = () => {
               ) : (
                 <Pie data={pieToChartData(incomePie)} options={pieOptions} />
               )
-            ) : <p className="muted">{t('common.none')}</p>}
+            ) : <p className="muted">{t('common.none')}</p>)}
           </div>
         </div>
 
@@ -440,7 +445,8 @@ const DashboardPage = () => {
           <h2>Uscite per</h2>
           {renderDimensionTabs(expenseDimension, setExpenseDimension)}
           <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
-            {pieToChartData(expensePie) ? (
+            {sectionErrors.expense && <div className="error" role="alert">{sectionErrors.expense} <button type="button" onClick={loadDashboard}>Riprova</button></div>}
+            {!sectionErrors.expense && (pieToChartData(expensePie) ? (
               shouldFallbackPieToList(expensePie) ? (
                 <ul className="list dashboard-pie-fallback-list">
                   {buildPieTopList(expensePie).map((item) => (
@@ -453,7 +459,7 @@ const DashboardPage = () => {
               ) : (
                 <Pie data={pieToChartData(expensePie)} options={pieOptions} />
               )
-            ) : <p className="muted">{t('common.none')}</p>}
+            ) : <p className="muted">{t('common.none')}</p>)}
           </div>
         </div>
       </div>
@@ -468,7 +474,7 @@ const DashboardPage = () => {
           </div>
         )}
         <div className={`dashboard-chart-wrap dashboard-chart-wrap--bar ${showAllTopExpenses ? 'dashboard-chart-wrap--scroll' : ''}`}>
-          {topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted">{emptySeriesMessage}</p>}
+          {sectionErrors.top ? <div className="error" role="alert">{sectionErrors.top} <button type="button" onClick={loadDashboard}>Riprova</button></div> : (topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted">{emptySeriesMessage}</p>)}
         </div>
       </div>
       </>}

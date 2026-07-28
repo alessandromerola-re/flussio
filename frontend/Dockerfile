@@ -1,8 +1,8 @@
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY vite.config.js ./
-RUN npm install
+RUN npm ci
 COPY scripts ./scripts
 COPY src ./src
 COPY index.html ./
