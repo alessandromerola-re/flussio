@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import Modal from './Modal.jsx';
 
 const AttachmentPreviewModal = ({ isOpen, onClose, attachment, fetchPreviewBlob, onDownload }) => {
   const { t } = useTranslation();
@@ -60,8 +61,7 @@ const AttachmentPreviewModal = ({ isOpen, onClose, attachment, fetchPreviewBlob,
   }
 
   return (
-    <div className="modal">
-      <div className="modal-content preview-modal-content">
+    <Modal isOpen={isOpen} onClose={onClose} className="preview-modal-content" title={t('pages.movements.attachmentPreview')}>
         <h2>{t('pages.movements.attachmentPreview')}</h2>
         <p className="muted">{attachment.original_name || attachment.file_name}</p>
 
@@ -87,8 +87,7 @@ const AttachmentPreviewModal = ({ isOpen, onClose, attachment, fetchPreviewBlob,
           </button>
           <button type="button" onClick={onClose}>{t('buttons.close')}</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

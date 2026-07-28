@@ -38,6 +38,18 @@ for file in "${required_files[@]}"; do
   fi
 done
 
+for compose_file in "$PROD_DIR/docker-compose.prod.yml" "$PROD_DIR/docker-compose.prod.qnap.yml"; do
+  if ! grep -Eq '^[[:space:]]*-[[:space:]]+db_data:/var/lib/postgresql[[:space:]]*$' "$compose_file"; then
+    echo "[ERROR] postgres:18 must mount db_data at /var/lib/postgresql: $compose_file"
+    exit 1
+  fi
+  if grep -Eq '^[[:space:]]*-[[:space:]]+db_data:/var/lib/postgresql/data[[:space:]]*$' "$compose_file"; then
+    echo "[ERROR] Legacy PostgreSQL data mount found: $compose_file"
+    exit 1
+  fi
+done
+echo "[INFO] PostgreSQL 18 volume targets are correct."
+
 # Hard minimum line counts to catch quasi-monoriga regressions.
 declare -A min_lines=(
   ["$PROD_DIR/docker-compose.prod.yml"]=20
@@ -68,7 +80,7 @@ for file in "${bundle_files[@]}"; do
     exit 1
   fi
 
-  if rg -q '\\n' "$file"; then
+  if grep -Fq '\\n' "$file"; then
     echo "[ERROR] File appears to contain escaped newlines (\\n): $file"
     exit 1
   fi

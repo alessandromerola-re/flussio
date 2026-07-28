@@ -1,6 +1,6 @@
 import { clearSession, readSession, writeSession } from '../utils/authStorage.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const API_BASE = import.meta.env?.VITE_API_BASE || '/api';
 
 export const getToken = () => readSession().token;
 export const getRole = () => readSession().role;

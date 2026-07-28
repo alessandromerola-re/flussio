@@ -297,10 +297,10 @@ const RegistryPage = () => {
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button type="button" className="ghost" onClick={handleExportCsv} disabled={exportLoading}>
+          {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv} disabled={exportLoading}>
             {exportLoading ? 'Export in corso...' : 'Esporta CSV'}
-          </button>
-          {canPermission('write') && <button type="button" className="ghost" onClick={() => setImportModalOpen(true)}>Importa CSV</button>}
+          </button>}
+          {canPermission('import') && <button type="button" className="ghost" onClick={() => setImportModalOpen(true)}>Importa CSV</button>}
           {canPermission('write') && (
             <button type="button" className="desktop-only registry-new-button" onClick={() => openCreateModal(tab)}>
               {t('buttons.new')}
@@ -559,7 +559,7 @@ const RegistryPage = () => {
 
 
       <Modal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)}>
-        <div className="modal-content">
+        <div>
           <h3>Importa CSV ({entityForTab[tab]})</h3>
           <input type="file" accept=".csv,text/csv" onChange={handleImportFileChange} />
           {importPreview.length > 0 && (
@@ -578,7 +578,7 @@ const RegistryPage = () => {
       {canPermission('write') && !createModalTab && <FloatingAddButton onClick={() => openCreateModal(tab)} label={t('buttons.new')} />}
 
       <Modal isOpen={Boolean(createModalTab)} onClose={closeCreateModal}>
-        <div className="modal-content">
+        <div>
           {createModalTab === 'accounts' && (
             <form onSubmit={handleAccountSubmit}>
               <h2>{t('pages.registry.accounts')}</h2>

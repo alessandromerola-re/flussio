@@ -91,9 +91,27 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
+      - name: Run frontend tests
+        working-directory: ./frontend
+        run: npm test
+
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
+
+      - name: Validate every Compose file
+        run: |
+          docker compose -f docker-compose.yml config >/dev/null
+          docker compose -f docker-compose.override.yml config >/dev/null
+          docker compose -f docker-compose.qnap.yml config >/dev/null
+          docker compose -f deploy/production/docker-compose.prod.yml config >/dev/null
+          docker compose -f deploy/production/docker-compose.prod.qnap.yml config >/dev/null
+
+      - name: Build backend Docker image
+        run: docker build -f backend/Dockerfile -t flussio-backend:ci .
+
+      - name: Build frontend Docker image
+        run: docker build -f frontend/Dockerfile -t flussio-frontend:ci frontend
 
   build-and-push:
     runs-on: ubuntu-latest
