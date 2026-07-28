@@ -119,7 +119,7 @@ const request = async (path, options = {}) => {
     throw error;
   }
 
-  return data;
+  return includeHeaders ? { data, headers: response.headers } : data;
 };
 
 export const api = {
@@ -176,11 +176,11 @@ export const api = {
   generateRecurringDue: () => request('/recurring-templates/generate-due', { method: 'POST' }),
   getTransactions: (input = 30) => {
     if (typeof input === 'number') {
-      return request(`/transactions?limit=${input}`);
+      return request(`/transactions?limit=${input}`, { includeHeaders: true });
     }
 
     const queryString = toQueryString(input);
-    return request(`/transactions${queryString}`);
+    return request(`/transactions${queryString}`, { includeHeaders: true });
   },
   exportTransactions: (filters = {}) => {
     const queryString = toQueryString(filters);

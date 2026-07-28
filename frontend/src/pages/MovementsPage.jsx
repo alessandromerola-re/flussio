@@ -5,7 +5,7 @@ import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import { formatDateInTimeZone, formatDateIT } from '../utils/date.js';
-import { splitPage, previousPageAfterDelete } from '../utils/pagination.js';
+import { previousPageAfterDelete } from '../utils/pagination.js';
 import { saveMovementWithAttachment } from '../utils/saveMovement.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
 import Modal from '../components/Modal.jsx';
@@ -58,7 +58,8 @@ const MovementsPage = () => {
   const [error, setError] = useState('');
   const [submitMessage, setSubmitMessage] = useState('');
   const [pageMessage, setPageMessage] = useState('');
-  const [loadError, setLoadError] = useState('');
+  const [movementLoadError, setMovementLoadError] = useState('');
+  const [lookupLoadError, setLookupLoadError] = useState('');
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
@@ -85,6 +86,7 @@ const MovementsPage = () => {
   const [createdMovementId, setCreatedMovementId] = useState(null);
 
   const loadLookupData = async () => {
+    setLookupLoadError('');
     const results = await Promise.allSettled([
       api.getAccounts(),
       api.getCategories(),
@@ -102,25 +104,28 @@ const MovementsPage = () => {
     if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value);
 
     if (results.some((result) => result.status === 'rejected')) {
-      setLoadError(getErrorMessage(t, null));
+      setLookupLoadError(`Impossibile caricare le anagrafiche. ${getErrorMessage(t, null)}`);
     }
   };
 
   const loadMovements = async (activeFilters = defaultFilters) => {
+    setMovementLoadError('');
     try {
       const pageSize = Number(activeFilters.limit || 30);
-      const data = await api.getTransactions({ ...activeFilters, limit: pageSize + 1 });
-      const page = splitPage(data, pageSize);
-      setMovements(page.rows);
+      const response = await api.getTransactions({ ...activeFilters, limit: pageSize });
+      const rows = response?.data ?? response;
+      const page = { rows, hasNext: response?.headers?.get('X-Has-More') === 'true' };
+      setMovements(rows);
       setHasNextPage(page.hasNext);
       return page;
     } catch (loadMovementsError) {
-      setLoadError(getErrorMessage(t, null));
+      setMovements([]);
+      setHasNextPage(false);
+      setMovementLoadError(`Impossibile caricare i movimenti. ${getErrorMessage(t, null)}`);
     }
   };
 
   const loadData = async () => {
-    setLoadError('');
     await loadLookupData();
 
     const nextFilters = {
@@ -729,7 +734,8 @@ const MovementsPage = () => {
       <div className="page-header">
         <h1>{t('pages.movements.title')}</h1>
       </div>
-      {loadError && <div className="error">{loadError}</div>}
+      {movementLoadError && <div className="error" role="alert">{movementLoadError} <button type="button" onClick={() => loadMovements(filters)}>Riprova</button></div>}
+      {lookupLoadError && <div className="error" role="alert">{lookupLoadError} <button type="button" onClick={loadLookupData}>Riprova</button></div>}
       {pageMessage && <div className="success" aria-live="polite">{pageMessage}</div>}
 
       <div className="row-actions movements-toolbar">

@@ -340,7 +340,9 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    const params = [...filters.params, filters.limit, filters.offset];
+    // Fetch one sentinel row internally: the public limit remains 200 while
+    // clients can determine whether another page exists.
+    const params = [...filters.params, filters.limit + 1, filters.offset];
     const result = await query(
       getTransactionsQuery({
         whereSql: filters.whereSql,
@@ -350,7 +352,10 @@ router.get('/', async (req, res) => {
       }),
       params
     );
-    return res.json(result.rows);
+    const hasMore = result.rows.length > filters.limit;
+    res.setHeader('X-Has-More', String(hasMore));
+    res.setHeader('Access-Control-Expose-Headers', 'X-Has-More');
+    return res.json(result.rows.slice(0, filters.limit));
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
