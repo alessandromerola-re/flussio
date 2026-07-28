@@ -97,14 +97,6 @@ const DashboardPage = () => {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    requestIdRef.current += 1;
-    Object.keys(sectionRequestIdsRef.current).forEach((key) => {
-      sectionRequestIdsRef.current[key] += 1;
-    });
-  }, []);
-
   const sectionRequests = {
     income: () => api.getDashboardPie({ ...activeRange, kind: 'income', dimension: incomeDimension, topN: 12 }),
     expense: () => api.getDashboardPie({ ...activeRange, kind: 'expense', dimension: expenseDimension, topN: 12 }),
@@ -162,7 +154,18 @@ const DashboardPage = () => {
     setLoading(false);
   };
 
-  useEffect(() => { loadDashboard(); }, [activeRange.from, activeRange.to, period, incomeDimension, expenseDimension]);
+  useEffect(() => {
+    mountedRef.current = true;
+    loadDashboard();
+
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+      Object.keys(sectionRequestIdsRef.current).forEach((key) => {
+        sectionRequestIdsRef.current[key] += 1;
+      });
+    };
+  }, [activeRange.from, activeRange.to, period, incomeDimension, expenseDimension]);
 
   const bucketSeries = summary?.by_bucket || [];
 
