@@ -97,12 +97,16 @@ const DashboardPage = () => {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    requestIdRef.current += 1;
-    Object.keys(sectionRequestIdsRef.current).forEach((key) => {
-      sectionRequestIdsRef.current[key] += 1;
-    });
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+      Object.keys(sectionRequestIdsRef.current).forEach((key) => {
+        sectionRequestIdsRef.current[key] += 1;
+      });
+    };
   }, []);
 
   const sectionRequests = {
