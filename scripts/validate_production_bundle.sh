@@ -88,6 +88,17 @@ done
 
 echo "[INFO] Required files are present, multiline, LF-only, and not overlong."
 
+for compose_file in "$PROD_DIR/docker-compose.prod.yml" "$PROD_DIR/docker-compose.prod.qnap.yml"; do
+  if ! rg -q 'db_data:/var/lib/postgresql$' "$compose_file"; then
+    echo "[ERROR] PostgreSQL 18 data volume must be mounted at /var/lib/postgresql: $compose_file"
+    exit 1
+  fi
+  if rg -q 'db_data:/var/lib/postgresql/data' "$compose_file"; then
+    echo "[ERROR] Legacy PostgreSQL data mount detected: $compose_file"
+    exit 1
+  fi
+done
+
 docker compose -f "$PROD_DIR/docker-compose.prod.yml" config >/dev/null
 docker compose -f "$PROD_DIR/docker-compose.prod.qnap.yml" config >/dev/null
 echo "[INFO] Compose files are parseable."

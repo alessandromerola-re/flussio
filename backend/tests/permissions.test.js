@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { canRole, requirePermission } from '../src/middleware/permissions.js';
+
+test('role/action matrix follows the backend authority', () => {
+  assert.equal(canRole('viewer', 'write'), false);
+  assert.equal(canRole('operatore', 'write'), true);
+  assert.equal(canRole('operatore', 'delete_sensitive'), false);
+  assert.equal(canRole('operatore', 'import'), false);
+  assert.equal(canRole('viewer', 'export'), false);
+  assert.equal(canRole('editor', 'import'), true);
+  assert.equal(canRole('editor', 'export'), true);
+  assert.equal(canRole('editor', 'users_manage'), false);
+  assert.equal(canRole('admin', 'users_manage'), true);
+});
+
+test('sensitive API middleware returns 403 and does not call next', () => {
+  let nextCalled = false;
+  const response = { statusCode: 0, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+  requirePermission('export')({ companyRole: 'viewer' }, response, () => { nextCalled = true; });
+  assert.equal(response.statusCode, 403);
+  assert.equal(nextCalled, false);
+});

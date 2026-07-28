@@ -1,9 +1,11 @@
+import { readSession } from './authStorage.js';
+
 export const rolePermissions = {
-  viewer: { read: true, write: false, delete_sensitive: false, export: false, users_manage: false },
-  operatore: { read: true, write: true, delete_sensitive: false, export: false, users_manage: false },
-  editor: { read: true, write: true, delete_sensitive: true, export: true, users_manage: false },
-  admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
-  super_admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
+  viewer: { read: true, write: false, delete_sensitive: false, import: false, export: false, users_manage: false },
+  operatore: { read: true, write: true, delete_sensitive: false, import: false, export: false, users_manage: false },
+  editor: { read: true, write: true, delete_sensitive: true, import: true, export: true, users_manage: false },
+  admin: { read: true, write: true, delete_sensitive: true, import: true, export: true, users_manage: true },
+  super_admin: { read: true, write: true, delete_sensitive: true, import: true, export: true, users_manage: true },
 };
 
 const actionToPermission = {
@@ -12,10 +14,11 @@ const actionToPermission = {
   update: 'write',
   delete: 'delete_sensitive',
   export: 'export',
+  import: 'import',
   manage_users: 'users_manage',
 };
 
-export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
+export const getRole = () => readSession().role;
 export const isRoadmapEnabled = () => String(import.meta.env.VITE_SHOW_ROADMAP || 'false').toLowerCase() === 'true';
 export const isRecurringEnabled = () => String(import.meta.env.VITE_SHOW_RECURRING || 'false').toLowerCase() === 'true';
 

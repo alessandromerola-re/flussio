@@ -1,7 +1,9 @@
+import { clearSession, readSession, writeSession } from '../utils/authStorage.js';
+
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-export const getToken = () => localStorage.getItem('flussio_token');
-export const getRole = () => localStorage.getItem('flussio_role') || 'viewer';
+export const getToken = () => readSession().token;
+export const getRole = () => readSession().role;
 export const getActiveCompanyId = () => localStorage.getItem('flussio_company_id');
 
 export const setActiveCompanyId = (id) => {
@@ -32,18 +34,14 @@ export const getIsSuperAdmin = () => {
   return payload?.is_super_admin === true;
 };
 
-export const setToken = (token, role = null) => {
-  localStorage.setItem('flussio_token', token);
-  if (role) {
-    localStorage.setItem('flussio_role', role);
-  }
-};
+export const setToken = (token, role = 'viewer', remember = true) => writeSession(token, role, remember);
 
 export const clearToken = () => {
-  localStorage.removeItem('flussio_token');
-  localStorage.removeItem('flussio_role');
+  clearSession();
   localStorage.removeItem('flussio_company_id');
   localStorage.removeItem('flussio_companies');
+  sessionStorage.removeItem('flussio_company_id');
+  sessionStorage.removeItem('flussio_companies');
 };
 
 const toQueryString = (params = {}) => {
@@ -172,6 +170,7 @@ export const api = {
   getRecurringTemplate: (id) => request(`/recurring-templates/${id}`),
   createRecurringTemplate: (payload) => request('/recurring-templates', { method: 'POST', body: JSON.stringify(payload) }),
   updateRecurringTemplate: (id, payload) => request(`/recurring-templates/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  setRecurringTemplateActive: (id, isActive) => request(`/recurring-templates/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active: isActive }) }),
   deleteRecurringTemplate: (id) => request(`/recurring-templates/${id}`, { method: 'DELETE' }),
   generateRecurringTemplateNow: (id) => request(`/recurring-templates/${id}/generate-now`, { method: 'POST' }),
   generateRecurringDue: () => request('/recurring-templates/generate-due', { method: 'POST' }),

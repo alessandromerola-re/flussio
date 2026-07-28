@@ -4,13 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
-import { formatDateIT } from '../utils/date.js';
+import { formatDateInTimeZone, formatDateIT } from '../utils/date.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
 import Modal from '../components/Modal.jsx';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
+import { pageFromLookahead, previousOffsetForEmptyPage } from '../utils/pagination.js';
+import { saveMovementWithAttachment } from '../utils/saveMovement.js';
 
 const emptyForm = {
-  date: new Date().toISOString().slice(0, 10),
+  date: formatDateInTimeZone(new Date()),
   type: 'expense',
   amount_total: '',
   description: '',
@@ -50,6 +52,7 @@ const MovementsPage = () => {
   const [properties, setProperties] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [movements, setMovements] = useState([]);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [selected, setSelected] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [error, setError] = useState('');
@@ -77,6 +80,8 @@ const MovementsPage = () => {
   const [showFilterContactResults, setShowFilterContactResults] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [movementModalOpen, setMovementModalOpen] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [createdMovementId, setCreatedMovementId] = useState(null);
 
   const loadLookupData = async () => {
     const results = await Promise.allSettled([
@@ -102,8 +107,18 @@ const MovementsPage = () => {
 
   const loadMovements = async (activeFilters = defaultFilters) => {
     try {
-      const data = await api.getTransactions(activeFilters);
-      setMovements(data);
+      const requestedLimit = Number(activeFilters.limit || defaultFilters.limit);
+      const data = await api.getTransactions({ ...activeFilters, limit: requestedLimit + 1 });
+      const page = pageFromLookahead(data, requestedLimit);
+      const safeOffset = previousOffsetForEmptyPage(Number(activeFilters.offset || 0), requestedLimit, page.items.length);
+      if (safeOffset !== Number(activeFilters.offset || 0)) {
+        const previousFilters = { ...activeFilters, offset: safeOffset };
+        setFilters(previousFilters);
+        setDraftFilters(previousFilters);
+        return loadMovements(previousFilters);
+      }
+      setMovements(page.items);
+      setHasNextPage(page.hasNext);
     } catch (loadMovementsError) {
       setLoadError(getErrorMessage(t, null));
     }
@@ -374,6 +389,8 @@ const MovementsPage = () => {
     if (filters.job_id && job) labels.push({ key: 'job_id', label: `${t('pages.movements.job')}: ${job.name || job.title}` });
 
     if (filters.q) labels.push({ key: 'q', label: `${t('pages.movements.searchText')}: ${filters.q}` });
+    if (filters.is_recurring !== '') labels.push({ key: 'is_recurring', label: `Ricorrenza: ${filters.is_recurring === '1' ? 'sì' : 'no'}` });
+    if (filters.has_attachments !== '') labels.push({ key: 'has_attachments', label: `Allegati: ${filters.has_attachments === '1' ? 'presenti' : 'assenti'}` });
 
     return labels;
   }, [filters, accounts, categories, contacts, properties, jobs, t]);
@@ -413,6 +430,7 @@ const MovementsPage = () => {
 
 
   const closeMovementModal = () => {
+    if (submitLoading) return;
     setMovementModalOpen(false);
     setEditingMovementId(null);
     setForm(emptyForm);
@@ -420,6 +438,7 @@ const MovementsPage = () => {
     setNewAttachmentFile(null);
     setError('');
     setSubmitMessage('');
+    setCreatedMovementId(null);
   };
 
   const openNewMovementModal = async () => {
@@ -451,6 +470,7 @@ const MovementsPage = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submitLoading) return;
 
     if (newAttachmentFile && newAttachmentFile.size > maxAttachmentMb * 1024 * 1024) {
       setError(t('errors.FILE_TOO_LARGE', { maxMb: maxAttachmentMb }));
@@ -468,6 +488,7 @@ const MovementsPage = () => {
     setError('');
     setSubmitMessage('');
 
+    setSubmitLoading(true);
     try {
       const accountsPayload = [];
       if (form.type === 'transfer') {
@@ -491,28 +512,36 @@ const MovementsPage = () => {
         accounts: accountsPayload,
       };
 
-      let transaction = null;
-      if (editingMovementId) {
-        transaction = await api.updateTransaction(editingMovementId, payload);
-      } else {
-        transaction = await api.createTransaction(payload);
-      }
-
-      if (newAttachmentFile && transaction?.id) {
-        await api.uploadAttachment(transaction.id, newAttachmentFile);
-      }
+      const result = await saveMovementWithAttachment({
+        existingId: createdMovementId,
+        saveMovement: () => editingMovementId
+          ? api.updateTransaction(editingMovementId, payload)
+          : api.createTransaction(payload),
+        uploadAttachment: api.uploadAttachment,
+        attachment: newAttachmentFile,
+      });
+      setCreatedMovementId(result.movementId);
 
       setForm(emptyForm);
       setNewAttachmentFile(null);
       setContactSearch('');
       setEditingMovementId(null);
+      setCreatedMovementId(null);
       await loadMovements(filters);
       await loadLookupData();
       setSubmitMessage(t('pages.movements.createSuccess'));
       setMovementModalOpen(false);
     } catch (submitError) {
-      setError(getErrorMessage(t, submitError));
-      setSubmitMessage(t('pages.movements.createError'));
+      if (submitError.code === 'ATTACHMENT_UPLOAD_FAILED') {
+        setCreatedMovementId(submitError.movementId);
+        setError(getErrorMessage(t, submitError.cause));
+        setSubmitMessage('Movimento creato, ma allegato non caricato. Riprova: verrà caricato sul movimento esistente.');
+      } else {
+        setError(getErrorMessage(t, submitError));
+        setSubmitMessage('Movimento non creato. Controlla i dati e riprova.');
+      }
+    } finally {
+      setSubmitLoading(false);
     }
   };
 
@@ -635,6 +664,7 @@ const MovementsPage = () => {
   };
 
   const handleDeleteAttachment = async (attachmentId) => {
+    if (!window.confirm('Eliminare definitivamente questo allegato?')) return;
     await api.deleteAttachment(attachmentId);
     if (!selected) {
       return;
@@ -692,9 +722,9 @@ const MovementsPage = () => {
           </button>
         )}
         <button type="button" className="ghost" onClick={() => setFiltersOpen((v) => !v)}>{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
-        <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>
-        {canPermission('write') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
-        {canPermission('write') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={importLoading}>{importLoading ? 'Import in corso...' : 'Importa CSV'}</button>}
+        {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>}
+        {canPermission('import') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
+        {canPermission('import') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={importLoading}>{importLoading ? 'Import in corso...' : 'Importa CSV'}</button>}
         {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
       </div>
 
@@ -713,7 +743,7 @@ const MovementsPage = () => {
       )}
 
       <Modal isOpen={movementModalOpen} onClose={closeMovementModal}>
-        <div className="modal-content">
+        <div>
           <form onSubmit={handleSubmit}>
             <h2>{editingMovementId ? `${t('buttons.edit')} #${editingMovementId}` : t('pages.movements.new')}</h2>
             <div className="form-grid">
@@ -823,12 +853,12 @@ const MovementsPage = () => {
               />
             </label>
           </div>
-          {error && <div className="error">{error}</div>}
-          {submitMessage && <div className={error ? 'error' : 'success'}>{submitMessage}</div>}
+          {error && <div className="error" role="alert">{error}</div>}
+          {submitMessage && <div aria-live="polite" className={error ? 'error' : 'success'}>{submitMessage}</div>}
             <div className="modal-actions">
-              {canPermission('write') && <button type="submit">{editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>}
-              <button type="button" className="ghost" onClick={closeMovementModal}>
-                {t('buttons.cancel')}
+              {canPermission('write') && <button type="submit" disabled={submitLoading}>{submitLoading ? t('common.loading') : createdMovementId ? 'Riprova allegato' : editingMovementId ? t('buttons.edit') : t('buttons.save')}</button>}
+              <button type="button" className="ghost" onClick={closeMovementModal} disabled={submitLoading}>
+                {createdMovementId ? 'Chiudi (movimento già salvato)' : t('buttons.cancel')}
               </button>
             </div>
           </form>
@@ -934,7 +964,7 @@ const MovementsPage = () => {
               <div className="row-actions">
                 <button type="button" onClick={applyFilters}>{t('buttons.apply')}</button>
                 <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>
-                <button type="button" className="ghost" onClick={handleExportCsv}>{t('buttons.exportCsv')}</button>
+                {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>{t('buttons.exportCsv')}</button>}
               </div>
 
               {hasActiveFilters && (
@@ -983,6 +1013,11 @@ const MovementsPage = () => {
               );
             })}
           </div>
+          <nav className="pagination" aria-label="Paginazione movimenti">
+            <button type="button" className="ghost" disabled={filters.offset === 0} onClick={() => { const next = { ...filters, offset: Math.max(0, filters.offset - filters.limit) }; setFilters(next); setDraftFilters(next); loadMovements(next); }}>Precedente</button>
+            <span>Pagina {Math.floor(filters.offset / filters.limit) + 1}</span>
+            <button type="button" className="ghost" disabled={!hasNextPage} onClick={() => { const next = { ...filters, offset: filters.offset + filters.limit }; setFilters(next); setDraftFilters(next); loadMovements(next); }}>Successiva</button>
+          </nav>
         </div>
       </div>
 
@@ -1000,8 +1035,6 @@ const MovementsPage = () => {
         )}
       </div>
 
-      {canPermission('write') && <FloatingAddButton onClick={openNewMovementModal} label={t('buttons.new')} />}
-
       {selected && (
         <Modal isOpen={Boolean(selected)} onClose={() => {
           setSelected(null);
@@ -1010,7 +1043,7 @@ const MovementsPage = () => {
           setAttachmentFile(null);
           setPreviewAttachment(null);
         }}>
-          <div className="modal-content">
+          <div>
             <h2>{t('pages.movements.details')}</h2>
             <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
             <p><strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}</p>
@@ -1041,12 +1074,12 @@ const MovementsPage = () => {
                     </div>
                     <div className="row-actions">
                       <button type="button" className="ghost" onClick={() => handleDownloadAttachment(item)}>{t('buttons.download')}</button>
-                      <button type="button" className="danger" onClick={() => handleDeleteAttachment(item.id)}>{t('buttons.delete')}</button>
+                      {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDeleteAttachment(item.id)}>{t('buttons.delete')}</button>}
                     </div>
                   </li>
                 ))}
               </ul>
-              <div className="attachment-upload">
+              {canPermission('write') && <div className="attachment-upload">
                 <input
                   type="file"
                   accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
@@ -1059,7 +1092,7 @@ const MovementsPage = () => {
                 >
                   {uploadLoading ? t('common.loading') : t('buttons.upload')}
                 </button>
-              </div>
+              </div>}
               {uploadMessage && <div className="muted">{uploadMessage}</div>}
               {uploadError && <div className="error">{uploadError}</div>}
             </div>

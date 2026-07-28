@@ -614,7 +614,14 @@ button.danger {
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  z-index: 1000;
 }
+
+.desktop-only { display: block; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+.table-scroll table { min-width: 640px; }
+tr[role="link"]:focus-visible { outline: 3px solid #2563eb; outline-offset: -3px; }
 
 .modal-content {
   background: #ffffff;
@@ -729,6 +736,7 @@ button.danger {
 }
 
 @media (max-width: 768px) {
+  .desktop-only { display: none !important; }
   .app-header,
   .topbar {
     flex-direction: column;
@@ -781,6 +789,12 @@ button.danger {
     padding: 1rem 0;
     border-radius: 0;
   }
+
+  .auth-form-column { order: 1; min-width: 0; }
+  .auth-welcome { order: 2; min-width: 0; }
+  .row-actions, .movements-toolbar { max-width: 100%; flex-wrap: wrap; }
+  .row-actions > * { min-width: 0; max-width: 100%; }
+  .pagination button { flex: 1 1 120px; }
 
   .auth-layout::before {
     top: -100px;

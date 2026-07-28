@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import {
@@ -13,13 +13,16 @@ import {
   Tooltip,
 } from 'chart.js';
 import { api } from '../services/api.js';
+import { formatDateInTimeZone } from '../utils/date.js';
+import { loadDashboardData } from '../utils/dashboardLoader.js';
 
 ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
-const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const toIsoDate = formatDateInTimeZone;
 const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
 const absCents = (value) => Math.abs(Number(value || 0));
 const emptySeriesMessage = 'Nessun dato nel periodo selezionato';
+const emptySummary = { income_sum_cents: 0, expense_sum_cents: 0, net_sum_cents: 0, by_bucket: [], previous: { income_sum_cents: 0, expense_sum_cents: 0, net_sum_cents: 0 } };
 
 const computeDelta = (current, previousValue) => {
   const currentNumber = Number(current || 0);
@@ -63,24 +66,17 @@ const DashboardPage = () => {
   const [incomeDimension, setIncomeDimension] = useState('category');
   const [expenseDimension, setExpenseDimension] = useState('category');
 
-  const [summary, setSummary] = useState({
-    income_sum_cents: 0,
-    expense_sum_cents: 0,
-    net_sum_cents: 0,
-    by_bucket: [],
-    previous: {
-      income_sum_cents: 0,
-      expense_sum_cents: 0,
-      net_sum_cents: 0,
-    },
-  });
+  const [summary, setSummary] = useState(emptySummary);
 
-  const [pieCache, setPieCache] = useState({});
   const [incomePie, setIncomePie] = useState(null);
   const [expensePie, setExpensePie] = useState(null);
   const [topExpenses, setTopExpenses] = useState(null);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
   const [showAllTopExpenses, setShowAllTopExpenses] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
+  const requestIdRef = useRef(0);
 
   const activeRange = useMemo(() => buildRangeFromPreset(period), [period]);
 
@@ -93,35 +89,25 @@ const DashboardPage = () => {
   }, []);
 
   useEffect(() => {
-    const loadSummary = async () => {
-      const response = await api.getDashboardSummary({ ...activeRange, period });
-      setSummary((prev) => ({ ...prev, ...response }));
-    };
-
-    loadSummary();
-  }, [activeRange, period]);
-
-  const loadPie = async (kind, dimension, topN = 12) => {
-    const cacheKey = `${activeRange.from}:${activeRange.to}:${kind}:${dimension}:${topN}`;
-    if (pieCache[cacheKey]) return pieCache[cacheKey];
-
-    const response = await api.getDashboardPie({ ...activeRange, kind, dimension, topN });
-    setPieCache((prev) => ({ ...prev, [cacheKey]: response }));
-    return response;
-  };
-
-  useEffect(() => {
-    loadPie('income', incomeDimension).then(setIncomePie);
-  }, [incomeDimension, activeRange.from, activeRange.to]);
-
-  useEffect(() => {
-    loadPie('expense', expenseDimension).then(setExpensePie);
-  }, [expenseDimension, activeRange.from, activeRange.to]);
-
-  useEffect(() => {
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
+    setDashboardError('');
+    setSummary(emptySummary);
+    setIncomePie(null);
+    setExpensePie(null);
+    setTopExpenses(null);
     setShowAllTopExpenses(false);
-    loadPie('expense', 'category', 10).then(setTopExpenses);
-  }, [activeRange.from, activeRange.to]);
+    loadDashboardData({ client: api, range: activeRange, period, incomeDimension, expenseDimension }).then(({ summary: nextSummary, incomePie: nextIncome, expensePie: nextExpense, topExpenses: nextTop }) => {
+      if (requestId !== requestIdRef.current) return;
+      setSummary({ ...emptySummary, ...nextSummary });
+      setIncomePie(nextIncome); setExpensePie(nextExpense); setTopExpenses(nextTop);
+      setLoading(false);
+    }).catch(() => {
+      if (requestId !== requestIdRef.current) return;
+      setDashboardError('Impossibile caricare i dati della Dashboard.');
+      setLoading(false);
+    });
+  }, [activeRange.from, activeRange.to, period, incomeDimension, expenseDimension, retryKey]);
 
   const bucketSeries = summary.by_bucket || [];
 
@@ -369,6 +355,10 @@ const DashboardPage = () => {
         </div>
       </div>
 
+      {loading && <div className="card" aria-live="polite">Caricamento Dashboard…</div>}
+      {dashboardError && <div className="error" role="alert" aria-live="assertive">{dashboardError} <button type="button" className="ghost" onClick={() => setRetryKey((value) => value + 1)}>Riprova</button></div>}
+      {!loading && !dashboardError && <>
+
       <div className="kpi-grid">
         <div className="card kpi">
           <span>{t('pages.dashboard.income')}</span>
@@ -378,7 +368,7 @@ const DashboardPage = () => {
 
         <div className="card kpi">
           <span>{t('pages.dashboard.expense')}</span>
-          <small className={deltaClassName(kpiDeltas.expense)}>{formatDelta(kpiDeltas.expense)}</small>
+          <small className={deltaClassName(kpiDeltas.expense == null ? null : -kpiDeltas.expense)}>{formatDelta(kpiDeltas.expense)} · {kpiDeltas.expense > 0 ? 'peggioramento' : kpiDeltas.expense < 0 ? 'miglioramento' : 'invariato'}</small>
           <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
         </div>
 
@@ -462,6 +452,7 @@ const DashboardPage = () => {
           {topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted">{emptySeriesMessage}</p>}
         </div>
       </div>
+      </>}
     </div>
   );
 };
