@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test && vitest run",
     "dev": "vite --host",
     "build": "node ./scripts/check-dashboard-duplicates.mjs && vite build",
     "preview": "vite preview --host"
@@ -19,7 +19,11 @@
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^4.3.1",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.2.4",
     "vite": "^5.4.2"
   }
 }
