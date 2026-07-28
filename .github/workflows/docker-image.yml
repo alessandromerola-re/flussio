@@ -33,6 +33,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Create temporary Compose env files
         run: |
@@ -40,10 +42,10 @@ jobs:
           cp frontend/.env.example frontend/.env
           cp deploy/production/.env.example.prod .env
 
-      - name: Setup Node 22
+      - name: Setup Node 24
         uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Install backend dependencies
         working-directory: ./backend
@@ -105,6 +107,27 @@ jobs:
 
       - name: Build frontend Docker image
         run: docker build -f frontend/Dockerfile -t flussio-frontend:ci frontend
+
+      - name: Check working tree whitespace
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            HEAD_SHA="$PR_HEAD_SHA"
+          elif [[ -n "$BEFORE_SHA" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$BEFORE_SHA"
+            HEAD_SHA="$CURRENT_SHA"
+          else
+            BASE_SHA="${CURRENT_SHA}^"
+            HEAD_SHA="$CURRENT_SHA"
+          fi
+          echo "Checking whitespace from ${BASE_SHA} to ${HEAD_SHA}"
+          git diff --check "$BASE_SHA" "$HEAD_SHA"
 
   build-and-push:
     runs-on: ubuntu-latest
