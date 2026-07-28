@@ -195,8 +195,8 @@ const RecurringTemplatesPage = () => {
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
         {canPermission('write') && <button type="button" onClick={handleGenerateDue}>{t('buttons.generateDue')}</button>}
         {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>}
-        {canPermission('write') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
-        {canPermission('write') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={!importFile}>Importa CSV</button>}
+        {canPermission('import') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
+        {canPermission('import') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={!importFile}>Importa CSV</button>}
       </div>
       {importPreview.length > 0 && <pre className="card" style={{ maxHeight: 140, overflow: 'auto' }}>{importPreview.join('\n')}</pre>}
 

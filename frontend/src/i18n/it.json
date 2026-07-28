@@ -266,7 +266,7 @@
   "pages.reportsAdvanced.readyReports": "Report pronti",
   "pages.reportsAdvanced.chartType": "Grafico",
   "pages.reportsAdvanced.chartPreview": "Anteprima grafico",
-  "pages.reportsAdvanced.chartFallbackNote": "TODO: pie/stacked in MVP sono mostrati come barre multi-serie.",
+  "pages.reportsAdvanced.chartFallbackNote": "I grafici a torta e impilati sono rappresentati come barre multi-serie.",
   "pages.reportsAdvanced.chartTypes.line": "Linea",
   "pages.reportsAdvanced.chartTypes.bar": "Barre",
   "pages.reportsAdvanced.chartTypes.pie": "Torta",

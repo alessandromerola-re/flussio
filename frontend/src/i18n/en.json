@@ -266,7 +266,7 @@
   "pages.reportsAdvanced.readyReports": "Ready-made reports",
   "pages.reportsAdvanced.chartType": "Chart",
   "pages.reportsAdvanced.chartPreview": "Chart preview",
-  "pages.reportsAdvanced.chartFallbackNote": "TODO: pie/stacked are rendered as multi-series bars in MVP.",
+  "pages.reportsAdvanced.chartFallbackNote": "Pie and stacked charts are represented as multi-series bars.",
   "pages.reportsAdvanced.chartTypes.line": "Line",
   "pages.reportsAdvanced.chartTypes.bar": "Bar",
   "pages.reportsAdvanced.chartTypes.pie": "Pie",

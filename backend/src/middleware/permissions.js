@@ -9,11 +9,11 @@ const levels = {
 };
 
 export const rolePermissions = {
-  viewer: { read: true, write: false, delete_sensitive: false, export: false, users_manage: false },
-  operatore: { read: true, write: true, delete_sensitive: false, export: false, users_manage: false },
-  editor: { read: true, write: true, delete_sensitive: true, export: true, users_manage: false },
-  admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
-  super_admin: { read: true, write: true, delete_sensitive: true, export: true, users_manage: true },
+  viewer: { read: true, write: false, delete_sensitive: false, import: false, import_movements: false, export: false, users_manage: false },
+  operatore: { read: true, write: true, delete_sensitive: false, import: false, import_movements: false, export: false, users_manage: false },
+  editor: { read: true, write: true, delete_sensitive: true, import: true, import_movements: false, export: true, users_manage: false },
+  admin: { read: true, write: true, delete_sensitive: true, import: true, import_movements: true, export: true, users_manage: true },
+  super_admin: { read: true, write: true, delete_sensitive: true, import: true, import_movements: true, export: true, users_manage: true },
 };
 
 export const getRole = (req) => req.companyRole || 'viewer';

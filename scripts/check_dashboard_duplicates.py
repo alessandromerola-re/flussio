@@ -7,9 +7,9 @@ CHECKS = [
     (
         "frontend/src/pages/DashboardPage.jsx",
         {
-            "const bucketSeries = summary.by_bucket || [];": 1,
+            "const bucketSeries = summary?.by_bucket || [];": 1,
             "const kpiDeltas = useMemo(() => {": 1,
-            "const previous = summary.previous || {};": 1,
+            "const previous = summary?.previous || {};": 1,
         },
     ),
     (

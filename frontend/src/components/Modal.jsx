@@ -1,48 +1,69 @@
 import { useEffect, useId, useRef } from 'react';
 
+const modalStack = [];
+let savedBodyOverflow = '';
+
+const focusableElements = (root) => [...(root?.querySelectorAll(
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+) || [])].filter((element) => !element.closest('[aria-hidden="true"]'));
+
 const Modal = ({ isOpen, onClose, children, className = '', title = 'Finestra di dialogo', closeOnOverlay = true, dismissible = true }) => {
   const dialogRef = useRef(null);
+  const closeRef = useRef(onClose);
+  const dismissibleRef = useRef(dismissible);
   const titleId = useId();
+  closeRef.current = onClose;
+  dismissibleRef.current = dismissible;
+
   useEffect(() => {
-    if (!isOpen) {
-      return undefined;
+    if (!isOpen) return undefined;
+    const entry = { dialog: dialogRef, previousFocus: document.activeElement };
+    modalStack.push(entry);
+    if (modalStack.length === 1) {
+      savedBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
     }
-
-    const previousOverflow = document.body.style.overflow;
-    const previousFocus = document.activeElement;
-    document.body.style.overflow = 'hidden';
-
-    const focusable = () => [...(dialogRef.current?.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') || [])];
-    requestAnimationFrame(() => (focusable()[0] || dialogRef.current)?.focus());
+    modalStack.slice(0, -1).forEach((item) => item.dialog.current?.setAttribute('aria-hidden', 'true'));
+    requestAnimationFrame(() => (focusableElements(dialogRef.current)[0] || dialogRef.current)?.focus());
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && dismissible) {
-        onClose();
+      if (modalStack.at(-1) !== entry) return;
+      if (event.key === 'Escape' && dismissibleRef.current) {
+        event.preventDefault();
+        closeRef.current?.();
+        return;
       }
-      if (event.key === 'Tab') {
-        const items = focusable();
-        if (!items.length) { event.preventDefault(); return; }
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (event.key !== 'Tab') return;
+      const items = focusableElements(dialogRef.current);
+      if (!items.length) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      const first = items[0];
+      const last = items.at(-1);
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
       }
     };
-
-    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-      previousFocus?.focus?.();
+      document.removeEventListener('keydown', onKeyDown);
+      const index = modalStack.indexOf(entry);
+      if (index >= 0) modalStack.splice(index, 1);
+      const top = modalStack.at(-1);
+      top?.dialog.current?.removeAttribute('aria-hidden');
+      if (!modalStack.length) document.body.style.overflow = savedBodyOverflow;
+      entry.previousFocus?.focus?.();
     };
-  }, [isOpen, onClose, dismissible]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
-
   return (
-    <div className="modal" onClick={closeOnOverlay && dismissible ? onClose : undefined}>
-      <div ref={dialogRef} tabIndex={-1} className={`modal-content ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
+    <div className="modal" onMouseDown={(event) => {
+      if (event.target === event.currentTarget && closeOnOverlay && dismissible && modalStack.at(-1)?.dialog === dialogRef) onClose?.();
+    }}>
+      <div ref={dialogRef} tabIndex={-1} className={`modal-content ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <span id={titleId} className="sr-only">{title}</span>
+        <button type="button" className="modal-close" aria-label="Chiudi finestra" onClick={onClose} disabled={!dismissible}>×</button>
         {children}
       </div>
     </div>

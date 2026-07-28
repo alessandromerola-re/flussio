@@ -34,36 +34,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Validate production bundle sources
-        run: ./scripts/validate_production_bundle.sh
-
-      - name: Validate raw blob line counts
+      - name: Create temporary Compose env files
         run: |
-          [[ "$(git show HEAD:deploy/production/docker-compose.prod.yml | wc -l)" -ge 20 ]]
-          [[ "$(git show HEAD:deploy/production/docker-compose.prod.qnap.yml | wc -l)" -ge 20 ]]
-          [[ "$(git show HEAD:deploy/production/.env.example.prod | wc -l)" -ge 10 ]]
-          [[ "$(git show HEAD:scripts/validate_production_bundle.sh | wc -l)" -ge 15 ]]
-
-
-      - name: Show bundle file line stats
-        run: |
-          wc -l deploy/production/docker-compose.prod.yml
-          wc -l deploy/production/docker-compose.prod.qnap.yml
-          wc -l deploy/production/.env.example.prod
-          wc -l scripts/validate_production_bundle.sh
-
-      - name: Validate production compose parseability
-        run: |
-          docker compose -f deploy/production/docker-compose.prod.yml config >/dev/null
-          docker compose -f deploy/production/docker-compose.prod.qnap.yml config >/dev/null
-
-      - name: Validate production scripts syntax
-        run: |
-          bash -n deploy/production/install.sh
-          bash -n deploy/production/backup.sh
-          bash -n deploy/production/check-schema.sh
-          bash -n deploy/production/restore-test.sh
-          bash -n deploy/production/generate-secrets.sh
+          cp backend/.env.example backend/.env
+          cp frontend/.env.example frontend/.env
+          cp deploy/production/.env.example.prod .env
 
       - name: Setup Node 22
         uses: actions/setup-node@v5
@@ -91,9 +66,45 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
+      - name: Run frontend tests
+        working-directory: ./frontend
+        run: npm test
+
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
+
+      - name: Validate production bundle sources
+        run: ./scripts/validate_production_bundle.sh
+
+      - name: Validate raw blob line counts
+        run: |
+          [[ "$(git show HEAD:deploy/production/docker-compose.prod.yml | wc -l)" -ge 20 ]]
+          [[ "$(git show HEAD:deploy/production/docker-compose.prod.qnap.yml | wc -l)" -ge 20 ]]
+          [[ "$(git show HEAD:deploy/production/.env.example.prod | wc -l)" -ge 10 ]]
+          [[ "$(git show HEAD:scripts/validate_production_bundle.sh | wc -l)" -ge 15 ]]
+
+      - name: Validate production scripts syntax
+        run: |
+          bash -n deploy/production/install.sh
+          bash -n deploy/production/backup.sh
+          bash -n deploy/production/check-schema.sh
+          bash -n deploy/production/restore-test.sh
+          bash -n deploy/production/generate-secrets.sh
+
+      - name: Validate every Compose file
+        run: |
+          docker compose -f docker-compose.yml config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.override.yml config >/dev/null
+          docker compose -f docker-compose.qnap.yml config >/dev/null
+          docker compose -f deploy/production/docker-compose.prod.yml config >/dev/null
+          docker compose -f deploy/production/docker-compose.prod.qnap.yml config >/dev/null
+
+      - name: Build backend Docker image
+        run: docker build -f backend/Dockerfile -t flussio-backend:ci .
+
+      - name: Build frontend Docker image
+        run: docker build -f frontend/Dockerfile -t flussio-frontend:ci frontend
 
   build-and-push:
     runs-on: ubuntu-latest

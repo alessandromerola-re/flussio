@@ -9,6 +9,7 @@ let baseUrl;
 let token;
 let companyId;
 let otherCompanyId;
+const roleTokens = {};
 
 const requestCsv = async (path, companyHeader) => {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -24,6 +25,22 @@ const requestCsv = async (path, companyHeader) => {
     body: await response.text(),
   };
 };
+
+const postImport = async (entity, role) => fetch(`${baseUrl}/api/import/${entity}`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${roleTokens[role]}`,
+    'X-Company-Id': String(companyId),
+  },
+});
+
+const postMovementSettingsImport = async (role) => fetch(`${baseUrl}/api/settings/movements/import-csv`, {
+  method: 'POST',
+  headers: role ? {
+    Authorization: `Bearer ${roleTokens[role]}`,
+    'X-Company-Id': String(companyId),
+  } : {},
+});
 
 test.before(async () => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_secret';
@@ -54,6 +71,25 @@ test.before(async () => {
     },
     process.env.JWT_SECRET
   );
+  roleTokens.admin = token;
+
+  for (const role of ['editor', 'operatore', 'viewer']) {
+    const roleUser = await query(
+      'INSERT INTO users (company_id, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id',
+      [companyId, `${role}@acme.local`, 'hash', role]
+    );
+    await query(
+      'INSERT INTO user_companies (user_id, company_id, role, is_active) VALUES ($1, $2, $3, true)',
+      [roleUser.rows[0].id, companyId, role]
+    );
+    roleTokens[role] = jwt.sign({
+      user_id: roleUser.rows[0].id,
+      email: `${role}@acme.local`,
+      default_company_id: companyId,
+      role,
+      is_super_admin: false,
+    }, process.env.JWT_SECRET);
+  }
 
   const parentCategory = await query(
     'INSERT INTO categories (company_id, external_id, name, direction, is_active) VALUES ($1, $2, $3, $4, true) RETURNING id',
@@ -148,4 +184,22 @@ test('contacts export never leaks default category metadata from another company
   assert.equal(row[nameIndex], '', 'default_category_name must be empty when category is cross-company');
   assert.doesNotMatch(response.body, /Categoria Altra Azienda/);
   assert.doesNotMatch(response.body, /cat_other/);
+});
+
+test('real import route enforces movement-specific and regular import permissions', async () => {
+  assert.equal((await postImport('transactions', 'admin')).status, 400, 'admin reaches movement import validation');
+  assert.equal((await postImport('transactions', 'editor')).status, 403, 'editor cannot call movement import directly');
+  assert.equal((await postImport('contacts', 'editor')).status, 400, 'editor reaches regular import validation');
+  assert.equal((await postImport('contacts', 'operatore')).status, 403, 'operatore cannot call regular import directly');
+  assert.equal((await postImport('contacts', 'viewer')).status, 403, 'viewer cannot call regular import directly');
+  assert.equal((await postImport('transactions', 'operatore')).status, 403, 'operatore cannot call movement import directly');
+  assert.equal((await postImport('transactions', 'viewer')).status, 403, 'viewer cannot call movement import directly');
+});
+
+test('frontend movement import route authorizes before CSV validation', async () => {
+  assert.equal((await postMovementSettingsImport('admin')).status, 400, 'admin reaches file validation');
+  assert.equal((await postMovementSettingsImport('editor')).status, 403, 'editor is rejected before file validation');
+  assert.equal((await postMovementSettingsImport('operatore')).status, 403, 'operatore is rejected before file validation');
+  assert.equal((await postMovementSettingsImport('viewer')).status, 403, 'viewer is rejected before file validation');
+  assert.equal((await postMovementSettingsImport()).status, 401, 'unauthenticated request is rejected');
 });
