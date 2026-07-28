@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { ADV_REPORT_TEMPLATES } from '../utils/advancedReportTemplates.js';
+import { formatDateInTimeZone } from '../utils/date.js';
 
 const metricOptions = ['income_sum_cents', 'expense_sum_cents', 'net_sum_cents', 'count', 'avg_abs_cents'];
 const groupOptions = ['month', 'day', 'week', 'quarter', 'year', 'category', 'account', 'contact', 'job', 'property', 'type', 'recurring'];
 const timeBuckets = new Set(['month', 'day', 'week', 'quarter', 'year']);
 
-const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const toIsoDate = formatDateInTimeZone;
 const getLast30Range = () => {
   const to = new Date();
   const from = new Date();

@@ -13,10 +13,11 @@ import {
   Tooltip,
 } from 'chart.js';
 import { api } from '../services/api.js';
+import { formatDateInTimeZone } from '../utils/date.js';
 
 ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
-const toIsoDate = (date) => date.toISOString().slice(0, 10);
+const toIsoDate = formatDateInTimeZone;
 const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
 const absCents = (value) => Math.abs(Number(value || 0));
 const emptySeriesMessage = 'Nessun dato nel periodo selezionato';

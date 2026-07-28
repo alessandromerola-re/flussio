@@ -21,13 +21,9 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
     setLoading(true);
     try {
       const data = await api.login({ email, password });
-      setToken(data.token, data.role);
+      setToken(data.token, data.role, remember);
       localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
       setActiveCompanyId(data.default_company_id);
-      localStorage.setItem('flussio_role', data.role || 'viewer');
-      if (!remember) {
-        sessionStorage.setItem('flussio_token_temp', data.token);
-      }
       onLogin(data.token);
       navigate('/dashboard');
     } catch (err) {
@@ -111,7 +107,6 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
               <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
               <span>{t('forms.rememberMe')}</span>
             </label>
-            <button className="link-button" type="button">{t('forms.forgotPassword')}</button>
           </div>
 
           {error && <div className="error auth-error" role="alert">{error}</div>}
@@ -126,11 +121,6 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
           </div>
         </form>
 
-        <div className="auth-footer-links" aria-label={t('pages.login.footerLabel')}>
-          <button type="button" className="link-button subtle">{t('pages.login.privacy')}</button>
-          <span aria-hidden="true">•</span>
-          <button type="button" className="link-button subtle">{t('pages.login.support')}</button>
-        </div>
       </div>
     </div>
   );
