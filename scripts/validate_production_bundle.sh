@@ -38,6 +38,18 @@ for file in "${required_files[@]}"; do
   fi
 done
 
+for compose_file in "$PROD_DIR/docker-compose.prod.yml" "$PROD_DIR/docker-compose.prod.qnap.yml"; do
+  if ! rg -q 'db_data:/var/lib/postgresql$' "$compose_file"; then
+    echo "[ERROR] postgres:18 must mount db_data at /var/lib/postgresql: $compose_file"
+    exit 1
+  fi
+  if rg -q 'db_data:/var/lib/postgresql/data$' "$compose_file"; then
+    echo "[ERROR] Legacy PostgreSQL data mount found: $compose_file"
+    exit 1
+  fi
+done
+echo "[INFO] PostgreSQL 18 volume targets are correct."
+
 # Hard minimum line counts to catch quasi-monoriga regressions.
 declare -A min_lines=(
   ["$PROD_DIR/docker-compose.prod.yml"]=20

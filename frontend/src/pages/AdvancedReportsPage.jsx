@@ -206,9 +206,18 @@ const AdvancedReportsPage = () => {
   const saveReport = async () => {
     if (!savedName.trim()) return;
     const payload = { name: savedName.trim(), spec_json: spec, is_shared: savedShared };
-    if (selectedSavedId) await api.updateSavedReport(selectedSavedId, payload);
+    if (selectedSavedId) {
+      if (!window.confirm('Aggiornare consapevolmente il report selezionato?')) return;
+      await api.updateSavedReport(selectedSavedId, payload);
+    }
     else await api.createSavedReport(payload);
     await loadSaved();
+  };
+
+  const startNewReport = () => {
+    setSelectedSavedId('');
+    setSavedName('');
+    setSavedShared(false);
   };
 
   const loadSavedSpec = async (saved) => {
@@ -350,13 +359,13 @@ const AdvancedReportsPage = () => {
         <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv}>{t('buttons.exportCsv')}</button>}</div>
       </details>
 
-      {canExport && <div className="card" style={{ marginTop: '1rem' }}><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{t('buttons.saveReport')}</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><ul className="list" style={{ marginTop: '1rem' }}>{savedReports.map((item) => <li key={item.id}><button type="button" className="list-item" onClick={() => loadSavedSpec(item)}><span>{item.name}</span><small>{item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
+      {canExport && <div className="card" style={{ marginTop: '1rem' }}><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><ul className="list" style={{ marginTop: '1rem' }}>{savedReports.map((item) => <li key={item.id}><button type="button" className="list-item" onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
 
       {result && (
         <div className="card" style={{ marginTop: '1rem' }}>
           <h2>{t('pages.reportsAdvanced.results')}</h2>
           {totals && <div className="row-actions" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}><span>{t('pages.dashboard.income')}: {formatEuro(totals.income_sum_cents)}</span><span>{t('pages.dashboard.expense')}: {formatEuro(totals.expense_sum_cents)}</span><span>{t('pages.dashboard.net')}: {formatEuro(totals.net_sum_cents)}</span><span>{t('pages.reportsAdvanced.metrics.count')}: {totals.count}</span></div>}
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}</tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} onClick={() => handleDrilldown(row)} style={{ cursor: 'pointer', backgroundColor: row.category_id == null ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col.includes('cents') ? formatEuro(row[col]) : String(row[col] ?? '')}</td>)}</tr>)}{rows.length === 0 && <tr><td colSpan={columns.length || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table>
+          <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: row.category_id == null ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col.includes('cents') ? formatEuro(row[col]) : String(row[col] ?? '')}</td>)}<td><button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>Apri</button></td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
         </div>
       )}
       </div>

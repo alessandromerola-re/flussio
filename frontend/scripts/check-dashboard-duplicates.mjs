@@ -11,9 +11,9 @@ const checks = [
   {
     file: dashboardPath,
     patterns: new Map([
-      ['const bucketSeries = summary.by_bucket || [];', 1],
+      ['const bucketSeries = summary?.by_bucket || [];', 1],
       ['const kpiDeltas = useMemo(() => {', 1],
-      ['const previous = summary.previous || {};', 1],
+      ['const previous = summary?.previous || {};', 1],
     ]),
   },
   ...(existsSync(backendDashboardPath)

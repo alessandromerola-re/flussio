@@ -16,6 +16,11 @@ const varianceClass = (value) => {
   if (value == null || value === 0) return '';
   return value > 0 ? 'positive' : 'negative';
 };
+const varianceMeaning = (value, inverse = false) => {
+  if (value == null || value === 0) return 'In linea con il previsto';
+  const favorable = inverse ? value < 0 : value > 0;
+  return favorable ? 'Scostamento favorevole' : 'Scostamento sfavorevole';
+};
 
 const JobDetailPage = () => {
   const { t } = useTranslation();
@@ -150,7 +155,7 @@ const JobDetailPage = () => {
             <div className="card">
               <h3>{t('pages.jobs.varianceSection')}</h3>
               <div>{t('pages.jobs.revenueVariance')}: <strong className={varianceClass(job.revenueVarianceCents)}>{formatCurrencyOrNotSet(job.revenueVarianceCents, t('common.notSet'))}</strong></div>
-              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(job.costVarianceCents)}>{formatCurrencyOrNotSet(job.costVarianceCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(job.costVarianceCents)} aria-label={varianceMeaning(job.costVarianceCents)}>{formatCurrencyOrNotSet(job.costVarianceCents, t('common.notSet'))} <small>({varianceMeaning(job.costVarianceCents)})</small></strong></div>
               <div>{t('pages.jobs.marginVariance')}: <strong className={varianceClass(job.marginVarianceCents)}>{formatCurrencyOrNotSet(job.marginVarianceCents, t('common.notSet'))}</strong></div>
             </div>
             <div className="card">
@@ -171,7 +176,7 @@ const JobDetailPage = () => {
               <div>{t('pages.jobs.totalExpense')}: <strong>{formatCurrencyOrNotSet(summary.totals.expense_cents, t('common.notSet'))}</strong></div>
               <div>{t('pages.jobs.actualMargin')}: <strong>{formatCurrencyOrNotSet(summary.totals.margin_cents, t('common.notSet'))}</strong></div>
               <div>{t('pages.jobs.revenueVariance')}: <strong className={varianceClass(summary.variances?.revenue_cents)}>{formatCurrencyOrNotSet(summary.variances?.revenue_cents, t('common.notSet'))}</strong></div>
-              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(summary.variances?.cost_cents)}>{formatCurrencyOrNotSet(summary.variances?.cost_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(summary.variances?.cost_cents)} aria-label={varianceMeaning(summary.variances?.cost_cents)}>{formatCurrencyOrNotSet(summary.variances?.cost_cents, t('common.notSet'))} <small>({varianceMeaning(summary.variances?.cost_cents)})</small></strong></div>
               <div>{t('pages.jobs.marginVariance')}: <strong className={varianceClass(summary.variances?.margin_cents)}>{formatCurrencyOrNotSet(summary.variances?.margin_cents, t('common.notSet'))}</strong></div>
             </div>
           </div>

@@ -619,6 +619,9 @@ button.danger {
 
 .desktop-only { display: block; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
+.table-scroll { width: 100%; overflow-x: auto; }
+.table-scroll table { min-width: 640px; }
+.report-drilldown:focus-visible, .list-item:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 
 .modal-content {
   background: #ffffff;
@@ -786,6 +789,8 @@ button.danger {
     padding: 1rem 0;
     border-radius: 0;
   }
+
+  .auth-form-column { order: -1; }
 
   .auth-layout::before {
     top: -100px;
