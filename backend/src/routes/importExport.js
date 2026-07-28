@@ -1,10 +1,10 @@
 import express from 'express';
 import { getClient, query } from '../db/index.js';
 import { sendError } from '../utils/httpErrors.js';
+import { canRole } from '../middleware/permissions.js';
 
 const router = express.Router();
 const rawUpload = express.raw({ type: 'multipart/form-data', limit: '25mb' });
-const allowedRoles = new Set(['admin', 'editor', 'super_admin']);
 
 const parseMultipartFile = (req) => {
   const contentType = req.headers['content-type'] || '';
@@ -51,8 +51,11 @@ const parseCsvLine = (line, delimiter = ',') => {
   return out.map((x) => x.trim());
 };
 
-const ensurePermission = (req, res) => {
-  if (!allowedRoles.has(req.companyRole)) {
+const ensurePermission = (req, res, entity = req.params.entity) => {
+  const permission = req.method === 'GET'
+    ? 'export'
+    : entity === 'transactions' ? 'import_movements' : 'import';
+  if (!canRole(req.companyRole, permission)) {
     sendError(res, 403, 'FORBIDDEN', 'Operation not allowed.');
     return false;
   }

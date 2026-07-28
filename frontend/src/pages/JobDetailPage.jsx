@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { formatCurrencyFromCents } from '../utils/currency.js';
+import { getCostVariancePresentation } from '../utils/jobCostVariance.js';
 
 const defaultFilters = {
   date_from: '',
@@ -15,6 +16,10 @@ const formatPctOrNotSet = (value, fallback) => (value == null ? fallback : `${Nu
 const varianceClass = (value) => {
   if (value == null || value === 0) return '';
   return value > 0 ? 'positive' : 'negative';
+};
+const CostVariance = ({ value, fallback }) => {
+  const presentation = getCostVariancePresentation(value);
+  return <strong className={presentation.className} aria-label={presentation.label}>{presentation.icon} {formatCurrencyOrNotSet(value, fallback)} <small>({presentation.label})</small></strong>;
 };
 
 const JobDetailPage = () => {
@@ -150,7 +155,7 @@ const JobDetailPage = () => {
             <div className="card">
               <h3>{t('pages.jobs.varianceSection')}</h3>
               <div>{t('pages.jobs.revenueVariance')}: <strong className={varianceClass(job.revenueVarianceCents)}>{formatCurrencyOrNotSet(job.revenueVarianceCents, t('common.notSet'))}</strong></div>
-              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(job.costVarianceCents)}>{formatCurrencyOrNotSet(job.costVarianceCents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.costVariance')}: <CostVariance value={job.costVarianceCents} fallback={t('common.notSet')} /></div>
               <div>{t('pages.jobs.marginVariance')}: <strong className={varianceClass(job.marginVarianceCents)}>{formatCurrencyOrNotSet(job.marginVarianceCents, t('common.notSet'))}</strong></div>
             </div>
             <div className="card">
@@ -171,7 +176,7 @@ const JobDetailPage = () => {
               <div>{t('pages.jobs.totalExpense')}: <strong>{formatCurrencyOrNotSet(summary.totals.expense_cents, t('common.notSet'))}</strong></div>
               <div>{t('pages.jobs.actualMargin')}: <strong>{formatCurrencyOrNotSet(summary.totals.margin_cents, t('common.notSet'))}</strong></div>
               <div>{t('pages.jobs.revenueVariance')}: <strong className={varianceClass(summary.variances?.revenue_cents)}>{formatCurrencyOrNotSet(summary.variances?.revenue_cents, t('common.notSet'))}</strong></div>
-              <div>{t('pages.jobs.costVariance')}: <strong className={varianceClass(summary.variances?.cost_cents)}>{formatCurrencyOrNotSet(summary.variances?.cost_cents, t('common.notSet'))}</strong></div>
+              <div>{t('pages.jobs.costVariance')}: <CostVariance value={summary.variances?.cost_cents} fallback={t('common.notSet')} /></div>
               <div>{t('pages.jobs.marginVariance')}: <strong className={varianceClass(summary.variances?.margin_cents)}>{formatCurrencyOrNotSet(summary.variances?.margin_cents, t('common.notSet'))}</strong></div>
             </div>
           </div>

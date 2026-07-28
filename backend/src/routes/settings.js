@@ -532,7 +532,7 @@ router.delete('/branding/icons', requirePermission('users_manage'), async (req, 
 });
 
 
-router.post('/movements/import-csv', requirePermission('users_manage'), rawUpload, async (req, res) => {
+router.post('/movements/import-csv', requirePermission('import_movements'), rawUpload, async (req, res) => {
   if (!(req.headers['content-type'] || '').includes('multipart/form-data')) {
     return sendError(res, 400, 'NO_FILE', 'Nessun file selezionato.');
   }

@@ -232,7 +232,7 @@ const UsersAdminPage = () => {
       </div>
 
       <Modal isOpen={modalOpen} onClose={closeModal}>
-        <div className="modal-content">
+        <div>
           <form onSubmit={submit} className="users-create-form">
             <h2>{form.id ? t('pages.users.editUser') : t('pages.users.addUser')}</h2>
             <label>
