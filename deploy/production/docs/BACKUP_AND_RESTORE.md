@@ -51,7 +51,7 @@ Optional helper:
 ```bash
 docker compose -f docker-compose.prod.yml cp check_schema.sql db:/work/check_schema.sql
 docker compose -f docker-compose.prod.yml exec -T db \
-  sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /work/check_schema.sql'
+  sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /work/check_schema.sql'
 ```
 
 Optional helper:

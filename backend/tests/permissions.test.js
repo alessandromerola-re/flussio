@@ -12,6 +12,8 @@ test('role/action matrix follows the backend authority', () => {
   assert.equal(canRole('editor', 'import_movements'), false);
   assert.equal(canRole('admin', 'users_manage'), true);
   assert.equal(canRole('admin', 'import_movements'), true);
+  assert.equal(canRole('admin', 'reconcile_accounts'), true);
+  assert.equal(canRole('editor', 'reconcile_accounts'), false);
 });
 
 test('permission middleware rejects a direct unauthorized request with 403', () => {

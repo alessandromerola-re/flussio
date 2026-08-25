@@ -1,5 +1,7 @@
 import express from 'express';
-import { query } from '../db/index.js';
+import { getClient, query } from '../db/index.js';
+import { requirePermission } from '../middleware/permissions.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const router = express.Router();
 
@@ -12,6 +14,101 @@ const parseNumberOrNull = (value) => {
   const parsed = Number(value);
   return Number.isNaN(parsed) ? null : parsed;
 };
+
+const reconciliationQuery = `
+  SELECT
+    a.id,
+    a.name,
+    a.balance AS stored_balance,
+    a.opening_balance + COALESCE(SUM(
+      CASE
+        WHEN t.id IS NULL THEN 0
+        WHEN ta.direction = 'in' THEN ta.amount
+        ELSE -ta.amount
+      END
+    ), 0) AS calculated_balance,
+    a.balance - (
+      a.opening_balance + COALESCE(SUM(
+        CASE
+          WHEN t.id IS NULL THEN 0
+          WHEN ta.direction = 'in' THEN ta.amount
+          ELSE -ta.amount
+        END
+      ), 0)
+    ) AS difference
+  FROM accounts a
+  LEFT JOIN transaction_accounts ta ON ta.account_id = a.id
+  LEFT JOIN transactions t ON t.id = ta.transaction_id AND t.company_id = a.company_id
+  WHERE a.company_id = $1
+  GROUP BY a.id
+  ORDER BY a.name
+`;
+
+router.get('/reconciliation', async (req, res) => {
+  try {
+    const result = await query(reconciliationQuery, [req.companyId]);
+    return res.json({
+      is_reconciled: result.rows.every((row) => Number(row.difference) === 0),
+      accounts: result.rows,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  }
+});
+
+router.post('/reconciliation/apply', requirePermission('reconcile_accounts'), async (req, res) => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM accounts WHERE company_id = $1 ORDER BY id FOR UPDATE', [req.companyId]);
+    const beforeResult = await client.query(reconciliationQuery, [req.companyId]);
+    await client.query(
+      `UPDATE accounts a
+       SET balance = a.opening_balance + COALESCE(m.delta, 0)
+       FROM (
+         SELECT
+           acc.id AS account_id,
+           COALESCE(SUM(
+             CASE
+               WHEN t.id IS NULL THEN 0
+               WHEN ta.direction = 'in' THEN ta.amount
+               ELSE -ta.amount
+             END
+           ), 0) AS delta
+         FROM accounts acc
+         LEFT JOIN transaction_accounts ta ON ta.account_id = acc.id
+         LEFT JOIN transactions t ON t.id = ta.transaction_id AND t.company_id = acc.company_id
+         WHERE acc.company_id = $1
+         GROUP BY acc.id
+       ) m
+       WHERE a.id = m.account_id
+         AND a.company_id = $1`,
+      [req.companyId]
+    );
+    await writeAuditLog({
+      client,
+      companyId: req.companyId,
+      userId: req.user.user_id,
+      action: 'reconcile',
+      entityType: 'accounts',
+      meta: {
+        differences: beforeResult.rows
+          .filter((row) => Number(row.difference) !== 0)
+          .map((row) => ({ account_id: row.id, difference: row.difference })),
+      },
+    });
+    const afterResult = await client.query(reconciliationQuery, [req.companyId]);
+    await client.query('COMMIT');
+    return res.json({ is_reconciled: true, accounts: afterResult.rows });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(error);
+    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  } finally {
+    client.release();
+  }
+});
 
 router.get('/', async (req, res) => {
   try {
@@ -86,18 +183,49 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
+  const client = await getClient();
   try {
-    const result = await query(
-      'DELETE FROM accounts WHERE id = $1 AND company_id = $2',
+    await client.query('BEGIN');
+    const accountResult = await client.query(
+      'SELECT id FROM accounts WHERE id = $1 AND company_id = $2 FOR UPDATE',
       [id, req.companyId]
     );
-    if (result.rowCount === 0) {
+    if (accountResult.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
+
+    const usageResult = await client.query(
+      `SELECT 1
+       FROM transaction_accounts ta
+       JOIN transactions t ON t.id = ta.transaction_id
+       WHERE ta.account_id = $1
+         AND t.company_id = $2
+       LIMIT 1`,
+      [id, req.companyId]
+    );
+    if (usageResult.rowCount > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error_code: 'ACCOUNT_HAS_MOVEMENTS' });
+    }
+
+    await client.query(
+      `UPDATE recurring_templates
+       SET is_active = false,
+           updated_at = NOW()
+       WHERE account_id = $1
+         AND company_id = $2`,
+      [id, req.companyId]
+    );
+    await client.query('DELETE FROM accounts WHERE id = $1 AND company_id = $2', [id, req.companyId]);
+    await client.query('COMMIT');
     return res.status(204).send();
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  } finally {
+    client.release();
   }
 });
 

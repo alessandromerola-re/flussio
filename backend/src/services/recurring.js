@@ -254,6 +254,31 @@ const generateForTemplate = async (client, template, runType, forcedNow = false)
     return { status: 'skipped', reason: 'beyond_end_date' };
   }
 
+  if (!template.account_id) {
+    await client.query(
+      'UPDATE recurring_templates SET is_active = false, updated_at = NOW() WHERE id = $1',
+      [template.id]
+    );
+    return { status: 'skipped', reason: 'missing_account' };
+  }
+
+  const accountResult = await client.query(
+    `SELECT id
+     FROM accounts
+     WHERE id = $1
+       AND company_id = $2
+       AND is_active = true
+     FOR UPDATE`,
+    [template.account_id, template.company_id]
+  );
+  if (accountResult.rowCount === 0) {
+    await client.query(
+      'UPDATE recurring_templates SET is_active = false, updated_at = NOW() WHERE id = $1',
+      [template.id]
+    );
+    return { status: 'skipped', reason: 'account_unavailable' };
+  }
+
   const cycleKey = computeCycleKey(template, runDate);
 
   const runInsertResult = await client.query(
@@ -309,6 +334,21 @@ const generateForTemplate = async (client, template, runType, forcedNow = false)
   );
 
   const movementId = movementInsertResult.rows[0].id;
+
+  const accountDirection = template.movement_type === 'expense' ? 'out' : 'in';
+  const accountAmount = Math.abs(amountValue);
+  await client.query(
+    `INSERT INTO transaction_accounts (transaction_id, account_id, direction, amount)
+     VALUES ($1, $2, $3, $4)`,
+    [movementId, template.account_id, accountDirection, accountAmount]
+  );
+  await client.query(
+    `UPDATE accounts
+     SET balance = balance + $1
+     WHERE id = $2
+       AND company_id = $3`,
+    [accountDirection === 'in' ? accountAmount : -accountAmount, template.account_id, template.company_id]
+  );
 
   await client.query('UPDATE recurring_runs SET generated_movement_id = $1 WHERE id = $2', [movementId, runId]);
 
@@ -398,6 +438,15 @@ export const generateDueTemplates = async ({ companyId = null, runType = 'auto' 
         continue;
       }
       const locked = toTemplateView(lockedResult.rows[0]);
+      if (!locked.is_active || new Date(locked.next_run_at).getTime() > Date.now()) {
+        await client.query('ROLLBACK');
+        result.skipped_count += 1;
+        result.skipped_details.push({
+          template_id: locked.id,
+          reason: 'no_longer_due',
+        });
+        continue;
+      }
       const itemResult = await generateForTemplate(client, locked, runType, false);
       await client.query('COMMIT');
 

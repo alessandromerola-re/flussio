@@ -109,8 +109,20 @@ const exportEntity = async (entity, companyId) => {
     };
   }
   if (entity === 'recurring_templates') {
-    const r = await query('SELECT external_id,title,frequency,interval,start_date,end_date,is_active,amount,movement_type,notes FROM recurring_templates WHERE company_id=$1 ORDER BY id', [companyId]);
-    return { headers: ['external_id', 'title', 'frequency', 'interval', 'start_date', 'end_date', 'is_active', 'amount', 'movement_type', 'notes'], rows: r.rows.map((x) => [x.external_id || slug(x.title), x.title, x.frequency, x.interval, x.start_date || '', x.end_date || '', x.is_active, Number(x.amount).toFixed(2), x.movement_type, x.notes || '']) };
+    const r = await query(
+      `SELECT rt.external_id,rt.title,rt.frequency,rt.interval,rt.start_date,rt.end_date,
+              rt.is_active,rt.amount,rt.movement_type,rt.notes,
+              a.external_id AS account_external_id,a.name AS account_name
+       FROM recurring_templates rt
+       LEFT JOIN accounts a ON a.id = rt.account_id AND a.company_id = rt.company_id
+       WHERE rt.company_id=$1
+       ORDER BY rt.id`,
+      [companyId]
+    );
+    return {
+      headers: ['external_id', 'title', 'frequency', 'interval', 'start_date', 'end_date', 'is_active', 'amount', 'movement_type', 'account_external_id', 'account_name', 'notes'],
+      rows: r.rows.map((x) => [x.external_id || slug(x.title), x.title, x.frequency, x.interval, x.start_date || '', x.end_date || '', x.is_active, Number(x.amount).toFixed(2), x.movement_type, x.account_external_id || '', x.account_name || '', x.notes || '']),
+    };
   }
   if (entity === 'transactions') {
     const r = await query(`SELECT t.id,t.external_id,t.date,t.type,t.amount_total,t.description,
@@ -149,6 +161,14 @@ router.get('/:entity.csv', async (req, res) => {
 router.post('/:entity', rawUpload, async (req, res) => {
   if (!ensurePermission(req, res)) return;
   const entity = req.params.entity;
+  if (entity === 'transactions') {
+    return sendError(
+      res,
+      400,
+      'IMPORT_USE_MOVEMENT_WIZARD',
+      'Use the dedicated movement import so account legs and balances stay consistent.'
+    );
+  }
   const fileBuffer = parseMultipartFile(req);
   if (!fileBuffer) return sendError(res, 400, 'NO_FILE', 'No file uploaded.');
 
@@ -185,7 +205,16 @@ router.post('/:entity', rawUpload, async (req, res) => {
           const externalId = row[idx('external_id')] || slug(row[idx('name')]);
           const found = await client.query('SELECT id FROM accounts WHERE company_id=$1 AND external_id=$2', [req.companyId, externalId]);
           if (found.rowCount) {
-            await client.query('UPDATE accounts SET name=$1,type=$2,opening_balance=$3,is_active=$4 WHERE id=$5', [row[idx('name')], row[idx('type')], asNum(row[idx('opening_balance')]), asBool(row[idx('is_active')]), found.rows[0].id]);
+            await client.query(
+              `UPDATE accounts
+               SET name=$1,
+                   type=$2,
+                   balance=balance + ($3 - opening_balance),
+                   opening_balance=$3,
+                   is_active=$4
+               WHERE id=$5 AND company_id=$6`,
+              [row[idx('name')], row[idx('type')], asNum(row[idx('opening_balance')]), asBool(row[idx('is_active')]), found.rows[0].id, req.companyId]
+            );
             updated += 1;
           } else {
             await client.query('INSERT INTO accounts (company_id,external_id,name,type,opening_balance,balance,is_active) VALUES ($1,$2,$3,$4,$5,$5,$6)', [req.companyId, externalId, row[idx('name')], row[idx('type')] || 'cash', asNum(row[idx('opening_balance')]) || 0, asBool(row[idx('is_active')])]);
@@ -237,13 +266,17 @@ router.post('/:entity', rawUpload, async (req, res) => {
           }
         } else if (entity === 'recurring_templates') {
           const externalId = row[idx('external_id')] || slug(row[idx('title')]);
+          const accountExternalId = idx('account_external_id') >= 0 ? row[idx('account_external_id')] : '';
+          const accountName = idx('account_name') >= 0 ? row[idx('account_name')] : '';
+          const accountId = await resolveByExternal('accounts', accountExternalId, accountName);
+          if (!accountId) throw new Error('account not found');
           const found = await client.query('SELECT id FROM recurring_templates WHERE company_id=$1 AND external_id=$2', [req.companyId, externalId]);
-          const params = [row[idx('title')], row[idx('frequency')] || 'monthly', Number(row[idx('interval')] || 1), row[idx('start_date')] || null, row[idx('end_date')] || null, asBool(row[idx('is_active')]), asNum(row[idx('amount')]), row[idx('movement_type')] || 'expense', row[idx('notes')] || null];
+          const params = [row[idx('title')], row[idx('frequency')] || 'monthly', Number(row[idx('interval')] || 1), row[idx('start_date')] || null, row[idx('end_date')] || null, asBool(row[idx('is_active')]), asNum(row[idx('amount')]), row[idx('movement_type')] || 'expense', accountId, row[idx('notes')] || null];
           if (found.rowCount) {
-            await client.query('UPDATE recurring_templates SET title=$1,frequency=$2,interval=$3,start_date=$4,end_date=$5,is_active=$6,amount=$7,movement_type=$8,notes=$9 WHERE id=$10', [...params, found.rows[0].id]);
+            await client.query('UPDATE recurring_templates SET title=$1,frequency=$2,interval=$3,start_date=$4,end_date=$5,is_active=$6,amount=$7,movement_type=$8,account_id=$9,notes=$10 WHERE id=$11', [...params, found.rows[0].id]);
             updated += 1;
           } else {
-            await client.query('INSERT INTO recurring_templates (company_id,external_id,title,frequency,interval,start_date,end_date,is_active,amount,movement_type,notes,next_run_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())', [req.companyId, externalId, ...params]);
+            await client.query('INSERT INTO recurring_templates (company_id,external_id,title,frequency,interval,start_date,end_date,is_active,amount,movement_type,account_id,notes,next_run_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())', [req.companyId, externalId, ...params]);
             created += 1;
           }
         } else if (entity === 'transactions') {

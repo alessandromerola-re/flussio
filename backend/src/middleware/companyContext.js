@@ -50,23 +50,30 @@ export const companyContextMiddleware = async (req, res, next) => {
 
     try {
       const membershipResult = await query(
-        `SELECT role
+        `SELECT role, is_active
          FROM user_companies
          WHERE user_id = $1
-           AND company_id = $2
-           AND is_active = true`,
+           AND company_id = $2`,
         [req.user?.user_id, companyId]
       );
 
-      if (membershipResult.rowCount > 0) {
+      if (membershipResult.rowCount > 0 && membershipResult.rows[0].is_active === true) {
         req.companyId = companyId;
         req.companyRole = membershipResult.rows[0].role;
         return next();
       }
 
-      const legacyAllowed = await applyLegacyCompanyFallback(req, companyId);
-      if (legacyAllowed) {
-        return next();
+      if (membershipResult.rowCount === 0) {
+        const anyMembershipResult = await query(
+          'SELECT 1 FROM user_companies WHERE user_id = $1 LIMIT 1',
+          [req.user?.user_id]
+        );
+        if (anyMembershipResult.rowCount === 0) {
+          const legacyAllowed = await applyLegacyCompanyFallback(req, companyId);
+          if (legacyAllowed) {
+            return next();
+          }
+        }
       }
 
       return sendError(res, 403, 'FORBIDDEN', 'You do not have access to this company.');

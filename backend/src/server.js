@@ -7,7 +7,7 @@ const port = process.env.PORT || 4000;
 
 const startRecurringScheduler = () => {
   const enabledRaw = process.env.RECURRING_GENERATOR_ENABLED;
-  const enabled = enabledRaw == null ? true : String(enabledRaw).toLowerCase() === 'true';
+  const enabled = String(enabledRaw || 'false').toLowerCase() === 'true';
   const intervalMinutes = Number(process.env.RECURRING_GENERATOR_INTERVAL_MIN || 5);
 
   if (!enabled) {

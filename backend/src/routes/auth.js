@@ -56,24 +56,30 @@ router.post('/login', async (req, res) => {
         }));
 
         if (companies.length === 0 && user.company_id) {
-          const fallbackCompanyResult = await query(
-            'SELECT id, name FROM companies WHERE id = $1',
-            [user.company_id]
+          const anyMembershipResult = await query(
+            'SELECT 1 FROM user_companies WHERE user_id = $1 LIMIT 1',
+            [user.id]
           );
-          if (fallbackCompanyResult.rowCount > 0) {
-            const fallbackRole = user.role || 'admin';
-            companies = [{
-              id: fallbackCompanyResult.rows[0].id,
-              name: fallbackCompanyResult.rows[0].name,
-              role: fallbackRole,
-            }];
-
-            await query(
-              `INSERT INTO user_companies (user_id, company_id, role, is_active)
-               VALUES ($1, $2, $3, true)
-               ON CONFLICT (user_id, company_id) DO NOTHING`,
-              [user.id, user.company_id, fallbackRole]
+          if (anyMembershipResult.rowCount === 0) {
+            const fallbackCompanyResult = await query(
+              'SELECT id, name FROM companies WHERE id = $1',
+              [user.company_id]
             );
+            if (fallbackCompanyResult.rowCount > 0) {
+              const fallbackRole = user.role || 'admin';
+              companies = [{
+                id: fallbackCompanyResult.rows[0].id,
+                name: fallbackCompanyResult.rows[0].name,
+                role: fallbackRole,
+              }];
+
+              await query(
+                `INSERT INTO user_companies (user_id, company_id, role, is_active)
+                 VALUES ($1, $2, $3, true)
+                 ON CONFLICT (user_id, company_id) DO NOTHING`,
+                [user.id, user.company_id, fallbackRole]
+              );
+            }
           }
         }
       } catch (membershipError) {
