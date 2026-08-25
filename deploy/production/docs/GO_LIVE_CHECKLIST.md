@@ -2,6 +2,7 @@
 
 ## Pre go-live
 - [ ] DNS and TLS configured for frontend URL.
+- [ ] `AUTH_COOKIE_SECURE=true` after HTTPS is active.
 - [ ] `.env` contains strong secrets and explicit `CORS_ORIGINS`.
 - [ ] `BOOTSTRAP_ADMIN_*` configured.
 - [ ] Compose file selected (`docker-compose.prod.yml` or `.qnap.yml`).

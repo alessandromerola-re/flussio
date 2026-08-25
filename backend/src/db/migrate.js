@@ -37,7 +37,7 @@ const LEGACY_EXPECTED_TABLES = [
   'contracts',
 ];
 
-const EXPECTED_TABLES = [...LEGACY_EXPECTED_TABLES, 'saved_reports'];
+const EXPECTED_TABLES = [...LEGACY_EXPECTED_TABLES, 'saved_reports', 'auth_sessions'];
 
 const LEGACY_EXPECTED_COLUMNS = [
   ['users', 'is_super_admin'],

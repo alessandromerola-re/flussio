@@ -187,6 +187,17 @@ CREATE TABLE password_reset_tokens (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE auth_sessions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  remember BOOLEAN NOT NULL DEFAULT false,
+  expires_at TIMESTAMPTZ NOT NULL,
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE contracts (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -229,6 +240,8 @@ CREATE INDEX idx_recurring_templates_account ON recurring_templates(company_id, 
 CREATE INDEX idx_recurring_runs_template_cycle ON recurring_runs(template_id, cycle_key);
 CREATE INDEX idx_audit_company_created ON audit_log(company_id, created_at DESC);
 CREATE INDEX idx_password_reset_user ON password_reset_tokens(user_id, created_at DESC);
+CREATE INDEX idx_auth_sessions_user_active ON auth_sessions(user_id, expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX idx_auth_sessions_expiry ON auth_sessions(expires_at);
 CREATE INDEX idx_user_companies_company ON user_companies(company_id);
 CREATE INDEX idx_user_companies_user ON user_companies(user_id);
 CREATE UNIQUE INDEX idx_accounts_company_external_id ON accounts(company_id, external_id) WHERE external_id IS NOT NULL;

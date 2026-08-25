@@ -6,6 +6,10 @@ export const readSession = (persistent = localStorage, temporary = sessionStorag
   role: temporary.getItem(ROLE_KEY) || persistent.getItem(ROLE_KEY) || 'viewer',
 });
 
+export const isPersistentSession = (persistent = localStorage, temporary = sessionStorage) => (
+  !temporary.getItem(TOKEN_KEY) && Boolean(persistent.getItem(TOKEN_KEY))
+);
+
 export const writeSession = (token, role = 'viewer', remember = true, persistent = localStorage, temporary = sessionStorage) => {
   persistent.removeItem(TOKEN_KEY);
   persistent.removeItem(ROLE_KEY);

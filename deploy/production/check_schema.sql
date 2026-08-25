@@ -9,6 +9,7 @@ BEGIN
     VALUES
       ('accounts'),
       ('attachments'),
+      ('auth_sessions'),
       ('audit_log'),
       ('categories'),
       ('companies'),
@@ -65,13 +66,14 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM schema_migrations
-    WHERE filename = '011_20260825__recurring_template_account.sql'
+    WHERE filename = '012_20260825__auth_sessions.sql'
   ) THEN
-    RAISE EXCEPTION 'Latest required migration is not recorded: 011_20260825__recurring_template_account.sql';
+    RAISE EXCEPTION 'Latest required migration is not recorded: 012_20260825__auth_sessions.sql';
   END IF;
 END $$;
 
 SELECT 'accounts' AS table_name, COUNT(*) AS rows FROM accounts
+UNION ALL SELECT 'auth_sessions', COUNT(*) FROM auth_sessions
 UNION ALL SELECT 'attachments', COUNT(*) FROM attachments
 UNION ALL SELECT 'categories', COUNT(*) FROM categories
 UNION ALL SELECT 'companies', COUNT(*) FROM companies

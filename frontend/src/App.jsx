@@ -147,12 +147,16 @@ const App = () => {
     };
   }, [drawerOpen]);
 
-  const handleLogout = () => {
-    clearToken();
-    setTokenState(null);
-    setDrawerOpen(false);
-    bootstrapPublicBrandingIcons();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } finally {
+      clearToken();
+      setTokenState(null);
+      setDrawerOpen(false);
+      bootstrapPublicBrandingIcons();
+      navigate('/login');
+    }
   };
 
   const navItems = useMemo(

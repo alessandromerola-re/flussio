@@ -29,6 +29,8 @@ test('fresh installation executes migrations not declared as folded', async () =
 
   const tableResult = await query("SELECT to_regclass('public.saved_reports') AS table_name");
   assert.equal(tableResult.rows[0].table_name, 'saved_reports');
+  const authSessionsResult = await query("SELECT to_regclass('public.auth_sessions') AS table_name");
+  assert.equal(authSessionsResult.rows[0].table_name, 'auth_sessions');
 
   const migrationResult = await query(
     `SELECT filename, note
@@ -37,7 +39,8 @@ test('fresh installation executes migrations not declared as folded', async () =
        '000_20260327__baseline_full_schema.sql',
        '006_20260220__saved_reports.sql',
        '010_20260825__repair_saved_reports.sql',
-       '011_20260825__recurring_template_account.sql'
+       '011_20260825__recurring_template_account.sql',
+       '012_20260825__auth_sessions.sql'
      )
      ORDER BY filename`
   );
@@ -47,6 +50,7 @@ test('fresh installation executes migrations not declared as folded', async () =
     { filename: '006_20260220__saved_reports.sql', note: 'executed' },
     { filename: '010_20260825__repair_saved_reports.sql', note: 'executed' },
     { filename: '011_20260825__recurring_template_account.sql', note: 'executed' },
+    { filename: '012_20260825__auth_sessions.sql', note: 'executed' },
   ]);
 
   const foldedResult = await query(

@@ -1,6 +1,7 @@
-import { clearSession, readSession, writeSession } from '../utils/authStorage.js';
+import { clearSession, isPersistentSession, readSession, writeSession } from '../utils/authStorage.js';
 
 const API_BASE = import.meta.env?.VITE_API_BASE || '/api';
+let refreshPromise = null;
 
 export const getToken = () => readSession().token;
 export const getRole = () => readSession().role;
@@ -55,7 +56,42 @@ const toQueryString = (params = {}) => {
     .join('&')}`;
 };
 
-const request = async (path, options = {}) => {
+const refreshAccessToken = async () => {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const remember = isPersistentSession();
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error('Session refresh failed');
+      }
+
+      const data = await response.json();
+      writeSession(data.token, data.role, remember);
+      localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
+
+      const activeCompanyId = getActiveCompanyId();
+      const stillAvailable = (data.companies || []).some(
+        (company) => String(company.id) === String(activeCompanyId)
+      );
+      if (!stillAvailable) {
+        setActiveCompanyId(data.default_company_id);
+      }
+
+      return data.token;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
+};
+
+const request = async (path, options = {}, retriedAfterRefresh = false) => {
   const { responseType, includeHeaders, ...fetchOptions } = options;
   const headers = { ...(fetchOptions.headers || {}) };
   const hasBody = fetchOptions.body !== undefined;
@@ -77,10 +113,24 @@ const request = async (path, options = {}) => {
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...fetchOptions,
+    credentials: fetchOptions.credentials || 'include',
     headers,
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && !retriedAfterRefresh && !path.startsWith('/auth/')) {
+    try {
+      await refreshAccessToken();
+      return request(path, options, true);
+    } catch {
+      clearToken();
+      window.location.href = '/login';
+      const error = new Error('Unauthorized');
+      error.code = 'UNAUTHORIZED';
+      throw error;
+    }
+  }
+
+  if (response.status === 401 && path !== '/auth/login') {
     clearToken();
     window.location.href = '/login';
     const error = new Error('Unauthorized');
@@ -124,6 +174,7 @@ const request = async (path, options = {}) => {
 
 export const api = {
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
   getCompanies: () => request('/companies'),
   createCompany: (payload) => request('/companies', { method: 'POST', body: JSON.stringify(payload) }),
   deleteCompany: (id) => request(`/companies/${id}`, { method: 'DELETE' }),

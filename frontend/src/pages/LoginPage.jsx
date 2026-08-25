@@ -20,7 +20,7 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
     setError(null);
     setLoading(true);
     try {
-      const data = await api.login({ email, password });
+      const data = await api.login({ email, password, remember });
       setToken(data.token, data.role, remember);
       localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
       setActiveCompanyId(data.default_company_id);
