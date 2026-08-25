@@ -107,11 +107,9 @@ const UsersAdminPage = () => {
 
     try {
       if (form.id) {
-        await api.updateUser(form.id, {
-          email: form.email,
-          is_active: form.is_active,
-          memberships,
-        });
+        await api.updateUser(form.id, isSuperAdmin
+          ? { email: form.email, is_active: form.is_active, memberships }
+          : { memberships });
         setMessage(t('pages.users.updated'));
       } else {
         await api.createUser({
@@ -241,6 +239,7 @@ const UsersAdminPage = () => {
                 type="email"
                 value={form.email}
                 onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                disabled={Boolean(form.id) && !isSuperAdmin}
                 required
               />
             </label>
@@ -257,7 +256,7 @@ const UsersAdminPage = () => {
               </label>
             )}
 
-            {form.id && (
+            {form.id && isSuperAdmin && (
               <label className="checkbox-row">
                 <input
                   type="checkbox"
@@ -274,6 +273,7 @@ const UsersAdminPage = () => {
                 <select
                   value={membership.company_id}
                   onChange={(event) => setMembershipAt(index, 'company_id', event.target.value)}
+                  disabled={!isSuperAdmin}
                   required
                 >
                   <option value="">{t('pages.users.selectCompany')}</option>
@@ -301,7 +301,7 @@ const UsersAdminPage = () => {
                   {t('forms.active')}
                 </label>
 
-                {form.memberships.length > 1 && (
+                {isSuperAdmin && form.memberships.length > 1 && (
                   <button type="button" className="ghost" onClick={() => removeMembership(index)}>
                     {t('buttons.remove')}
                   </button>
@@ -310,7 +310,9 @@ const UsersAdminPage = () => {
             ))}
 
             <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
-              <button type="button" className="ghost" onClick={addMembership}>{t('pages.users.addCompanyAccess')}</button>
+              {isSuperAdmin
+                ? <button type="button" className="ghost" onClick={addMembership}>{t('pages.users.addCompanyAccess')}</button>
+                : <span />}
               <div>
                 <button type="submit">{t('buttons.save')}</button>
                 <button type="button" className="ghost" onClick={closeModal}>{t('buttons.close')}</button>

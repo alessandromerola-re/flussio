@@ -19,4 +19,4 @@ echo "[INFO] Copying SQL checker into db container"
 $COMPOSE_CMD -f "$COMPOSE_FILE_PATH" cp check_schema.sql db:/work/check_schema.sql
 
 echo "[INFO] Running schema checks..."
-$COMPOSE_CMD -f "$COMPOSE_FILE_PATH" exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /work/check_schema.sql'
+$COMPOSE_CMD -f "$COMPOSE_FILE_PATH" exec -T db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /work/check_schema.sql'

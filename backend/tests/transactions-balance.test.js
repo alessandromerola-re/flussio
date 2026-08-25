@@ -107,3 +107,55 @@ test('create/delete transaction updates and reverts account balance', async () =
   const cashAfterDelete = Number(afterDeleteAccounts.body.find((account) => account.name === 'Cassa').balance);
   assert.equal(cashAfterDelete, cashBefore);
 });
+
+test('account reconciliation reports and repairs stored balance drift', async () => {
+  const token = await getToken('dev@flussio.local', 'flussio123');
+  const accounts = await requestJson('/api/accounts', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const cash = accounts.body.find((account) => account.name === 'Cassa');
+  await query('UPDATE accounts SET balance = balance + 12.34 WHERE id = $1', [cash.id]);
+
+  const beforeRepair = await requestJson('/api/accounts/reconciliation', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(beforeRepair.status, 200);
+  assert.equal(beforeRepair.body.is_reconciled, false);
+  assert.equal(Number(beforeRepair.body.accounts.find((account) => account.id === cash.id).difference), 12.34);
+
+  const repair = await requestJson('/api/accounts/reconciliation/apply', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(repair.status, 200);
+  assert.equal(repair.body.is_reconciled, true);
+  assert.equal(Number(repair.body.accounts.find((account) => account.id === cash.id).difference), 0);
+});
+
+test('account with movement history cannot be deleted', async () => {
+  const token = await getToken('dev@flussio.local', 'flussio123');
+  const accounts = await requestJson('/api/accounts', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const cash = accounts.body.find((account) => account.name === 'Cassa');
+
+  const createResponse = await requestJson('/api/transactions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      date: '2026-02-16',
+      type: 'income',
+      amount_total: 10,
+      description: 'Movimento storico',
+      accounts: [{ account_id: cash.id, direction: 'in', amount: 10 }],
+    }),
+  });
+  assert.equal(createResponse.status, 201);
+
+  const deleteResponse = await requestJson(`/api/accounts/${cash.id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(deleteResponse.status, 409);
+  assert.equal(deleteResponse.body.error_code, 'ACCOUNT_HAS_MOVEMENTS');
+});

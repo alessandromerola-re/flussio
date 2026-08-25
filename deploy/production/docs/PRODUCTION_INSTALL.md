@@ -23,6 +23,11 @@ Then edit `.env` and set at minimum:
 - `CORS_ORIGINS`
 - `BOOTSTRAP_ADMIN_*`
 
+Persistent sessions use a rotating `HttpOnly` refresh cookie. Keep
+`AUTH_COOKIE_SECURE=false` only for an HTTP-only local installation; set it to
+`true` as soon as Flussio is exposed through HTTPS. `AUTH_REFRESH_REMEMBER_DAYS`
+controls the duration of the "Remember me" session (30 days by default).
+
 Optional helper to generate strong secrets:
 
 ```bash

@@ -14,6 +14,7 @@ const initialForm = {
   end_date: '',
   amount: '',
   movement_type: 'expense',
+  account_id: '',
   category_id: '',
   contact_id: '',
   property_id: '',
@@ -76,6 +77,7 @@ const RecurringTemplatesPage = () => {
       ...form,
       interval: Number(form.interval),
       amount: Number(form.amount),
+      account_id: form.account_id ? Number(form.account_id) : null,
       category_id: form.category_id ? Number(form.category_id) : null,
       contact_id: form.contact_id ? Number(form.contact_id) : null,
       property_id: form.property_id ? Number(form.property_id) : null,
@@ -240,6 +242,7 @@ const RecurringTemplatesPage = () => {
           )}
           <label>{t('pages.movements.amount')}<input type="number" step="0.01" min="0.01" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} required /></label>
           <label>{t('pages.movements.type')}<select value={form.movement_type} onChange={(event) => setForm((prev) => ({ ...prev, movement_type: event.target.value }))}><option value="income">{t('pages.movements.income')}</option><option value="expense">{t('pages.movements.expense')}</option></select></label>
+          <label>{t('pages.movements.account')}<select value={form.account_id} onChange={(event) => setForm((prev) => ({ ...prev, account_id: event.target.value }))} required><option value="">{t('pages.recurring.selectAccount')}</option>{accounts.filter((x) => x.is_active !== false).map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.dateFrom')}<input type="date" value={form.start_date} onChange={(event) => setForm((prev) => ({ ...prev, start_date: event.target.value }))} /></label>
           <label>{t('pages.movements.dateTo')}<input type="date" value={form.end_date} onChange={(event) => setForm((prev) => ({ ...prev, end_date: event.target.value }))} /></label>
           <label>{t('pages.movements.category')}<select value={form.category_id} onChange={(event) => setForm((prev) => ({ ...prev, category_id: event.target.value }))}><option value="">{t('common.none')}</option>{categories.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
@@ -259,6 +262,7 @@ const RecurringTemplatesPage = () => {
                   <strong>{template.title}</strong>
                   <div className="muted">{template.frequency} · {template.interval}</div>
                   <div className="muted">{t('pages.movements.amount')}: € {Number(template.amount).toFixed(2)}</div>
+                  <div className="muted">{t('pages.movements.account')}: {template.account_name || t('pages.recurring.accountMissing')}</div>
                   <div className="muted">next: {template.next_run_at}</div>
                   {template.recurring_template_id && <div className="muted">#{template.recurring_template_id}</div>}
                 </div>
@@ -276,6 +280,7 @@ const RecurringTemplatesPage = () => {
                         end_date: template.end_date ? String(template.end_date).slice(0, 10) : '',
                         amount: template.amount,
                         movement_type: template.movement_type,
+                        account_id: template.account_id || '',
                         category_id: template.category_id || '',
                         contact_id: template.contact_id || '',
                         property_id: template.property_id || '',

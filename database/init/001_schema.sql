@@ -107,6 +107,7 @@ CREATE TABLE recurring_templates (
   is_active BOOLEAN NOT NULL DEFAULT true,
   amount NUMERIC(12, 2) NOT NULL,
   movement_type TEXT NOT NULL CHECK (movement_type IN ('income', 'expense')),
+  account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
   property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL,
@@ -186,6 +187,17 @@ CREATE TABLE password_reset_tokens (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE auth_sessions (
+  id BIGSERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  remember BOOLEAN NOT NULL DEFAULT false,
+  expires_at TIMESTAMPTZ NOT NULL,
+  last_used_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE contracts (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -197,6 +209,17 @@ CREATE TABLE contracts (
   deposit NUMERIC(12, 2),
   notes TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE saved_reports (
+  id SERIAL PRIMARY KEY,
+  company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  spec_json JSONB NOT NULL,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  is_shared BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- Indexes
@@ -213,9 +236,12 @@ CREATE INDEX idx_transactions_job ON transactions(company_id, job_id);
 CREATE INDEX idx_transactions_company_job_date ON transactions(company_id, job_id, date);
 CREATE INDEX idx_transaction_accounts_transaction ON transaction_accounts(transaction_id);
 CREATE INDEX idx_recurring_templates_due ON recurring_templates(is_active, next_run_at);
+CREATE INDEX idx_recurring_templates_account ON recurring_templates(company_id, account_id);
 CREATE INDEX idx_recurring_runs_template_cycle ON recurring_runs(template_id, cycle_key);
 CREATE INDEX idx_audit_company_created ON audit_log(company_id, created_at DESC);
 CREATE INDEX idx_password_reset_user ON password_reset_tokens(user_id, created_at DESC);
+CREATE INDEX idx_auth_sessions_user_active ON auth_sessions(user_id, expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX idx_auth_sessions_expiry ON auth_sessions(expires_at);
 CREATE INDEX idx_user_companies_company ON user_companies(company_id);
 CREATE INDEX idx_user_companies_user ON user_companies(user_id);
 CREATE UNIQUE INDEX idx_accounts_company_external_id ON accounts(company_id, external_id) WHERE external_id IS NOT NULL;
@@ -225,5 +251,8 @@ CREATE UNIQUE INDEX idx_properties_company_external_id ON properties(company_id,
 CREATE UNIQUE INDEX idx_recurring_templates_company_external_id ON recurring_templates(company_id, external_id) WHERE external_id IS NOT NULL;
 CREATE UNIQUE INDEX idx_transactions_company_external_id ON transactions(company_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX idx_contracts_company_property ON contracts(company_id, property_id);
+CREATE INDEX idx_saved_reports_company ON saved_reports(company_id);
+CREATE INDEX idx_saved_reports_company_shared ON saved_reports(company_id, is_shared);
+CREATE INDEX idx_saved_reports_company_created_by ON saved_reports(company_id, created_by_user_id);
 
 COMMIT;

@@ -32,6 +32,7 @@ const normalizeTemplatePayload = (payload = {}) => ({
   is_active: payload.is_active ?? true,
   amount: parseNullableNumber(payload.amount),
   movement_type: payload.movement_type,
+  account_id: parseNullableInteger(payload.account_id),
   category_id: parseNullableInteger(payload.category_id),
   contact_id: parseNullableInteger(payload.contact_id),
   property_id: parseNullableInteger(payload.property_id),
@@ -42,11 +43,14 @@ const normalizeTemplatePayload = (payload = {}) => ({
   yearly_anchor_dd: parseNullableInteger(payload.yearly_anchor_dd),
 });
 
-const validateReference = async (table, id, companyId) => {
+const validateReference = async (table, id, companyId, { activeOnly = false } = {}) => {
   if (id == null) {
     return { valid: true };
   }
-  const result = await query(`SELECT id FROM ${table} WHERE id = $1 AND company_id = $2`, [id, companyId]);
+  const result = await query(
+    `SELECT id FROM ${table} WHERE id = $1 AND company_id = $2${activeOnly ? ' AND is_active = true' : ''}`,
+    [id, companyId]
+  );
   return result.rowCount > 0;
 };
 
@@ -71,11 +75,16 @@ const validatePayload = async (payload, companyId) => {
     return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_MOVEMENT_TYPE', field: 'movement_type' };
   }
 
+  if (payload.account_id == null) {
+    return { valid: false, status: 400, errorCode: 'RECURRING_MISSING_ACCOUNT', field: 'account_id' };
+  }
+
   if (payload.start_date && payload.end_date && payload.end_date < payload.start_date) {
     return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'end_date' };
   }
 
   const refs = await Promise.all([
+    validateReference('accounts', payload.account_id, companyId, { activeOnly: true }),
     validateReference('categories', payload.category_id, companyId),
     validateReference('contacts', payload.contact_id, companyId),
     validateReference('properties', payload.property_id, companyId),
@@ -109,11 +118,13 @@ router.get('/', async (req, res) => {
     const result = await query(
       `
       SELECT rt.*,
+             a.name AS account_name,
              c.name AS category_name,
              ct.name AS contact_name,
              p.name AS property_name,
              j.title AS job_title
       FROM recurring_templates rt
+      LEFT JOIN accounts a ON a.id = rt.account_id AND a.company_id = rt.company_id
       LEFT JOIN categories c ON c.id = rt.category_id
       LEFT JOIN contacts ct ON ct.id = rt.contact_id
       LEFT JOIN properties p ON p.id = rt.property_id
@@ -155,6 +166,7 @@ router.post('/', async (req, res) => {
       RECURRING_INVALID_INTERVAL: 'Intervallo ricorrenza non valido.',
       RECURRING_MISSING_AMOUNT: 'Importo ricorrente mancante o non valido.',
       RECURRING_INVALID_MOVEMENT_TYPE: 'Tipo movimento ricorrente non valido.',
+      RECURRING_MISSING_ACCOUNT: 'Seleziona il conto della ricorrenza.',
       RECURRING_INVALID_REFERENCE: 'Riferimenti ricorrenti non validi.',
       RECURRING_INVALID_ANCHOR: 'Parametri di ancoraggio ricorrenza non validi.',
       VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
@@ -170,10 +182,10 @@ router.post('/', async (req, res) => {
       `
       INSERT INTO recurring_templates (
         company_id, title, frequency, interval, start_date, end_date, next_run_at,
-        is_active, amount, movement_type, category_id, contact_id, property_id, job_id,
+        is_active, amount, movement_type, account_id, category_id, contact_id, property_id, job_id,
         notes, weekly_anchor_dow, yearly_anchor_mm, yearly_anchor_dd
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       RETURNING *
       `,
       [
@@ -187,6 +199,7 @@ router.post('/', async (req, res) => {
         payload.is_active,
         payload.amount,
         payload.movement_type,
+        payload.account_id,
         payload.category_id,
         payload.contact_id,
         payload.property_id,
@@ -215,6 +228,7 @@ router.put('/:id', async (req, res) => {
       RECURRING_INVALID_INTERVAL: 'Intervallo ricorrenza non valido.',
       RECURRING_MISSING_AMOUNT: 'Importo ricorrente mancante o non valido.',
       RECURRING_INVALID_MOVEMENT_TYPE: 'Tipo movimento ricorrente non valido.',
+      RECURRING_MISSING_ACCOUNT: 'Seleziona il conto della ricorrenza.',
       RECURRING_INVALID_REFERENCE: 'Riferimenti ricorrenti non validi.',
       RECURRING_INVALID_ANCHOR: 'Parametri di ancoraggio ricorrenza non validi.',
       VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
@@ -238,16 +252,17 @@ router.put('/:id', async (req, res) => {
           is_active = $7,
           amount = $8,
           movement_type = $9,
-          category_id = $10,
-          contact_id = $11,
-          property_id = $12,
-          job_id = $13,
-          notes = $14,
-          weekly_anchor_dow = $15,
-          yearly_anchor_mm = $16,
-          yearly_anchor_dd = $17,
+          account_id = $10,
+          category_id = $11,
+          contact_id = $12,
+          property_id = $13,
+          job_id = $14,
+          notes = $15,
+          weekly_anchor_dow = $16,
+          yearly_anchor_mm = $17,
+          yearly_anchor_dd = $18,
           updated_at = NOW()
-      WHERE id = $18 AND company_id = $19
+      WHERE id = $19 AND company_id = $20
       RETURNING *
       `,
       [
@@ -260,6 +275,7 @@ router.put('/:id', async (req, res) => {
         payload.is_active,
         payload.amount,
         payload.movement_type,
+        payload.account_id,
         payload.category_id,
         payload.contact_id,
         payload.property_id,
@@ -290,6 +306,21 @@ router.patch('/:id/active', async (req, res) => {
     return sendError(res, 400, 'VALIDATION_INVALID_ACTIVE_STATE', 'Lo stato della ricorrenza non è valido.');
   }
   try {
+    if (req.body.is_active) {
+      const accountResult = await query(
+        `SELECT 1
+         FROM recurring_templates rt
+         JOIN accounts a ON a.id = rt.account_id
+           AND a.company_id = rt.company_id
+           AND a.is_active = true
+         WHERE rt.id = $1
+           AND rt.company_id = $2`,
+        [req.params.id, req.companyId]
+      );
+      if (accountResult.rowCount === 0) {
+        return sendError(res, 400, 'RECURRING_MISSING_ACCOUNT', 'Seleziona un conto attivo prima di riattivare la ricorrenza.');
+      }
+    }
     const result = await query(
       'UPDATE recurring_templates SET is_active = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3 RETURNING *',
       [req.body.is_active, req.params.id, req.companyId]
@@ -328,7 +359,10 @@ router.post('/:id/generate-now', async (req, res) => {
     }
 
     if (result.status === 'skipped') {
-      return res.json({ status: 'skipped', code: 'RECURRING_ALREADY_GENERATED', reason: result.reason });
+      const code = ['missing_account', 'account_unavailable'].includes(result.reason)
+        ? 'RECURRING_MISSING_ACCOUNT'
+        : 'RECURRING_ALREADY_GENERATED';
+      return res.json({ status: 'skipped', code, reason: result.reason });
     }
 
     await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'generate', entityType: 'recurring_templates', entityId: req.params.id, meta: result });

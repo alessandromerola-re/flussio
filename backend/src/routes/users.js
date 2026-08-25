@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import express from 'express';
 import { getClient, query } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
+import { writeAuditLog } from '../services/audit.js';
 
 const VALID_ROLES = ['admin', 'editor', 'viewer', 'operatore'];
 
@@ -13,35 +14,48 @@ const normalizeMemberships = (memberships = []) => {
     return null;
   }
 
-  const normalized = memberships
-    .map((membership) => ({
-      company_id: Number(membership?.company_id),
-      role: membership?.role,
-      is_active: membership?.is_active !== false,
-    }))
-    .filter((membership) => Number.isInteger(membership.company_id) && VALID_ROLES.includes(membership.role));
-
-  const dedup = [];
-  const seen = new Set();
-  for (const membership of normalized) {
-    if (seen.has(membership.company_id)) continue;
-    seen.add(membership.company_id);
-    dedup.push(membership);
+  const normalized = memberships.map((membership) => ({
+    company_id: Number(membership?.company_id),
+    role: membership?.role,
+    is_active: membership?.is_active !== false,
+  }));
+  if (normalized.some((membership) => (
+    !Number.isInteger(membership.company_id)
+    || membership.company_id <= 0
+    || !VALID_ROLES.includes(membership.role)
+  ))) {
+    return null;
   }
 
-  return dedup;
+  const seen = new Set();
+  for (const membership of normalized) {
+    if (seen.has(membership.company_id)) return null;
+    seen.add(membership.company_id);
+  }
+  return normalized;
 };
 
-const loadUserMemberships = async (userId) => {
+const loadUserMemberships = async (userId, companyId = null) => {
+  const params = [userId];
+  const companyFilter = companyId == null ? '' : ` AND uc.company_id = $${params.push(companyId)}`;
   const memberships = await query(
     `SELECT uc.company_id, c.name AS company_name, uc.role, uc.is_active
      FROM user_companies uc
      JOIN companies c ON c.id = uc.company_id
      WHERE uc.user_id = $1
+       ${companyFilter}
      ORDER BY c.name`,
-    [userId]
+    params
   );
   return memberships.rows;
+};
+
+const membershipsForCompanyAdmin = (memberships, companyId) => {
+  if (!memberships) return null;
+  if (memberships.length !== 1 || memberships[0].company_id !== companyId) {
+    return { forbidden: true };
+  }
+  return { memberships };
 };
 
 router.get('/', requirePermission('users_manage'), async (req, res) => {
@@ -97,7 +111,10 @@ router.get('/:id', requirePermission('users_manage'), async (req, res) => {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
 
-    const memberships = await loadUserMemberships(req.params.id);
+    const memberships = await loadUserMemberships(
+      req.params.id,
+      req.user?.is_super_admin === true ? null : req.companyId
+    );
 
     return res.json({
       ...userResult.rows[0],
@@ -116,13 +133,21 @@ router.post('/', requirePermission('users_manage'), async (req, res) => {
   }
 
   const parsedMemberships = normalizeMemberships(memberships);
-  if (Array.isArray(memberships) && parsedMemberships == null) {
+  if (Array.isArray(memberships) && (parsedMemberships == null || parsedMemberships.length === 0)) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
-  const desiredMemberships = req.user?.is_super_admin === true && parsedMemberships?.length > 0
+  const isSuperAdmin = req.user?.is_super_admin === true;
+  const companyAdminSelection = isSuperAdmin
+    ? null
+    : membershipsForCompanyAdmin(parsedMemberships, req.companyId);
+  if (companyAdminSelection?.forbidden) {
+    return res.status(403).json({ error_code: 'FORBIDDEN' });
+  }
+
+  const desiredMemberships = isSuperAdmin && parsedMemberships?.length > 0
     ? parsedMemberships
-    : [{ company_id: req.companyId, role, is_active: true }];
+    : companyAdminSelection?.memberships || [{ company_id: req.companyId, role, is_active: true }];
 
   const client = await getClient();
   try {
@@ -186,6 +211,16 @@ router.post('/', requirePermission('users_manage'), async (req, res) => {
       [userId]
     );
 
+    await writeAuditLog({
+      client,
+      companyId: req.companyId,
+      userId: req.user.user_id,
+      action: existingUser.rowCount === 0 ? 'create' : 'membership_create',
+      entityType: 'users',
+      entityId: userId,
+      meta: { memberships: desiredMemberships },
+    });
+
     await client.query('COMMIT');
 
     const currentCompanyMembership = membershipsResult.rows.find((membership) => membership.company_id === req.companyId)
@@ -220,6 +255,18 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
+  const isSuperAdmin = req.user?.is_super_admin === true;
+  if (!isSuperAdmin && (email !== undefined || is_active !== undefined)) {
+    return res.status(403).json({ error_code: 'FORBIDDEN' });
+  }
+
+  const companyAdminSelection = isSuperAdmin
+    ? null
+    : membershipsForCompanyAdmin(parsedMemberships, req.companyId);
+  if (companyAdminSelection?.forbidden) {
+    return res.status(403).json({ error_code: 'FORBIDDEN' });
+  }
+
   const client = await getClient();
   try {
     await client.query('BEGIN');
@@ -239,7 +286,7 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
 
-    if (email || typeof is_active === 'boolean') {
+    if (isSuperAdmin && (email || typeof is_active === 'boolean')) {
       await client.query(
         `UPDATE users
          SET email = COALESCE($1, email),
@@ -249,7 +296,7 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
       );
     }
 
-    if (req.user?.is_super_admin === true && parsedMemberships) {
+    if (isSuperAdmin && parsedMemberships) {
       if (parsedMemberships.length === 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
@@ -282,6 +329,9 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
         );
       }
     } else {
+      const companyMembership = companyAdminSelection?.memberships?.[0];
+      const requestedRole = companyMembership?.role ?? role ?? null;
+      const requestedActive = companyMembership?.is_active ?? membership_active ?? null;
       const result = await client.query(
         `UPDATE user_companies
          SET role = COALESCE($1, role),
@@ -289,7 +339,7 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
          WHERE user_id = $3
            AND company_id = $4
          RETURNING role, is_active AS membership_active`,
-        [role ?? null, membership_active ?? null, req.params.id, req.companyId]
+        [requestedRole, requestedActive, req.params.id, req.companyId]
       );
 
       if (result.rowCount === 0) {
@@ -307,6 +357,21 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
        ORDER BY c.name`,
       [req.params.id]
     );
+
+    await writeAuditLog({
+      client,
+      companyId: req.companyId,
+      userId: req.user.user_id,
+      action: 'update',
+      entityType: 'users',
+      entityId: req.params.id,
+      meta: {
+        global_fields_changed: isSuperAdmin && (email !== undefined || is_active !== undefined),
+        memberships: isSuperAdmin && parsedMemberships
+          ? parsedMemberships
+          : membershipsResult.rows.filter((membership) => membership.company_id === req.companyId),
+      },
+    });
 
     await client.query('COMMIT');
 
@@ -332,23 +397,38 @@ router.put('/:id', requirePermission('users_manage'), async (req, res) => {
 
 router.post('/:id/reset-password-token', requirePermission('users_manage'), async (req, res) => {
   const resetEnabled = String(process.env.RESET_EMAIL_ENABLED || 'false').toLowerCase() === 'true';
+  const client = await getClient();
 
   try {
-    const userResult = await query(
+    await client.query('BEGIN');
+    const userResult = await client.query(
       'SELECT user_id FROM user_companies WHERE user_id = $1 AND company_id = $2',
       [req.params.id, req.companyId]
     );
     if (userResult.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
 
     const token = crypto.randomBytes(24).toString('hex');
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
 
-    await query(
+    await client.query(
       'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
       [req.params.id, token, expiresAt]
     );
+
+    await writeAuditLog({
+      client,
+      companyId: req.companyId,
+      userId: req.user.user_id,
+      action: 'reset_password_token',
+      entityType: 'users',
+      entityId: req.params.id,
+      meta: { delivery: resetEnabled ? 'email' : 'admin_manual', expires_at: expiresAt },
+    });
+
+    await client.query('COMMIT');
 
     return res.json({
       status: 'created',
@@ -357,8 +437,11 @@ router.post('/:id/reset-password-token', requirePermission('users_manage'), asyn
       delivery: resetEnabled ? 'email' : 'admin_manual',
     });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  } finally {
+    client.release();
   }
 });
 
