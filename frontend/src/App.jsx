@@ -35,6 +35,8 @@ const App = () => {
   const menuButtonRef = useRef(null);
   const drawerRef = useRef(null);
   const drawerCloseRef = useRef(null);
+  const brandingRequestIdRef = useRef(0);
+  const brandingUrlsRef = useRef({ logo: '', favicon: '', appleTouch: '' });
   const [token, setTokenState] = useState(getToken());
   const [language, setLanguageState] = useState(() => localStorage.getItem('flussio_lang') || 'it');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -47,65 +49,59 @@ const App = () => {
   const currentUser = getCurrentUser();
 
   const loadBrandingAssets = async () => {
-    if (!getToken()) return;
+    const requestId = ++brandingRequestIdRef.current;
+    const requestedToken = getToken();
+    const requestedCompanyId = getActiveCompanyId() || '';
+    if (!requestedToken) return;
+
+    const isCurrentRequest = () => (
+      requestId === brandingRequestIdRef.current
+      && getToken() === requestedToken
+      && String(getActiveCompanyId() || '') === String(requestedCompanyId)
+    );
+    const nextUrls = { logo: '', favicon: '', appleTouch: '' };
+    const revokeNextUrls = () => {
+      Object.values(nextUrls).forEach((url) => {
+        if (url) URL.revokeObjectURL?.(url);
+      });
+    };
+    const replaceUrl = (key, url, setter) => {
+      const previous = brandingUrlsRef.current[key];
+      if (previous && previous !== url) URL.revokeObjectURL?.(previous);
+      brandingUrlsRef.current[key] = url;
+      setter(url);
+    };
 
     try {
       const branding = await api.getBranding();
-      if (!branding?.has_logo) {
-        setBrandLogoUrl((previous) => {
-          if (previous) URL.revokeObjectURL?.(previous);
-          return '';
-        });
-      } else {
-        const blob = await api.downloadBrandLogo();
-        setBrandLogoUrl((previous) => {
-          if (previous) URL.revokeObjectURL?.(previous);
-          return URL.createObjectURL(blob);
-        });
+      if (!isCurrentRequest()) return;
+
+      const [logoBlob, faviconBlob, appleTouchBlob] = await Promise.all([
+        branding?.has_logo ? api.downloadBrandLogo() : null,
+        branding?.icons?.variants?.favicon?.available ? api.downloadBrandIcon('favicon') : null,
+        branding?.icons?.variants?.apple_touch_icon?.available ? api.downloadBrandIcon('apple-touch-icon') : null,
+      ]);
+
+      if (logoBlob) nextUrls.logo = URL.createObjectURL(logoBlob);
+      if (faviconBlob) nextUrls.favicon = URL.createObjectURL(faviconBlob);
+      if (appleTouchBlob) nextUrls.appleTouch = URL.createObjectURL(appleTouchBlob);
+      if (!isCurrentRequest()) {
+        revokeNextUrls();
+        return;
       }
 
-      if (branding?.icons?.variants?.favicon?.available) {
-        const blob = await api.downloadBrandIcon('favicon');
-        setFaviconUrl((previous) => {
-          if (previous) URL.revokeObjectURL?.(previous);
-          return URL.createObjectURL(blob);
-        });
-      } else {
-        setFaviconUrl((previous) => {
-          if (previous) URL.revokeObjectURL?.(previous);
-          return '';
-        });
-      }
+      replaceUrl('logo', nextUrls.logo, setBrandLogoUrl);
+      replaceUrl('favicon', nextUrls.favicon, setFaviconUrl);
+      replaceUrl('appleTouch', nextUrls.appleTouch, setAppleTouchUrl);
 
-      if (branding?.icons?.variants?.apple_touch_icon?.available) {
-        const blob = await api.downloadBrandIcon('apple-touch-icon');
-        setAppleTouchUrl((previous) => {
-          if (previous) URL.revokeObjectURL?.(previous);
-          return URL.createObjectURL(blob);
-        });
-      } else {
-        setAppleTouchUrl((previous) => {
-          if (previous) URL.revokeObjectURL?.(previous);
-          return '';
-        });
-      }
-
-      const companyId = getActiveCompanyId();
-      const version = branding?.icons?.updated_at ? `${companyId ? '&' : '?'}v=${encodeURIComponent(branding.icons.updated_at)}` : '';
-      setManifestUrl(`/api/public/branding/manifest.webmanifest${companyId ? `?company_id=${companyId}` : ''}${version}`);
+      const version = branding?.icons?.updated_at ? `${requestedCompanyId ? '&' : '?'}v=${encodeURIComponent(branding.icons.updated_at)}` : '';
+      setManifestUrl(`/api/public/branding/manifest.webmanifest${requestedCompanyId ? `?company_id=${requestedCompanyId}` : ''}${version}`);
     } catch {
-      setBrandLogoUrl((previous) => {
-        if (previous) URL.revokeObjectURL?.(previous);
-        return '';
-      });
-      setFaviconUrl((previous) => {
-        if (previous) URL.revokeObjectURL?.(previous);
-        return '';
-      });
-      setAppleTouchUrl((previous) => {
-        if (previous) URL.revokeObjectURL?.(previous);
-        return '';
-      });
+      revokeNextUrls();
+      if (!isCurrentRequest()) return;
+      replaceUrl('logo', '', setBrandLogoUrl);
+      replaceUrl('favicon', '', setFaviconUrl);
+      replaceUrl('appleTouch', '', setAppleTouchUrl);
       setManifestUrl('');
     }
   };
@@ -117,6 +113,14 @@ const App = () => {
   useEffect(() => {
     applyBrandingIconsToHead({ faviconUrl, appleTouchUrl, manifestUrl });
   }, [faviconUrl, appleTouchUrl, manifestUrl]);
+
+  useEffect(() => () => {
+    brandingRequestIdRef.current += 1;
+    Object.values(brandingUrlsRef.current).forEach((url) => {
+      if (url) URL.revokeObjectURL?.(url);
+    });
+    brandingUrlsRef.current = { logo: '', favicon: '', appleTouch: '' };
+  }, []);
 
   useEffect(() => {
     if (!token) {

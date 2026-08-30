@@ -47,6 +47,11 @@ vi.mock('../src/services/publicBranding.js', () => ({ bootstrapPublicBrandingIco
 vi.mock('../src/i18n/index.js', () => ({ setLanguage: vi.fn() }));
 
 const jwt = (payload) => `header.${btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')}.signature`;
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((res) => { resolve = res; });
+  return { promise, resolve };
+};
 
 const renderApp = () => render(<MemoryRouter initialEntries={['/dashboard']}><App /></MemoryRouter>);
 
@@ -98,5 +103,29 @@ describe('App mobile-first shell', () => {
     localStorage.setItem('flussio_companies', JSON.stringify([{ id: 1, name: 'Windome', role: 'admin' }]));
     renderApp();
     expect(screen.queryByLabelText('Azienda')).toBeNull();
+  });
+
+  it('ignores a stale branding response after switching company', async () => {
+    const firstBranding = deferred();
+    api.getBranding
+      .mockReset()
+      .mockReturnValueOnce(firstBranding.promise)
+      .mockResolvedValueOnce({ has_logo: false, icons: { updated_at: 'new-brand', variants: {} } });
+
+    renderApp();
+    fireEvent.change(screen.getAllByLabelText('Azienda')[0], { target: { value: '2' } });
+
+    await waitFor(() => {
+      const manifest = document.head.querySelector('link[data-branding-icon="manifest"]');
+      expect(manifest?.getAttribute('href')).toContain('company_id=2');
+      expect(manifest?.getAttribute('href')).toContain('new-brand');
+    });
+
+    firstBranding.resolve({ has_logo: false, icons: { updated_at: 'old-brand', variants: {} } });
+    await Promise.resolve();
+
+    const manifest = document.head.querySelector('link[data-branding-icon="manifest"]');
+    expect(manifest?.getAttribute('href')).toContain('company_id=2');
+    expect(manifest?.getAttribute('href')).not.toContain('old-brand');
   });
 });
