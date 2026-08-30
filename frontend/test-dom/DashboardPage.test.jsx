@@ -13,6 +13,7 @@ vi.mock('react-i18next', () => ({
     'pages.dashboard.expense': 'Uscite',
     'pages.dashboard.net': 'Netto',
     'pages.dashboard.topExpensesByCategory': 'Top uscite',
+    'pages.dashboard.loading': 'Caricamento dashboard…',
     'common.none': 'Nessun dato',
   }[key] || key) }),
 }));
@@ -47,6 +48,7 @@ const renderDashboard = (element = <DashboardPage />) => render(element);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 });
   api.getDashboardSummary.mockResolvedValue(summary());
   api.getDashboardPie.mockImplementation(({ kind, dimension, topN }) =>
     Promise.resolve(pie(`${kind}-${dimension}-${topN}`)));
@@ -56,7 +58,7 @@ describe('DashboardPage DOM behaviour', () => {
   it('loads the dashboard initially', async () => {
     renderDashboard();
     expect(screen.getByText('Caricamento dashboard…')).toBeTruthy();
-    expect(await screen.findByText('€ 120.00')).toBeTruthy();
+    expect(await screen.findByText((text) => text.startsWith('120,00'))).toBeTruthy();
     expect(api.getDashboardSummary).toHaveBeenCalledTimes(1);
     expect(api.getDashboardPie).toHaveBeenCalledTimes(3);
   });
@@ -66,12 +68,30 @@ describe('DashboardPage DOM behaviour', () => {
     renderDashboard();
     await screen.findByText('Dashboard');
     await waitFor(() => expect(screen.queryByText('Caricamento dashboard…')).toBeNull());
-    expect(screen.getAllByText('€ 0.00')).toHaveLength(3);
+    expect(screen.getAllByText((text) => text.startsWith('0,00'))).toHaveLength(3);
+  });
+
+  it('uses compact ranked lists instead of pie charts on a 390px viewport', async () => {
+    window.innerWidth = 390;
+    const mobilePie = {
+      slices: [
+        { label: 'Casa', value_cents: 6000 },
+        { label: 'Auto', value_cents: 4000 },
+      ],
+      others_cents: 0,
+    };
+    api.getDashboardPie.mockResolvedValue(mobilePie);
+
+    renderDashboard();
+
+    expect(await screen.findAllByText('Casa')).toHaveLength(2);
+    expect(screen.queryByTestId('pie-chart')).toBeNull();
+    expect(screen.getAllByText((text) => text.startsWith('60,00'))).toHaveLength(2);
   });
 
   it('completes loading inside React.StrictMode', async () => {
     renderDashboard(<StrictMode><DashboardPage /></StrictMode>);
-    expect(await screen.findByText('€ 120.00')).toBeTruthy();
+    expect(await screen.findByText((text) => text.startsWith('120,00'))).toBeTruthy();
     expect(screen.queryByText('Caricamento dashboard…')).toBeNull();
     expect(api.getDashboardSummary).toHaveBeenCalledTimes(2);
   });
@@ -80,7 +100,7 @@ describe('DashboardPage DOM behaviour', () => {
     api.getDashboardSummary.mockRejectedValue(new Error('summary failed'));
     renderDashboard();
     expect(await screen.findByText('Impossibile caricare i dati della dashboard.')).toBeTruthy();
-    expect(screen.queryByText('€ 120.00')).toBeNull();
+    expect(screen.queryByText((text) => text.startsWith('120,00'))).toBeNull();
   });
 
   it('shows an error only for the failed chart', async () => {
@@ -128,11 +148,11 @@ describe('DashboardPage DOM behaviour', () => {
     api.getDashboardSummary.mockReturnValueOnce(first.promise).mockResolvedValueOnce(summary({ income_sum_cents: 9900 }));
     renderDashboard();
     fireEvent.change(screen.getByLabelText('Periodo'), { target: { value: 'currentmonth' } });
-    expect(await screen.findByText('€ 99.00')).toBeTruthy();
+    expect(await screen.findByText((text) => text.startsWith('99,00'))).toBeTruthy();
     first.resolve(summary({ income_sum_cents: 100 }));
     await Promise.resolve();
-    expect(screen.queryByText('€ 1.00')).toBeNull();
-    expect(screen.getByText('€ 99.00')).toBeTruthy();
+    expect(screen.queryByText((text) => text.startsWith('1,00'))).toBeNull();
+    expect(screen.getByText((text) => text.startsWith('99,00'))).toBeTruthy();
   });
 
   it('does not update the DOM after unmount with pending requests', async () => {
@@ -143,6 +163,6 @@ describe('DashboardPage DOM behaviour', () => {
     unmount();
     pending.resolve(summary());
     await Promise.resolve();
-    expect(document.body.textContent).not.toContain('€ 120.00');
+    expect(document.body.textContent).not.toContain('120,00');
   });
 });

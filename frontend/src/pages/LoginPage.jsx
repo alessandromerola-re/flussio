@@ -60,6 +60,10 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
 
       <div className="auth-form-column">
         <form className="card auth-form" onSubmit={handleSubmit} aria-busy={loading}>
+          <div className="auth-mobile-brand">
+            <BrandMark logoUrl={brandLogoUrl} alt="Flussio" />
+            <span className="auth-badge">{t('pages.login.protectedBadge')}</span>
+          </div>
           <div className="auth-form-header">
             <h2>{t('pages.login.title')}</h2>
             <p className="muted">{t('pages.login.subtitle')}</p>

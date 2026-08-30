@@ -6,7 +6,7 @@ import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import Modal from '../components/Modal.jsx';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
-import { formatCurrencyFromCents, parseEuroInputToCents } from '../utils/currency.js';
+import { formatCurrency, formatCurrencyFromCents, parseEuroInputToCents } from '../utils/currency.js';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = { name: '', direction: 'income', parent_id: '', color: '#2ecc71', is_active: true };
@@ -327,8 +327,8 @@ const RegistryPage = () => {
                 <div>
                   <strong>{account.name}</strong>
                   <div className="muted">{t(`labels.${account.type}`)}</div>
-                  <div className="muted">{t('forms.openingBalance')}: € {Number(account.opening_balance).toFixed(2)}</div>
-                  <div className="muted">{t('forms.currentBalance')}: € {Number(account.balance).toFixed(2)}</div>
+                  <div className="muted">{t('forms.openingBalance')}: {formatCurrency(account.opening_balance)}</div>
+                  <div className="muted">{t('forms.currentBalance')}: {formatCurrency(account.balance)}</div>
                 </div>
                 <div className="row-actions">
                   {canPermission('write') && (

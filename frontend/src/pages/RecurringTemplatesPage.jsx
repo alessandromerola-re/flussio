@@ -5,6 +5,7 @@ import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
 import { getErrorMessage } from '../utils/errorMessages.js';
+import { formatCurrency } from '../utils/currency.js';
 
 const initialForm = {
   title: '',
@@ -261,7 +262,7 @@ const RecurringTemplatesPage = () => {
                 <div>
                   <strong>{template.title}</strong>
                   <div className="muted">{template.frequency} · {template.interval}</div>
-                  <div className="muted">{t('pages.movements.amount')}: € {Number(template.amount).toFixed(2)}</div>
+                  <div className="muted">{t('pages.movements.amount')}: {formatCurrency(template.amount)}</div>
                   <div className="muted">{t('pages.movements.account')}: {template.account_name || t('pages.recurring.accountMissing')}</div>
                   <div className="muted">next: {template.next_run_at}</div>
                   {template.recurring_template_id && <div className="muted">#{template.recurring_template_id}</div>}

@@ -5,6 +5,7 @@ import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import { formatDateInTimeZone, formatDateIT } from '../utils/date.js';
+import { formatCurrency } from '../utils/currency.js';
 import { previousPageAfterDelete } from '../utils/pagination.js';
 import { saveMovementWithAttachment } from '../utils/saveMovement.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
@@ -1034,7 +1035,7 @@ const MovementsPage = () => {
                   )}
                 </div>
                 <div className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>
-                  € {Number(movement.amount_total).toFixed(2)}
+                  {formatCurrency(movement.amount_total)}
                 </div>
               </button>
               );
@@ -1055,7 +1056,7 @@ const MovementsPage = () => {
           <>
             <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
             <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
-            <p><strong>{t('pages.movements.amount')}:</strong> € {Number(selected.amount_total).toFixed(2)}</p>
+            <p><strong>{t('pages.movements.amount')}:</strong> {formatCurrency(selected.amount_total)}</p>
             <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
           </>
@@ -1074,7 +1075,7 @@ const MovementsPage = () => {
             <h2>{t('pages.movements.details')}</h2>
             <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
             <p><strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}</p>
-            <p><strong>{t('pages.movements.amount')}:</strong> € {Number(selected.amount_total).toFixed(2)}</p>
+            <p><strong>{t('pages.movements.amount')}:</strong> {formatCurrency(selected.amount_total)}</p>
             <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.job')}:</strong> {selected.job_name || t('common.none')}</p>

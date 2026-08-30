@@ -20,6 +20,13 @@ export const writeSession = (token, role = 'viewer', remember = true, persistent
   target.setItem(ROLE_KEY, role);
 };
 
+export const writeSessionRole = (role = 'viewer', persistent = localStorage, temporary = sessionStorage) => {
+  const target = temporary.getItem(TOKEN_KEY) ? temporary : persistent;
+  target.setItem(ROLE_KEY, role);
+  const other = target === temporary ? persistent : temporary;
+  other.removeItem(ROLE_KEY);
+};
+
 export const clearSession = (persistent = localStorage, temporary = sessionStorage) => {
   for (const storage of [persistent, temporary]) {
     storage.removeItem(TOKEN_KEY);
