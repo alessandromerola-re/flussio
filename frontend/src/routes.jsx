@@ -1,15 +1,17 @@
+import { lazy } from 'react';
 import { Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import MovementsPage from './pages/MovementsPage.jsx';
-import RegistryPage from './pages/RegistryPage.jsx';
-import JobDetailPage from './pages/JobDetailPage.jsx';
-import RecurringTemplatesPage from './pages/RecurringTemplatesPage.jsx';
-import UsersAdminPage from './pages/UsersAdminPage.jsx';
-import RoadmapPage from './pages/RoadmapPage.jsx';
-import SettingsAdminPage from './pages/SettingsAdminPage.jsx';
-import AdvancedReportsPage from './pages/AdvancedReportsPage.jsx';
 import { can, isRecurringEnabled } from './utils/permissions.js';
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
+const MovementsPage = lazy(() => import('./pages/MovementsPage.jsx'));
+const RegistryPage = lazy(() => import('./pages/RegistryPage.jsx'));
+const JobDetailPage = lazy(() => import('./pages/JobDetailPage.jsx'));
+const RecurringTemplatesPage = lazy(() => import('./pages/RecurringTemplatesPage.jsx'));
+const UsersAdminPage = lazy(() => import('./pages/UsersAdminPage.jsx'));
+const RoadmapPage = lazy(() => import('./pages/RoadmapPage.jsx'));
+const SettingsAdminPage = lazy(() => import('./pages/SettingsAdminPage.jsx'));
+const AdvancedReportsPage = lazy(() => import('./pages/AdvancedReportsPage.jsx'));
 
 const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
   {

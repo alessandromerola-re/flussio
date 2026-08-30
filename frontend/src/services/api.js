@@ -1,4 +1,4 @@
-import { clearSession, isPersistentSession, readSession, writeSession } from '../utils/authStorage.js';
+import { clearSession, isPersistentSession, readSession, writeSession, writeSessionRole } from '../utils/authStorage.js';
 
 const API_BASE = import.meta.env?.VITE_API_BASE || '/api';
 let refreshPromise = null;
@@ -35,7 +35,16 @@ export const getIsSuperAdmin = () => {
   return payload?.is_super_admin === true;
 };
 
+export const getCurrentUser = () => {
+  const payload = parseJwtPayload(getToken());
+  return {
+    email: payload?.email || '',
+    userId: payload?.user_id || null,
+  };
+};
+
 export const setToken = (token, role = 'viewer', remember = true) => writeSession(token, role, remember);
+export const setRole = (role = 'viewer') => writeSessionRole(role);
 
 export const clearToken = () => {
   clearSession();

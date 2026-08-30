@@ -13,15 +13,15 @@ import {
   Tooltip,
 } from 'chart.js';
 import { api } from '../services/api.js';
+import { formatCurrencyFromCents } from '../utils/currency.js';
 import { formatDateInTimeZone } from '../utils/date.js';
 import { financialDeltaClass, financialDeltaLabel } from '../utils/financialSemantics.js';
 
 ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
 const toIsoDate = formatDateInTimeZone;
-const centsToEuro = (cents) => `€ ${(Number(cents || 0) / 100).toFixed(2)}`;
+const centsToEuro = (cents) => formatCurrencyFromCents(Number(cents || 0)) || formatCurrencyFromCents(0);
 const absCents = (value) => Math.abs(Number(value || 0));
-const emptySeriesMessage = 'Nessun dato nel periodo selezionato';
 
 const computeDelta = (current, previousValue) => {
   const currentNumber = Number(current || 0);
@@ -182,9 +182,22 @@ const DashboardPage = () => {
       scales: {
         y: {
           beginAtZero: true,
+          ticks: {
+            maxTicksLimit: isMobile ? 5 : 8,
+            font: { size: isMobile ? 10 : 12 },
+          },
+          grid: { color: 'rgba(148, 163, 184, 0.18)' },
+        },
+        x: {
+          ticks: { maxTicksLimit: isMobile ? 6 : 12, font: { size: isMobile ? 10 : 12 } },
+          grid: { display: false },
         },
       },
       plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { boxWidth: 12, usePointStyle: true, padding: isMobile ? 12 : 18 },
+        },
         tooltip: {
           callbacks: {
             label: (context) => `${context.dataset.label}: ${currencyTooltip(context)}`,
@@ -192,7 +205,7 @@ const DashboardPage = () => {
         },
       },
     }),
-    []
+    [isMobile]
   );
 
 
@@ -203,6 +216,7 @@ const DashboardPage = () => {
       plugins: {
         legend: {
           position: 'bottom',
+          labels: { boxWidth: 12, usePointStyle: true, padding: 14 },
         },
         tooltip: {
           callbacks: {
@@ -374,21 +388,22 @@ const DashboardPage = () => {
         },
       },
       scales: {
-        x: { beginAtZero: true },
-        y: { ticks: { autoSkip: false } },
+        x: { beginAtZero: true, ticks: { maxTicksLimit: isMobile ? 5 : 8, font: { size: isMobile ? 10 : 12 } } },
+        y: { ticks: { autoSkip: false, font: { size: isMobile ? 10 : 12 } }, grid: { display: false } },
       },
     }),
-    []
+    [isMobile]
   );
 
   const renderDimensionTabs = (selected, onChange) => (
-    <div className="row-actions dashboard-tabs" style={{ marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+    <div className="dashboard-tabs" role="group">
       {dimensionOptions.map((dimension) => (
         <button
           key={dimension}
           type="button"
-          className={selected === dimension ? '' : 'ghost'}
+          className={`dashboard-tab ${selected === dimension ? 'active' : ''}`.trim()}
           onClick={() => onChange(dimension)}
+          aria-pressed={selected === dimension}
         >
           {t(`pages.dashboard.dim.${dimension}`)}
         </button>
@@ -414,26 +429,37 @@ const DashboardPage = () => {
       </div>
 
       <div aria-live="polite">
-        {loading && <p className="muted">Caricamento dashboard…</p>}
+        {loading && (
+          <div className="dashboard-loading" role="status">
+            <span className="sr-only">{t('pages.dashboard.loading')}</span>
+            <div className="kpi-grid" aria-hidden="true">
+              {[0, 1, 2].map((item) => <div className="card kpi dashboard-skeleton-card" key={item}><span /><strong /></div>)}
+            </div>
+            <div className="grid-two" aria-hidden="true">
+              <div className="card dashboard-skeleton-chart" />
+              <div className="card dashboard-skeleton-chart" />
+            </div>
+          </div>
+        )}
         {loadError && <div className="error" role="alert">{loadError} <button type="button" onClick={loadDashboard}>Riprova</button></div>}
       </div>
 
       {!loading && !loadError && summary && <>
 
       <div className="kpi-grid">
-        <div className="card kpi">
+        <div className="card kpi kpi-income">
           <span>{t('pages.dashboard.income')}</span>
           <small className={deltaClassName(kpiDeltas.income)}>{deltaLabel(kpiDeltas.income)}</small>
           <strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong>
         </div>
 
-        <div className="card kpi">
+        <div className="card kpi kpi-expense">
           <span>{t('pages.dashboard.expense')}</span>
           <small className={deltaClassName(kpiDeltas.expense, true)}>{deltaLabel(kpiDeltas.expense, true)}</small>
           <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
         </div>
 
-        <div className="card kpi">
+        <div className="card kpi kpi-net">
           <span>{t('pages.dashboard.net')}</span>
           <small className={deltaClassName(kpiDeltas.net)}>{deltaLabel(kpiDeltas.net)}</small>
           <strong>{centsToEuro(summary.net_sum_cents)}</strong>
@@ -442,28 +468,28 @@ const DashboardPage = () => {
 
       <div className="grid-two">
         <div className="card dashboard-chart-card">
-          <h2>Cashflow trend</h2>
+          <h2>{t('pages.dashboard.cashflowTrend')}</h2>
           <div className="dashboard-chart-wrap dashboard-chart-wrap--line">
-            {hasBucketData ? <Line data={trendData} options={commonLineOptions} /> : <p className="muted">{emptySeriesMessage}</p>}
+            {hasBucketData ? <Line data={trendData} options={commonLineOptions} /> : <p className="muted dashboard-empty-chart">{t('pages.dashboard.emptyPeriod')}</p>}
           </div>
         </div>
 
         <div className="card dashboard-chart-card">
-          <h2>Netto nel tempo</h2>
+          <h2>{t('pages.dashboard.netTrend')}</h2>
           <div className="dashboard-chart-wrap dashboard-chart-wrap--line">
-            {hasBucketData ? <Line data={netTrendData} options={commonLineOptions} /> : <p className="muted">{emptySeriesMessage}</p>}
+            {hasBucketData ? <Line data={netTrendData} options={commonLineOptions} /> : <p className="muted dashboard-empty-chart">{t('pages.dashboard.emptyPeriod')}</p>}
           </div>
         </div>
       </div>
 
-      <div className="grid-two" style={{ marginTop: '1rem' }}>
+      <div className="grid-two dashboard-section-grid">
         <div className="card dashboard-chart-card">
-          <h2>Entrate per</h2>
+          <h2>{t('pages.dashboard.incomeBy')}</h2>
           {renderDimensionTabs(incomeDimension, setIncomeDimension)}
           <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
             {sectionErrors.income && <div className="error" role="alert">{sectionErrors.income} <button type="button" onClick={() => retrySection('income')}>Riprova</button></div>}
             {!sectionErrors.income && (pieToChartData(incomePie) ? (
-              shouldFallbackPieToList(incomePie) ? (
+              isMobile || shouldFallbackPieToList(incomePie) ? (
                 <ul className="list dashboard-pie-fallback-list">
                   {buildPieTopList(incomePie).map((item) => (
                     <li key={item.label} className="list-item-row">
@@ -480,12 +506,12 @@ const DashboardPage = () => {
         </div>
 
         <div className="card dashboard-chart-card">
-          <h2>Uscite per</h2>
+          <h2>{t('pages.dashboard.expenseBy')}</h2>
           {renderDimensionTabs(expenseDimension, setExpenseDimension)}
           <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
             {sectionErrors.expense && <div className="error" role="alert">{sectionErrors.expense} <button type="button" onClick={() => retrySection('expense')}>Riprova</button></div>}
             {!sectionErrors.expense && (pieToChartData(expensePie) ? (
-              shouldFallbackPieToList(expensePie) ? (
+              isMobile || shouldFallbackPieToList(expensePie) ? (
                 <ul className="list dashboard-pie-fallback-list">
                   {buildPieTopList(expensePie).map((item) => (
                     <li key={item.label} className="list-item-row">
@@ -502,17 +528,17 @@ const DashboardPage = () => {
         </div>
       </div>
 
-      <div className="card dashboard-chart-card" style={{ marginTop: '1rem' }}>
+      <div className="card dashboard-chart-card dashboard-top-expenses">
         <h2>{t('pages.dashboard.topExpensesByCategory')}</h2>
         {isMobile && topExpenses?.slices?.length > 5 && (
-          <div className="row-actions" style={{ marginBottom: '0.75rem' }}>
+          <div className="row-actions dashboard-show-all">
             <button type="button" className="ghost" onClick={() => setShowAllTopExpenses((prev) => !prev)}>
-              {showAllTopExpenses ? 'Mostra meno' : 'Mostra tutte'}
+              {showAllTopExpenses ? t('pages.dashboard.showLess') : t('pages.dashboard.showAll')}
             </button>
           </div>
         )}
         <div className={`dashboard-chart-wrap dashboard-chart-wrap--bar ${showAllTopExpenses ? 'dashboard-chart-wrap--scroll' : ''}`}>
-          {sectionErrors.top ? <div className="error" role="alert">{sectionErrors.top} <button type="button" onClick={() => retrySection('top')}>Riprova</button></div> : (topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted">{emptySeriesMessage}</p>)}
+          {sectionErrors.top ? <div className="error" role="alert">{sectionErrors.top} <button type="button" onClick={() => retrySection('top')}>Riprova</button></div> : (topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted dashboard-empty-chart">{t('pages.dashboard.emptyPeriod')}</p>)}
         </div>
       </div>
       </>}

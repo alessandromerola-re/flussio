@@ -16,6 +16,12 @@ export const formatCurrencyFromCents = (valueCents) => {
   return euroFormatter.format(cents / 100);
 };
 
+export const formatCurrency = (value) => {
+  if (value == null || value === '') return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? euroFormatter.format(amount) : null;
+};
+
 export const parseEuroInputToCents = (value) => {
   if (value == null || String(value).trim() === '') {
     return null;

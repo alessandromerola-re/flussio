@@ -183,7 +183,7 @@ const JobDetailPage = () => {
 
           <div className="card" style={{ marginTop: '1rem' }}>
             <h2>{t('pages.jobs.breakdownByCategory')}</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
                   <th align="left">{t('pages.movements.category')}</th>
@@ -205,7 +205,7 @@ const JobDetailPage = () => {
                   </tr>
                 )}
               </tbody>
-            </table>
+            </table></div>
           </div>
         </>
       )}

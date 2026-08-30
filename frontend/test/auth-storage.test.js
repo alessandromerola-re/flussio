@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearSession, isPersistentSession, readSession, writeSession } from '../src/utils/authStorage.js';
+import { clearSession, isPersistentSession, readSession, writeSession, writeSessionRole } from '../src/utils/authStorage.js';
 
 const storage = () => {
   const values = new Map();
@@ -21,4 +21,17 @@ test('remember me selects exactly one storage and preserves legacy local session
   assert.deepEqual(readSession(local, session), { token: 'persistent', role: 'admin' });
   clearSession(local, session);
   assert.equal(readSession(local, session).token, null);
+});
+
+test('company changes update the role in the storage that owns the active session', () => {
+  const local = storage(); const session = storage();
+  writeSession('temporary', 'viewer', false, local, session);
+  writeSessionRole('editor', local, session);
+  assert.equal(session.getItem('flussio_role'), 'editor');
+  assert.equal(local.getItem('flussio_role'), null);
+
+  writeSession('persistent', 'viewer', true, local, session);
+  writeSessionRole('admin', local, session);
+  assert.equal(local.getItem('flussio_role'), 'admin');
+  assert.equal(session.getItem('flussio_role'), null);
 });
