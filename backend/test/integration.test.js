@@ -41,10 +41,10 @@ const jsonRequest = async (url, options = {}) => {
   });
 
   if (res.status === 204) {
-    return { status: res.status, body: null };
+    return { status: res.status, body: null, headers: res.headers };
   }
 
-  return { status: res.status, body: await res.json() };
+  return { status: res.status, body: await res.json(), headers: res.headers };
 };
 
 const login = async () => {
@@ -148,4 +148,38 @@ test('create and delete transaction updates account balances', async () => {
   });
   const cashAfterDelete = Number(afterDeleteAccounts.body.find((item) => item.name === 'Cassa').balance);
   assert.equal(cashAfterDelete, cashBefore);
+});
+
+test('transaction list supports related search, filters, sorting and total count', async () => {
+  const token = await login();
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const propertyPage = await jsonRequest(
+    `${baseUrl}/api/transactions?property_id=1&sort_by=amount&sort_dir=asc&limit=1`,
+    { headers }
+  );
+  assert.equal(propertyPage.status, 200);
+  assert.equal(propertyPage.body.length, 1);
+  assert.equal(propertyPage.body[0].property_name, 'Immobile Centro');
+  assert.equal(Math.abs(Number(propertyPage.body[0].amount_total)), 450);
+  assert.equal(propertyPage.headers.get('x-total-count'), '2');
+  assert.equal(propertyPage.headers.get('x-has-more'), 'true');
+
+  const relatedSearch = await jsonRequest(
+    `${baseUrl}/api/transactions?q=${encodeURIComponent('Cliente Alpha')}`,
+    { headers }
+  );
+  assert.equal(relatedSearch.status, 200);
+  assert.equal(relatedSearch.body.length, 1);
+  assert.equal(relatedSearch.body[0].description, 'Fattura vendita');
+
+  const withoutAttachments = await jsonRequest(
+    `${baseUrl}/api/transactions?has_attachments=0&is_recurring=0`,
+    { headers }
+  );
+  assert.equal(withoutAttachments.status, 200);
+  assert.equal(withoutAttachments.headers.get('x-total-count'), '3');
+
+  const invalidSort = await jsonRequest(`${baseUrl}/api/transactions?sort_by=created_at`, { headers });
+  assert.equal(invalidSort.status, 400);
 });
