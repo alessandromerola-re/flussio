@@ -560,6 +560,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     accountNames: headers.indexOf('account_names'),
     category: headers.indexOf('category'),
     contact: headers.indexOf('contact'),
+    property: headers.indexOf('property') >= 0 ? headers.indexOf('property') : headers.indexOf('immobile'),
     job: headers.indexOf('commessa') >= 0 ? headers.indexOf('commessa') : headers.indexOf('job'),
     description: headers.indexOf('description'),
   };
@@ -568,16 +569,18 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Header CSV non valido.');
   }
 
-  const [accountsResult, categoriesResult, contactsResult, jobsResult] = await Promise.all([
+  const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = await Promise.all([
     query('SELECT id, name FROM accounts WHERE company_id = $1', [req.companyId]),
     query('SELECT id, name FROM categories WHERE company_id = $1', [req.companyId]),
     query('SELECT id, name FROM contacts WHERE company_id = $1', [req.companyId]),
+    query('SELECT id, name FROM properties WHERE company_id = $1', [req.companyId]),
     query('SELECT id, name, title FROM jobs WHERE company_id = $1', [req.companyId]),
   ]);
 
   const accountByName = new Map(accountsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
   const categoryByName = new Map(categoriesResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
   const contactByName = new Map(contactsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
+  const propertyByName = new Map(propertiesResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
   const jobByName = new Map(jobsResult.rows.map((r) => [String((r.name || r.title || '')).trim().toLowerCase(), r.id]));
 
   let imported = 0;
@@ -646,6 +649,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
 
       const categoryId = idx.category >= 0 ? (categoryByName.get(String(row[idx.category] || '').trim().toLowerCase()) || null) : null;
       const contactId = idx.contact >= 0 ? (contactByName.get(String(row[idx.contact] || '').trim().toLowerCase()) || null) : null;
+      const propertyId = idx.property >= 0 ? (propertyByName.get(String(row[idx.property] || '').trim().toLowerCase()) || null) : null;
       const jobId = idx.job >= 0 ? (jobByName.get(String(row[idx.job] || '').trim().toLowerCase()) || null) : null;
       const description = idx.description >= 0 ? String(row[idx.description] || '').trim() : '';
       const signedAmount = type === 'expense' ? -amountAbs : amountAbs;
@@ -654,7 +658,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
         `INSERT INTO transactions (company_id, date, type, amount_total, description, category_id, contact_id, property_id, job_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id`,
-        [req.companyId, date, type, signedAmount, description || null, categoryId, contactId, null, jobId]
+        [req.companyId, date, type, signedAmount, description || null, categoryId, contactId, propertyId, jobId]
       );
 
       for (const entry of accountEntries) {
