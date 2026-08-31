@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
@@ -39,6 +39,8 @@ const defaultFilters = {
   q: '',
   is_recurring: '',
   has_attachments: '',
+  sort_by: 'date',
+  sort_dir: 'desc',
   limit: 30,
   offset: 0,
 };
@@ -54,6 +56,8 @@ const MovementsPage = () => {
   const [jobs, setJobs] = useState([]);
   const [movements, setMovements] = useState([]);
   const [hasNextPage, setHasNextPage] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [movementsLoading, setMovementsLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [error, setError] = useState('');
@@ -64,6 +68,7 @@ const MovementsPage = () => {
   const [contactSearch, setContactSearch] = useState('');
   const [contactResults, setContactResults] = useState([]);
   const [showContactResults, setShowContactResults] = useState(false);
+  const [contactActiveIndex, setContactActiveIndex] = useState(-1);
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [newAttachmentFile, setNewAttachmentFile] = useState(null);
   const [editingMovementId, setEditingMovementId] = useState(null);
@@ -81,10 +86,14 @@ const MovementsPage = () => {
   const [filterContactSearch, setFilterContactSearch] = useState('');
   const [filterContactResults, setFilterContactResults] = useState([]);
   const [showFilterContactResults, setShowFilterContactResults] = useState(false);
+  const [filterContactActiveIndex, setFilterContactActiveIndex] = useState(-1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [movementModalOpen, setMovementModalOpen] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [createdMovementId, setCreatedMovementId] = useState(null);
+  const [searchInput, setSearchInput] = useState('');
+  const movementRequestId = useRef(0);
+  const filtersRef = useRef(defaultFilters);
 
   const loadLookupData = async () => {
     setLookupLoadError('');
@@ -110,19 +119,27 @@ const MovementsPage = () => {
   };
 
   const loadMovements = async (activeFilters = defaultFilters) => {
+    const requestId = ++movementRequestId.current;
     setMovementLoadError('');
+    setMovementsLoading(true);
     try {
       const pageSize = Number(activeFilters.limit || 30);
       const response = await api.getTransactions({ ...activeFilters, limit: pageSize });
       const rows = response?.data ?? response;
       const page = { rows, hasNext: response?.headers?.get('X-Has-More') === 'true' };
+      if (requestId !== movementRequestId.current) return page;
       setMovements(rows);
       setHasNextPage(page.hasNext);
+      setTotalCount(Number(response?.headers?.get('X-Total-Count') || rows.length));
       return page;
     } catch (loadMovementsError) {
+      if (requestId !== movementRequestId.current) return null;
       setMovements([]);
       setHasNextPage(false);
+      setTotalCount(0);
       setMovementLoadError(`Impossibile caricare i movimenti. ${getErrorMessage(t, null)}`);
+    } finally {
+      if (requestId === movementRequestId.current) setMovementsLoading(false);
     }
   };
 
@@ -142,12 +159,15 @@ const MovementsPage = () => {
       q: searchParams.get('q') || '',
       is_recurring: searchParams.get('is_recurring') || '',
       has_attachments: searchParams.get('has_attachments') || '',
+      sort_by: searchParams.get('sort_by') || defaultFilters.sort_by,
+      sort_dir: searchParams.get('sort_dir') || defaultFilters.sort_dir,
       limit: Number(searchParams.get('limit') || defaultFilters.limit),
       offset: Number(searchParams.get('offset') || defaultFilters.offset),
     };
 
     setFilters(nextFilters);
     setDraftFilters(nextFilters);
+    setSearchInput(nextFilters.q);
     setFilterContactSearch('');
     await loadMovements(nextFilters);
   };
@@ -155,6 +175,22 @@ const MovementsPage = () => {
   useEffect(() => {
     loadData();
   }, [searchParams.toString()]);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const currentFilters = filtersRef.current;
+      if (searchInput === currentFilters.q) return;
+      const nextFilters = { ...currentFilters, q: searchInput.trim(), offset: 0 };
+      setFilters(nextFilters);
+      setDraftFilters((previous) => ({ ...previous, q: nextFilters.q, offset: 0 }));
+      loadMovements(nextFilters);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const formatAccounts = (accountsList = []) => {
     const names = accountsList.map((account) => account?.account_name).filter(Boolean);
@@ -289,7 +325,7 @@ const MovementsPage = () => {
     });
   };
 
-  const handleContactSearch = async (value) => {
+  const handleContactSearch = (value) => {
     setContactSearch(value);
     if (!value) {
       handleChange('contact_id', '');
@@ -297,12 +333,10 @@ const MovementsPage = () => {
       setShowContactResults(false);
       return;
     }
-    const results = await api.getContacts(value);
-    setContactResults(results);
     setShowContactResults(true);
   };
 
-  const handleFilterContactSearch = async (value) => {
+  const handleFilterContactSearch = (value) => {
     setFilterContactSearch(value);
     if (!value) {
       setDraftFilters((prev) => ({ ...prev, contact_id: '' }));
@@ -311,10 +345,34 @@ const MovementsPage = () => {
       return;
     }
 
-    const results = await api.getContacts(value);
-    setFilterContactResults(results);
     setShowFilterContactResults(true);
   };
+
+  useEffect(() => {
+    if (!contactSearch.trim()) return undefined;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      const results = await api.getContacts(contactSearch.trim());
+      if (active) {
+        setContactResults(results);
+        setContactActiveIndex(-1);
+      }
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [contactSearch]);
+
+  useEffect(() => {
+    if (!filterContactSearch.trim()) return undefined;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      const results = await api.getContacts(filterContactSearch.trim());
+      if (active) {
+        setFilterContactResults(results);
+        setFilterContactActiveIndex(-1);
+      }
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [filterContactSearch]);
 
   const handleSelectContact = (contact) => {
     handleChange('contact_id', contact.id);
@@ -332,6 +390,25 @@ const MovementsPage = () => {
     setDraftFilters((prev) => ({ ...prev, contact_id: contact.id }));
     setFilterContactSearch(contact.name);
     setShowFilterContactResults(false);
+  };
+
+  const handleAutocompleteKeyDown = (event, results, activeIndex, setActiveIndex, selectResult, closeResults) => {
+    if (!results.length) {
+      if (event.key === 'Escape') closeResults();
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((activeIndex + 1) % results.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex(activeIndex <= 0 ? results.length - 1 : activeIndex - 1);
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      event.preventDefault();
+      selectResult(results[activeIndex]);
+    } else if (event.key === 'Escape') {
+      closeResults();
+    }
   };
 
   const validate = () => {
@@ -360,6 +437,8 @@ const MovementsPage = () => {
         if (key === 'offset') {
           return Number(value) !== 0;
         }
+        if (key === 'sort_by') return value !== defaultFilters.sort_by;
+        if (key === 'sort_dir') return value !== defaultFilters.sort_dir;
         return value !== '' && value != null;
       }),
     [filters]
@@ -392,14 +471,20 @@ const MovementsPage = () => {
     if (filters.q) labels.push({ key: 'q', label: `${t('pages.movements.searchText')}: ${filters.q}` });
     if (filters.is_recurring !== '') labels.push({ key: 'is_recurring', label: `Ricorrenza: ${filters.is_recurring === '1' ? 'sì' : 'no'}` });
     if (filters.has_attachments !== '') labels.push({ key: 'has_attachments', label: `Allegati: ${filters.has_attachments === '1' ? 'presenti' : 'assenti'}` });
+    if (filters.sort_by !== defaultFilters.sort_by || filters.sort_dir !== defaultFilters.sort_dir) {
+      labels.push({ key: 'sort', label: `${t('pages.movements.sort')}: ${t(`pages.movements.sort.${filters.sort_by}`)} (${filters.sort_dir === 'asc' ? '↑' : '↓'})` });
+    }
 
     return labels;
   }, [filters, accounts, categories, contacts, properties, jobs, t]);
 
   const clearFilterChip = async (key) => {
-    const nextFilters = { ...filters, [key]: defaultFilters[key], offset: 0 };
+    const nextFilters = key === 'sort'
+      ? { ...filters, sort_by: defaultFilters.sort_by, sort_dir: defaultFilters.sort_dir, offset: 0 }
+      : { ...filters, [key]: defaultFilters[key], offset: 0 };
     setFilters(nextFilters);
     setDraftFilters(nextFilters);
+    if (key === 'q') setSearchInput('');
 
     if (key === 'contact_id') {
       setFilterContactSearch('');
@@ -416,12 +501,14 @@ const MovementsPage = () => {
       offset: 0,
     };
     setFilters(nextFilters);
+    setSearchInput(nextFilters.q);
     await loadMovements(nextFilters);
   };
 
   const resetFilters = async () => {
     setDraftFilters(defaultFilters);
     setFilters(defaultFilters);
+    setSearchInput('');
     setFilterContactSearch('');
     setFilterContactResults([]);
     setShowFilterContactResults(false);
@@ -749,10 +836,32 @@ const MovementsPage = () => {
             {t('pages.movements.new')}
           </button>
         )}
-        <button type="button" className="ghost" onClick={() => setFiltersOpen((v) => !v)}>{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
+        <label className="movement-search">
+          <span className="sr-only">{t('pages.movements.search')}</span>
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder={t('pages.movements.searchPlaceholder')}
+          />
+        </label>
+        <button
+          type="button"
+          className="ghost"
+          aria-expanded={filtersOpen}
+          aria-controls="movement-filters"
+          onClick={() => setFiltersOpen((v) => !v)}
+        >{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
         {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>}
-        {canPermission('import_movements') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
-        {canPermission('import_movements') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={importLoading}>{importLoading ? 'Import in corso...' : 'Importa CSV'}</button>}
+        {canPermission('import_movements') && (
+          <details className="movements-import-tools">
+            <summary>Importa CSV</summary>
+            <div className="row-actions">
+              <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />
+              <button type="button" className="ghost" onClick={handleImportCsv} disabled={importLoading}>{importLoading ? 'Import in corso...' : 'Importa'}</button>
+            </div>
+          </details>
+        )}
         {!filtersOpen && hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
       </div>
 
@@ -831,16 +940,27 @@ const MovementsPage = () => {
                 value={contactSearch}
                 onChange={(event) => handleContactSearch(event.target.value)}
                 onFocus={() => contactSearch && setShowContactResults(true)}
+                onKeyDown={(event) => handleAutocompleteKeyDown(event, contactResults, contactActiveIndex, setContactActiveIndex, handleSelectContact, () => setShowContactResults(false))}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={showContactResults && contactResults.length > 0}
+                aria-controls="movement-contact-results"
+                aria-activedescendant={contactActiveIndex >= 0 ? `movement-contact-${contactResults[contactActiveIndex]?.id}` : undefined}
                 placeholder={t('placeholders.searchContacts')}
               />
               {showContactResults && contactResults.length > 0 && (
-                <ul className="dropdown">
+                <div id="movement-contact-results" className="dropdown" role="listbox">
                   {contactResults.map((contact) => (
-                    <li key={contact.id}>
-                      <button type="button" onClick={() => handleSelectContact(contact)}>{contact.name}</button>
-                    </li>
+                    <button
+                      id={`movement-contact-${contact.id}`}
+                      key={contact.id}
+                      type="button"
+                      role="option"
+                      aria-selected={String(form.contact_id) === String(contact.id) || contactResults[contactActiveIndex]?.id === contact.id}
+                      onClick={() => handleSelectContact(contact)}
+                    >{contact.name}</button>
                   ))}
-                </ul>
+                </div>
               )}
             </label>
             {form.type !== 'transfer' && (
@@ -854,6 +974,15 @@ const MovementsPage = () => {
                 </select>
               </label>
             )}
+            <label>
+              {t('pages.movements.property')}
+              <select value={form.property_id} onChange={(event) => handleChange('property_id', event.target.value)}>
+                <option value="">{t('common.none')}</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>{property.name}</option>
+                ))}
+              </select>
+            </label>
             <label>
               {t('pages.movements.job')}
               <select value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
@@ -895,10 +1024,10 @@ const MovementsPage = () => {
 
       <div className="grid-two">
         <div className="card">
-          <h2>{t('pages.movements.filters')}</h2>
-          {hasActiveFilters && <div className="muted">{t('pages.movements.activeFilters')}</div>}
           {filtersOpen && (
-            <div className="filters-drawer">
+            <div id="movement-filters" className="filters-drawer">
+              <h2>{t('pages.movements.filters')}</h2>
+              {hasActiveFilters && <div className="muted">{t('pages.movements.activeFilters')}</div>}
 <div className="form-grid">
             <label>
               {t('pages.movements.dateFrom')}
@@ -922,6 +1051,7 @@ const MovementsPage = () => {
                 value={draftFilters.type}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, type: event.target.value }))}
               >
+                <option value="">{t('common.all')}</option>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
                 <option value="transfer">{t('pages.movements.transfer')}</option>
@@ -933,6 +1063,7 @@ const MovementsPage = () => {
                 value={draftFilters.account_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, account_id: event.target.value }))}
               >
+                <option value="">{t('common.all')}</option>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>{account.name}</option>
                 ))}
@@ -944,6 +1075,7 @@ const MovementsPage = () => {
                 value={draftFilters.category_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, category_id: event.target.value }))}
               >
+                <option value="">{t('common.all')}</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>{category.name}</option>
                 ))}
@@ -956,17 +1088,40 @@ const MovementsPage = () => {
                 value={filterContactSearch}
                 onChange={(event) => handleFilterContactSearch(event.target.value)}
                 onFocus={() => filterContactSearch && setShowFilterContactResults(true)}
+                onKeyDown={(event) => handleAutocompleteKeyDown(event, filterContactResults, filterContactActiveIndex, setFilterContactActiveIndex, handleSelectFilterContact, () => setShowFilterContactResults(false))}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={showFilterContactResults && filterContactResults.length > 0}
+                aria-controls="movement-filter-contact-results"
+                aria-activedescendant={filterContactActiveIndex >= 0 ? `movement-filter-contact-${filterContactResults[filterContactActiveIndex]?.id}` : undefined}
                 placeholder={t('placeholders.searchContacts')}
               />
               {showFilterContactResults && filterContactResults.length > 0 && (
-                <ul className="dropdown">
+                <div id="movement-filter-contact-results" className="dropdown" role="listbox">
                   {filterContactResults.map((contact) => (
-                    <li key={contact.id}>
-                      <button type="button" onClick={() => handleSelectFilterContact(contact)}>{contact.name}</button>
-                    </li>
+                    <button
+                      id={`movement-filter-contact-${contact.id}`}
+                      key={contact.id}
+                      type="button"
+                      role="option"
+                      aria-selected={String(draftFilters.contact_id) === String(contact.id) || filterContactResults[filterContactActiveIndex]?.id === contact.id}
+                      onClick={() => handleSelectFilterContact(contact)}
+                    >{contact.name}</button>
                   ))}
-                </ul>
+                </div>
               )}
+            </label>
+            <label>
+              {t('pages.movements.property')}
+              <select
+                value={draftFilters.property_id}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, property_id: event.target.value }))}
+              >
+                <option value="">{t('common.all')}</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>{property.name}</option>
+                ))}
+              </select>
             </label>
             <label>
               {t('pages.movements.job')}
@@ -974,9 +1129,32 @@ const MovementsPage = () => {
                 value={draftFilters.job_id}
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, job_id: event.target.value }))}
               >
+                <option value="">{t('common.all')}</option>
                 {jobs.map((job) => (
                   <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
+              </select>
+            </label>
+            <label>
+              {t('pages.movements.recurrence')}
+              <select
+                value={draftFilters.is_recurring}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, is_recurring: event.target.value }))}
+              >
+                <option value="">{t('common.all')}</option>
+                <option value="1">{t('common.yes')}</option>
+                <option value="0">{t('common.no')}</option>
+              </select>
+            </label>
+            <label>
+              {t('pages.movements.attachments')}
+              <select
+                value={draftFilters.has_attachments}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, has_attachments: event.target.value }))}
+              >
+                <option value="">{t('common.all')}</option>
+                <option value="1">{t('pages.movements.withAttachments')}</option>
+                <option value="0">{t('pages.movements.withoutAttachments')}</option>
               </select>
             </label>
             <label>
@@ -987,6 +1165,28 @@ const MovementsPage = () => {
                 onChange={(event) => setDraftFilters((prev) => ({ ...prev, q: event.target.value }))}
                 placeholder={t('pages.movements.searchText')}
               />
+            </label>
+            <label>
+              {t('pages.movements.sort')}
+              <select
+                value={draftFilters.sort_by}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, sort_by: event.target.value }))}
+              >
+                <option value="date">{t('pages.movements.sort.date')}</option>
+                <option value="amount">{t('pages.movements.sort.amount')}</option>
+                <option value="description">{t('pages.movements.sort.description')}</option>
+                <option value="type">{t('pages.movements.sort.type')}</option>
+              </select>
+            </label>
+            <label>
+              {t('pages.movements.direction')}
+              <select
+                value={draftFilters.sort_dir}
+                onChange={(event) => setDraftFilters((prev) => ({ ...prev, sort_dir: event.target.value }))}
+              >
+                <option value="desc">{t('pages.movements.descending')}</option>
+                <option value="asc">{t('pages.movements.ascending')}</option>
+              </select>
             </label>
               </div>
               <div className="row-actions">
@@ -1007,60 +1207,101 @@ const MovementsPage = () => {
             </div>
           )}
 
-          <h2>{t('pages.movements.latest')}</h2>
-          <div className="list">
-            {movements.map((movement) => {
-              const attachmentCount = Number(movement.attachment_count || movement.attachments_count || 0);
-
-              return (
-              <button key={movement.id} type="button" className="list-item" onClick={() => setSelected(movement)}>
-                <div>
-                  <strong className="movement-title-badge">{movement.description || movement.type}</strong>
-                  <div className="muted">{formatDateIT(movement.date)}</div>
-                  {movement.job_name && (
-                    <div className="muted">{t('pages.movements.job')}: {movement.job_name}</div>
-                  )}
-                  <div className="muted">{t('pages.movements.account')}: {formatAccounts(movement.accounts)}</div>
-                  <div className="muted">{t('pages.movements.category')}: {movement.category_name || t('common.none')}</div>
-                  <div className="muted">{t('pages.movements.contact')}: {movement.contact_name || t('common.none')}</div>
-                  {movement.recurring_template_title && (
-                    <div className="muted">
-                      {t('pages.recurring.badge')}: <a href={`/recurring?template_id=${movement.recurring_template_id}`}>{movement.recurring_template_title}</a>
-                    </div>
-                  )}
-                  {attachmentCount > 0 && (
-                    <div className="attachment-indicator" aria-label={`${attachmentCount} attachments`}>
-                      📎 {attachmentCount}
-                    </div>
-                  )}
-                </div>
-                <div className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>
-                  {formatCurrency(movement.amount_total)}
-                </div>
-              </button>
-              );
-            })}
+          <div className="movements-list-heading">
+            <h2>{t('pages.movements.latest')}</h2>
+            <span className="muted" aria-live="polite">
+              {movementsLoading ? t('common.loading') : t('pages.movements.results', { count: totalCount })}
+            </span>
           </div>
-          <nav className="pagination" aria-label="Paginazione movimenti">
-            <button type="button" className="ghost" disabled={filters.offset === 0} onClick={() => { const next = { ...filters, offset: Math.max(0, filters.offset - filters.limit) }; setFilters(next); setDraftFilters(next); loadMovements(next); }}>Precedente</button>
-            <span>Pagina {Math.floor(filters.offset / filters.limit) + 1}</span>
-            <button type="button" className="ghost" disabled={!hasNextPage} onClick={() => { const next = { ...filters, offset: filters.offset + filters.limit }; setFilters(next); setDraftFilters(next); loadMovements(next); }}>Successiva</button>
-          </nav>
-        </div>
-      </div>
 
-      <div className="card movement-detail-card desktop-only">
-        <h2>{t('pages.movements.details')}</h2>
-        {!selected && <p className="muted">{t('common.none')}</p>}
-        {selected && (
-          <>
-            <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
-            <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
-            <p><strong>{t('pages.movements.amount')}:</strong> {formatCurrency(selected.amount_total)}</p>
-            <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
-            <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
-          </>
-        )}
+          {movementsLoading && movements.length === 0 && (
+            <div className="movements-loading" role="status">{t('common.loading')}</div>
+          )}
+
+          {!movementsLoading && movements.length === 0 && (
+            <div className="empty-state">
+              <h3>{t('pages.movements.emptyTitle')}</h3>
+              <p className="muted">{hasActiveFilters ? t('pages.movements.emptyFiltered') : t('pages.movements.emptyDescription')}</p>
+              {hasActiveFilters && <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>}
+              {!hasActiveFilters && canPermission('write') && <button type="button" onClick={openNewMovementModal}>{t('pages.movements.new')}</button>}
+            </div>
+          )}
+
+          {movements.length > 0 && (
+            <div className="table-scroll desktop-only">
+              <table className="movements-table">
+                <thead>
+                  <tr>
+                    <th>{t('pages.movements.date')}</th>
+                    <th>{t('pages.movements.description')}</th>
+                    <th>{t('pages.movements.account')}</th>
+                    <th>{t('pages.movements.category')}</th>
+                    <th>{t('pages.movements.links')}</th>
+                    <th className="align-right">{t('pages.movements.amount')}</th>
+                    <th><span className="sr-only">{t('pages.movements.details')}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((movement) => {
+                    const attachmentCount = Number(movement.attachment_count || movement.attachments_count || 0);
+                    return (
+                      <tr key={movement.id}>
+                        <td>{formatDateIT(movement.date)}</td>
+                        <td>
+                          <strong>{movement.description || t(`pages.movements.${movement.type}`)}</strong>
+                          <div className="muted">{t(`pages.movements.${movement.type}`)}</div>
+                        </td>
+                        <td>{formatAccounts(movement.accounts)}</td>
+                        <td>{movement.category_name || t('common.none')}</td>
+                        <td>
+                          {movement.contact_name && <div>{movement.contact_name}</div>}
+                          {movement.property_name && <div className="muted">{movement.property_name}</div>}
+                          {movement.job_name && <div className="muted">{movement.job_name}</div>}
+                          {attachmentCount > 0 && <span className="attachment-indicator" aria-label={`${attachmentCount} ${t('pages.movements.attachments')}`}>📎 {attachmentCount}</span>}
+                        </td>
+                        <td className={`align-right ${movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}`}>
+                          {formatCurrency(movement.amount_total)}
+                        </td>
+                        <td><button type="button" className="ghost compact-button" onClick={() => setSelected(movement)}>{t('pages.movements.open')}</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {movements.length > 0 && (
+            <div className="movements-mobile-list mobile-only">
+              {movements.map((movement) => {
+                const attachmentCount = Number(movement.attachment_count || movement.attachments_count || 0);
+                return (
+                  <button key={movement.id} type="button" className="movement-mobile-card" onClick={() => setSelected(movement)}>
+                    <span className="movement-mobile-main">
+                      <span className="movement-mobile-topline">
+                        <strong>{movement.description || t(`pages.movements.${movement.type}`)}</strong>
+                        <span className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>{formatCurrency(movement.amount_total)}</span>
+                      </span>
+                      <span className="muted">{formatDateIT(movement.date)} · {formatAccounts(movement.accounts)}</span>
+                      <span className="movement-mobile-meta">
+                        {movement.category_name && <span>{movement.category_name}</span>}
+                        {movement.contact_name && <span>{movement.contact_name}</span>}
+                        {movement.property_name && <span>{movement.property_name}</span>}
+                        {attachmentCount > 0 && <span aria-label={`${attachmentCount} ${t('pages.movements.attachments')}`}>📎 {attachmentCount}</span>}
+                      </span>
+                    </span>
+                    <span aria-hidden="true">›</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {totalCount > 0 && <nav className="pagination" aria-label="Paginazione movimenti">
+            <button type="button" className="ghost" disabled={filters.offset === 0} onClick={() => { const next = { ...filters, offset: Math.max(0, filters.offset - filters.limit) }; setFilters(next); setDraftFilters(next); loadMovements(next); }}>Precedente</button>
+            <span>{totalCount > 0 ? `${filters.offset + 1}–${Math.min(filters.offset + movements.length, totalCount)} / ${totalCount}` : t('pages.movements.noResults')}</span>
+            <button type="button" className="ghost" disabled={!hasNextPage} onClick={() => { const next = { ...filters, offset: filters.offset + filters.limit }; setFilters(next); setDraftFilters(next); loadMovements(next); }}>Successiva</button>
+          </nav>}
+        </div>
       </div>
 
       {selected && (
@@ -1076,13 +1317,15 @@ const MovementsPage = () => {
             <p><strong>{t('pages.movements.date')}:</strong> {formatDateIT(selected.date)}</p>
             <p><strong>{t('pages.movements.type')}:</strong> {t(`pages.movements.${selected.type}`)}</p>
             <p><strong>{t('pages.movements.amount')}:</strong> {formatCurrency(selected.amount_total)}</p>
+            <p><strong>{t('pages.movements.account')}:</strong> {formatAccounts(selected.accounts)}</p>
             <p><strong>{t('pages.movements.category')}:</strong> {selected.category_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.contact')}:</strong> {selected.contact_name || t('common.none')}</p>
+            <p><strong>{t('pages.movements.property')}:</strong> {selected.property_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.job')}:</strong> {selected.job_name || t('common.none')}</p>
             <p><strong>{t('pages.movements.description')}:</strong> {selected.description || t('common.none')}</p>
             <p><strong>{t('pages.movements.createdBy')}:</strong> {selected.created_by_name || t('common.none')}</p>
             {selected.recurring_template_title && (
-              <p><strong>{t('pages.recurring.badge')}:</strong> <a href={`/recurring?template_id=${selected.recurring_template_id}`}>{selected.recurring_template_title}</a></p>
+              <p><strong>{t('pages.recurring.badge')}:</strong> {selected.recurring_template_title}</p>
             )}
             <div>
               <strong>{t('pages.movements.attachments')}:</strong>

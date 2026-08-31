@@ -626,6 +626,7 @@ button.danger {
 }
 
 .desktop-only { display: block; }
+.mobile-only { display: none; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
 .table-scroll { width: 100%; overflow-x: auto; }
 .table-scroll table { min-width: 640px; }
@@ -701,12 +702,18 @@ button.danger {
   z-index: 5;
 }
 
-.dropdown li button {
+.dropdown li button,
+.dropdown > button {
   width: 100%;
   text-align: left;
   background: transparent;
   color: #1f2933;
   padding: 0.5rem;
+}
+
+.dropdown > button[aria-selected="true"] {
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .relative {
@@ -1109,9 +1116,159 @@ button.danger {
 
 .movements-toolbar {
   margin-bottom: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.movement-search {
+  flex: 1 1 280px;
+  min-width: min(280px, 100%);
+  margin: 0;
+}
+
+.movement-search input {
+  width: 100%;
+}
+
+.movements-import-tools {
+  position: relative;
+}
+
+.movements-import-tools summary {
+  cursor: pointer;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.movements-import-tools[open] .row-actions {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  width: min(460px, 85vw);
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  box-shadow: 0 14px 35px rgba(15, 23, 42, 0.14);
+  z-index: 9;
+}
+
+.movements-list-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.movements-list-heading h2 {
+  margin-bottom: 0.75rem;
+}
+
+.movements-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+}
+
+.movements-table th,
+.movements-table td {
+  padding: 0.75rem 0.65rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.movements-table th {
+  color: #475569;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.movements-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.movements-table .align-right {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.compact-button {
+  min-height: 36px;
+  padding: 0.4rem 0.65rem;
+}
+
+.movements-loading,
+.empty-state {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.empty-state h3 {
+  margin: 0 0 0.35rem;
+}
+
+.movement-mobile-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  color: #1f2933;
+  text-align: left;
+}
+
+.movement-mobile-main {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.movement-mobile-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.movement-mobile-topline strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.movement-mobile-topline .amount {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.movement-mobile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.movement-mobile-meta > span {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
 }
 
 @media (max-width: 768px) {
+  .mobile-only { display: block; }
   .desktop-topbar {
     display: none;
   }
@@ -2023,6 +2180,43 @@ body {
 
   .movements-toolbar {
     gap: 0.5rem;
+  }
+
+  .movement-search {
+    order: -1;
+    flex-basis: 100%;
+    min-width: 100%;
+  }
+
+  .movements-toolbar > button,
+  .movements-toolbar > details {
+    flex: 1 1 auto;
+  }
+
+  .movements-import-tools[open] .row-actions {
+    position: fixed;
+    left: 0.875rem;
+    right: 0.875rem;
+    top: auto;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    width: auto;
+  }
+
+  .grid-two {
+    display: block;
+  }
+
+  .grid-two > .card {
+    padding: 1rem;
+  }
+
+  .movements-list-heading {
+    align-items: center;
+  }
+
+  .movements-mobile-list {
+    display: grid;
+    gap: 0.65rem;
   }
 
   .movements-toolbar input[type="file"] {

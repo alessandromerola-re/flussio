@@ -128,8 +128,30 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
     if (typeof filters.q !== 'string') {
       return { error: true };
     }
-    params.push(`%${filters.q.trim()}%`);
-    where.push(`COALESCE(t.description, '') ILIKE $${params.length}`);
+    const searchValue = filters.q.trim();
+    if (searchValue) {
+      params.push(`%${searchValue}%`);
+      const searchParam = `$${params.length}`;
+      where.push(`(
+        COALESCE(t.description, '') ILIKE ${searchParam}
+        OR EXISTS (SELECT 1 FROM categories c2 WHERE c2.id = t.category_id AND c2.name ILIKE ${searchParam})
+        OR EXISTS (SELECT 1 FROM contacts ct2 WHERE ct2.id = t.contact_id AND ct2.name ILIKE ${searchParam})
+        OR EXISTS (SELECT 1 FROM properties p2 WHERE p2.id = t.property_id AND p2.name ILIKE ${searchParam})
+        OR EXISTS (
+          SELECT 1 FROM jobs j2
+          WHERE j2.id = t.job_id
+            AND (COALESCE(j2.title, '') ILIKE ${searchParam} OR COALESCE(j2.name, '') ILIKE ${searchParam})
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM transaction_accounts ta3
+          JOIN accounts a3 ON a3.id = ta3.account_id
+          WHERE ta3.transaction_id = t.id
+            AND a3.company_id = t.company_id
+            AND a3.name ILIKE ${searchParam}
+        )
+      )`);
+    }
   }
 
 
@@ -165,15 +187,28 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
     return { error: true };
   }
 
+  const sortFields = {
+    date: 't.date',
+    amount: 'ABS(t.amount_total)',
+    description: "COALESCE(t.description, '')",
+    type: 't.type',
+  };
+  const sortBy = filters.sort_by || 'date';
+  const sortDirection = String(filters.sort_dir || 'desc').toLowerCase();
+  if (!Object.hasOwn(sortFields, sortBy) || !['asc', 'desc'].includes(sortDirection)) {
+    return { error: true };
+  }
+
   return {
     whereSql: where.join(' AND '),
     params,
     limit,
     offset,
+    orderBySql: `${sortFields[sortBy]} ${sortDirection.toUpperCase()}, t.id ${sortDirection.toUpperCase()}`,
   };
 };
 
-const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIndex, offsetParamIndex }) => `
+const getTransactionsQuery = ({ whereSql, orderBySql, includePagination = true, limitParamIndex, offsetParamIndex }) => `
   SELECT
     t.*, 
     c.name AS category_name,
@@ -218,7 +253,7 @@ const getTransactionsQuery = ({ whereSql, includePagination = true, limitParamIn
   LEFT JOIN accounts a ON ta.account_id = a.id
   WHERE ${whereSql}
   GROUP BY t.id, c.name, ct.name, p.name, j.title, j.name, rt.title
-  ORDER BY t.date DESC, t.id DESC
+  ORDER BY ${orderBySql}
   ${includePagination ? `LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}` : ''}
 `;
 
@@ -294,6 +329,7 @@ router.get('/export', async (req, res) => {
     const result = await query(
       getTransactionsQuery({
         whereSql: filters.whereSql,
+        orderBySql: filters.orderBySql,
         includePagination: true,
         limitParamIndex: params.length - 1,
         offsetParamIndex: params.length,
@@ -302,7 +338,7 @@ router.get('/export', async (req, res) => {
     );
 
     const header =
-      'date;type;amount_total;account_names;category;contact;commessa;description';
+      'date;type;amount_total;account_names;category;contact;property;commessa;description';
     const rows = result.rows.map((movement) => {
       const accountNames = (movement.accounts || [])
         .map((account) => account?.account_name)
@@ -316,6 +352,7 @@ router.get('/export', async (req, res) => {
         csvEscape(accountNames),
         csvEscape(movement.category_name),
         csvEscape(movement.contact_name),
+        csvEscape(movement.property_name),
         csvEscape(movement.job_name),
         csvEscape(movement.description),
       ].join(';');
@@ -343,18 +380,23 @@ router.get('/', async (req, res) => {
     // Fetch one sentinel row internally: the public limit remains 200 while
     // clients can determine whether another page exists.
     const params = [...filters.params, filters.limit + 1, filters.offset];
-    const result = await query(
-      getTransactionsQuery({
-        whereSql: filters.whereSql,
-        includePagination: true,
-        limitParamIndex: params.length - 1,
-        offsetParamIndex: params.length,
-      }),
-      params
-    );
+    const [result, countResult] = await Promise.all([
+      query(
+        getTransactionsQuery({
+          whereSql: filters.whereSql,
+          orderBySql: filters.orderBySql,
+          includePagination: true,
+          limitParamIndex: params.length - 1,
+          offsetParamIndex: params.length,
+        }),
+        params
+      ),
+      query(`SELECT COUNT(*)::int AS total FROM transactions t WHERE ${filters.whereSql}`, filters.params),
+    ]);
     const hasMore = result.rows.length > filters.limit;
     res.setHeader('X-Has-More', String(hasMore));
-    res.setHeader('Access-Control-Expose-Headers', 'X-Has-More');
+    res.setHeader('X-Total-Count', String(countResult.rows[0]?.total || 0));
+    res.setHeader('Access-Control-Expose-Headers', 'X-Has-More, X-Total-Count');
     return res.json(result.rows.slice(0, filters.limit));
   } catch (error) {
     console.error(error);
