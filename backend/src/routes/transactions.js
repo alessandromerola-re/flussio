@@ -214,6 +214,7 @@ const getTransactionsQuery = ({ whereSql, orderBySql, includePagination = true, 
     c.name AS category_name,
     ct.name AS contact_name,
     p.name AS property_name,
+    p.external_id AS property_external_id,
     COALESCE(j.title, j.name) AS job_name,
     rt.title AS recurring_template_title,
     (
@@ -252,7 +253,7 @@ const getTransactionsQuery = ({ whereSql, orderBySql, includePagination = true, 
   LEFT JOIN transaction_accounts ta ON t.id = ta.transaction_id
   LEFT JOIN accounts a ON ta.account_id = a.id
   WHERE ${whereSql}
-  GROUP BY t.id, c.name, ct.name, p.name, j.title, j.name, rt.title
+  GROUP BY t.id, c.name, ct.name, p.name, p.external_id, j.title, j.name, rt.title
   ORDER BY ${orderBySql}
   ${includePagination ? `LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}` : ''}
 `;
@@ -338,7 +339,7 @@ router.get('/export', async (req, res) => {
     );
 
     const header =
-      'date;type;amount_total;account_names;category;contact;property;commessa;description';
+      'date;type;amount_total;account_names;category;contact;property_code;property;commessa;description';
     const rows = result.rows.map((movement) => {
       const accountNames = (movement.accounts || [])
         .map((account) => account?.account_name)
@@ -352,6 +353,7 @@ router.get('/export', async (req, res) => {
         csvEscape(accountNames),
         csvEscape(movement.category_name),
         csvEscape(movement.contact_name),
+        csvEscape(movement.property_external_id),
         csvEscape(movement.property_name),
         csvEscape(movement.job_name),
         csvEscape(movement.description),

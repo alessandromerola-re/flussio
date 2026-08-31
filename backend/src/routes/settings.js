@@ -560,6 +560,9 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     accountNames: headers.indexOf('account_names'),
     category: headers.indexOf('category'),
     contact: headers.indexOf('contact'),
+    propertyCode: headers.indexOf('property_code') >= 0
+      ? headers.indexOf('property_code')
+      : headers.indexOf('property_external_id'),
     property: headers.indexOf('property') >= 0 ? headers.indexOf('property') : headers.indexOf('immobile'),
     job: headers.indexOf('commessa') >= 0 ? headers.indexOf('commessa') : headers.indexOf('job'),
     description: headers.indexOf('description'),
@@ -573,14 +576,21 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     query('SELECT id, name FROM accounts WHERE company_id = $1', [req.companyId]),
     query('SELECT id, name FROM categories WHERE company_id = $1', [req.companyId]),
     query('SELECT id, name FROM contacts WHERE company_id = $1', [req.companyId]),
-    query('SELECT id, name FROM properties WHERE company_id = $1', [req.companyId]),
+    query('SELECT id, external_id, name FROM properties WHERE company_id = $1', [req.companyId]),
     query('SELECT id, name, title FROM jobs WHERE company_id = $1', [req.companyId]),
   ]);
 
   const accountByName = new Map(accountsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
   const categoryByName = new Map(categoriesResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
   const contactByName = new Map(contactsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
-  const propertyByName = new Map(propertiesResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
+  const propertyByCode = new Map(propertiesResult.rows.map((r) => [String(r.external_id || '').trim(), r.id]));
+  const propertyIdsByName = new Map();
+  for (const property of propertiesResult.rows) {
+    const normalizedName = String(property.name || '').trim().toLowerCase();
+    const ids = propertyIdsByName.get(normalizedName) || [];
+    ids.push(property.id);
+    propertyIdsByName.set(normalizedName, ids);
+  }
   const jobByName = new Map(jobsResult.rows.map((r) => [String((r.name || r.title || '')).trim().toLowerCase(), r.id]));
 
   let imported = 0;
@@ -649,7 +659,31 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
 
       const categoryId = idx.category >= 0 ? (categoryByName.get(String(row[idx.category] || '').trim().toLowerCase()) || null) : null;
       const contactId = idx.contact >= 0 ? (contactByName.get(String(row[idx.contact] || '').trim().toLowerCase()) || null) : null;
-      const propertyId = idx.property >= 0 ? (propertyByName.get(String(row[idx.property] || '').trim().toLowerCase()) || null) : null;
+      const propertyCode = idx.propertyCode >= 0 ? String(row[idx.propertyCode] || '').trim() : '';
+      const propertyName = idx.property >= 0 ? String(row[idx.property] || '').trim() : '';
+      let propertyId = null;
+
+      if (propertyCode) {
+        propertyId = propertyByCode.get(propertyCode) || null;
+        if (!propertyId) {
+          skipped += 1;
+          errors.push({ line: lineIndex + 1, message: `Codice immobile non trovato: ${propertyCode}` });
+          continue;
+        }
+      } else if (propertyName) {
+        const matchingPropertyIds = propertyIdsByName.get(propertyName.toLowerCase()) || [];
+        if (matchingPropertyIds.length !== 1) {
+          skipped += 1;
+          errors.push({
+            line: lineIndex + 1,
+            message: matchingPropertyIds.length > 1
+              ? `Nome immobile ambiguo: ${propertyName}. Usa property_code.`
+              : `Immobile non trovato: ${propertyName}`,
+          });
+          continue;
+        }
+        [propertyId] = matchingPropertyIds;
+      }
       const jobId = idx.job >= 0 ? (jobByName.get(String(row[idx.job] || '').trim().toLowerCase()) || null) : null;
       const description = idx.description >= 0 ? String(row[idx.description] || '').trim() : '';
       const signedAmount = type === 'expense' ? -amountAbs : amountAbs;

@@ -161,6 +161,8 @@
   "pages.movements.previewNotAvailable": "Anteprima non disponibile per questo tipo di file.",
   "pages.movements.previewLoadError": "Impossibile caricare l’anteprima.",
   "forms.jobCode": "Codice commessa",
+  "forms.propertyCode": "Codice immobile",
+  "forms.propertyCodeAuto": "Il codice univoco dell’immobile verrà assegnato automaticamente.",
   "forms.jobTitle": "Titolo commessa",
   "forms.jobStatus": "Stato",
   "forms.jobStartDate": "Data inizio",

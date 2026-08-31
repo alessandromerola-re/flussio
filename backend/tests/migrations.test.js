@@ -40,7 +40,8 @@ test('fresh installation executes migrations not declared as folded', async () =
        '006_20260220__saved_reports.sql',
        '010_20260825__repair_saved_reports.sql',
        '011_20260825__recurring_template_account.sql',
-       '012_20260825__auth_sessions.sql'
+       '012_20260825__auth_sessions.sql',
+       '013_20260831__property_codes.sql'
      )
      ORDER BY filename`
   );
@@ -51,7 +52,16 @@ test('fresh installation executes migrations not declared as folded', async () =
     { filename: '010_20260825__repair_saved_reports.sql', note: 'executed' },
     { filename: '011_20260825__recurring_template_account.sql', note: 'executed' },
     { filename: '012_20260825__auth_sessions.sql', note: 'executed' },
+    { filename: '013_20260831__property_codes.sql', note: 'executed' },
   ]);
+
+  await query("INSERT INTO companies (name) VALUES ('Property code test')");
+  const propertyResult = await query(
+    `INSERT INTO properties (company_id, name)
+     VALUES ((SELECT id FROM companies WHERE name = 'Property code test'), 'Immobile test')
+     RETURNING external_id`
+  );
+  assert.match(propertyResult.rows[0].external_id, /^IMM-\d{6}$/);
 
   const foldedResult = await query(
     `SELECT note

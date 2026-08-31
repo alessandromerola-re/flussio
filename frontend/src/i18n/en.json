@@ -161,6 +161,8 @@
   "pages.movements.previewNotAvailable": "Preview is not available for this file type.",
   "pages.movements.previewLoadError": "Unable to load preview.",
   "forms.jobCode": "Job code",
+  "forms.propertyCode": "Property code",
+  "forms.propertyCodeAuto": "The unique property code will be assigned automatically.",
   "forms.jobTitle": "Job title",
   "forms.jobStatus": "Status",
   "forms.jobStartDate": "Start date",

@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
   try {
     const result = await query(
       `
-      SELECT p.id, p.name, p.notes, p.contact_id, p.is_active, c.name AS contact_name
+      SELECT p.id, p.external_id, p.name, p.notes, p.contact_id, p.is_active, c.name AS contact_name
       FROM properties p
       LEFT JOIN contacts c ON p.contact_id = c.id
       WHERE p.company_id = $1
