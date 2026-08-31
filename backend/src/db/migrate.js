@@ -54,7 +54,11 @@ const LEGACY_EXPECTED_COLUMNS = [
   ['accounts', 'opening_balance'],
 ];
 
-const EXPECTED_COLUMNS = [...LEGACY_EXPECTED_COLUMNS, ['recurring_templates', 'account_id']];
+const EXPECTED_COLUMNS = [
+  ...LEGACY_EXPECTED_COLUMNS,
+  ['recurring_templates', 'account_id'],
+  ['properties', 'external_id'],
+];
 
 const advisoryLockKey = 74201931;
 

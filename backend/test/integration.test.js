@@ -100,6 +100,8 @@ test('properties CRUD including PUT response', async () => {
     body: JSON.stringify({ name: 'Nuovo immobile', notes: 'test', contact_id: 1, is_active: true }),
   });
   assert.equal(createResponse.status, 201);
+  assert.match(createResponse.body.external_id, /^IMM-\d{6}$/);
+  const propertyCode = createResponse.body.external_id;
 
   const updateResponse = await jsonRequest(`${baseUrl}/api/properties/${createResponse.body.id}`, {
     method: 'PUT',
@@ -108,6 +110,7 @@ test('properties CRUD including PUT response', async () => {
   });
   assert.equal(updateResponse.status, 200);
   assert.equal(updateResponse.body.name, 'Immobile aggiornato');
+  assert.equal(updateResponse.body.external_id, propertyCode);
 
   const deleteResponse = await jsonRequest(`${baseUrl}/api/properties/${createResponse.body.id}`, {
     method: 'DELETE',
@@ -197,13 +200,22 @@ test('movement export and import preserve the property association', async () =>
   const token = await login();
   const headers = { Authorization: `Bearer ${token}` };
 
+  const duplicateProperty = await jsonRequest(`${baseUrl}/api/properties`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name: 'Immobile Centro', notes: 'omonimo', contact_id: null, is_active: true }),
+  });
+  assert.equal(duplicateProperty.status, 201);
+  assert.notEqual(duplicateProperty.body.external_id, 'IMM-000001');
+
   const exportResponse = await fetch(
     `${baseUrl}/api/transactions/export?q=${encodeURIComponent('Fattura vendita')}`,
     { headers }
   );
   assert.equal(exportResponse.status, 200);
   const csv = await exportResponse.text();
-  assert.match(csv, /;property;/);
+  assert.match(csv, /;property_code;property;/);
+  assert.match(csv, /IMM-000001;Immobile Centro/);
   assert.match(csv, /Immobile Centro/);
 
   const formData = new FormData();
@@ -225,4 +237,26 @@ test('movement export and import preserve the property association', async () =>
   assert.equal(importedMovements.status, 200);
   assert.equal(importedMovements.headers.get('x-total-count'), '2');
   assert.ok(importedMovements.body.every((movement) => movement.property_name === 'Immobile Centro'));
+  assert.ok(importedMovements.body.every((movement) => movement.property_id === 1));
+
+  const legacyCsv = csv
+    .split(/\r?\n/)
+    .map((line) => {
+      const columns = line.split(';');
+      columns.splice(6, 1);
+      return columns.join(';');
+    })
+    .join('\n');
+  const legacyFormData = new FormData();
+  legacyFormData.append('file', new Blob([legacyCsv], { type: 'text/csv' }), 'movements-legacy.csv');
+  const legacyImportResponse = await fetch(`${baseUrl}/api/settings/movements/import-csv`, {
+    method: 'POST',
+    headers,
+    body: legacyFormData,
+  });
+  assert.equal(legacyImportResponse.status, 201);
+  const legacyImportResult = await legacyImportResponse.json();
+  assert.equal(legacyImportResult.imported, 0);
+  assert.equal(legacyImportResult.skipped, 1);
+  assert.match(legacyImportResult.errors[0].message, /Nome immobile ambiguo/);
 });

@@ -68,12 +68,38 @@ CREATE TABLE properties (
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  external_id TEXT,
+  external_id TEXT NOT NULL,
   notes TEXT,
   contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE OR REPLACE FUNCTION assign_property_external_id()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  generated_code TEXT;
+BEGIN
+  IF NEW.external_id IS NULL OR BTRIM(NEW.external_id) = '' THEN
+    generated_code := 'IMM-' || LPAD(NEW.id::text, GREATEST(6, LENGTH(NEW.id::text)), '0');
+    IF EXISTS (
+      SELECT 1 FROM properties
+      WHERE company_id = NEW.company_id AND external_id = generated_code
+    ) THEN
+      generated_code := 'IMM-AUTO-' || NEW.company_id::text || '-' || NEW.id::text;
+    END IF;
+    NEW.external_id := generated_code;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_properties_external_id
+BEFORE INSERT ON properties
+FOR EACH ROW
+EXECUTE FUNCTION assign_property_external_id();
 
 CREATE TABLE jobs (
   id SERIAL PRIMARY KEY,

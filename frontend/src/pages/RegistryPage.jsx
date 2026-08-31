@@ -11,7 +11,7 @@ import { formatCurrency, formatCurrencyFromCents, parseEuroInputToCents } from '
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = { name: '', direction: 'income', parent_id: '', color: '#2ecc71', is_active: true };
 const initialContact = { name: '', email: '', phone: '', default_category_id: '', is_active: true };
-const initialProperty = { name: '', notes: '', contact_id: '', is_active: true };
+const initialProperty = { external_id: '', name: '', notes: '', contact_id: '', is_active: true };
 const initialJob = {
   code: '',
   title: '',
@@ -529,6 +529,7 @@ const RegistryPage = () => {
               <li key={property.id} className="list-item-row">
                 <div>
                   <strong>{property.name}</strong>
+                  <div className="muted">{t('forms.propertyCode')}: {property.external_id}</div>
                   <div className="muted">{property.notes || t('common.none')}</div>
                 </div>
                 <div className="row-actions">
@@ -538,6 +539,7 @@ const RegistryPage = () => {
                       className="ghost"
                       onClick={() => {
                         setPropertyForm({
+                          external_id: property.external_id || '',
                           name: property.name,
                           notes: property.notes || '',
                           contact_id: property.contact_id ? String(property.contact_id) : '',
@@ -631,6 +633,11 @@ const RegistryPage = () => {
           {createModalTab === 'properties' && (
             <form onSubmit={handlePropertySubmit}>
               <h2>{t('pages.registry.propertiesBeta')}</h2>
+              {editingId ? (
+                <label>{t('forms.propertyCode')}<input type="text" value={propertyForm.external_id} readOnly /></label>
+              ) : (
+                <div className="muted" style={{ marginBottom: '0.75rem' }}>{t('forms.propertyCodeAuto')}</div>
+              )}
               <label>{t('forms.name')}<input type="text" value={propertyForm.name} onChange={(event) => setPropertyForm({ ...propertyForm, name: event.target.value })} required /></label>
               <label>{t('forms.referenceContact')}<select value={propertyForm.contact_id} onChange={(event) => setPropertyForm({ ...propertyForm, contact_id: event.target.value })}><option value="">{t('common.none')}</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label>
               <label>{t('forms.notes')}<textarea value={propertyForm.notes} onChange={(event) => setPropertyForm({ ...propertyForm, notes: event.target.value })} /></label>
