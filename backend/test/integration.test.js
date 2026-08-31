@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import app from '../src/app.js';
 
@@ -10,6 +12,7 @@ const rootDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '.
 
 let server;
 let baseUrl;
+let testAdminPassword;
 
 const getClient = async () => {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -26,6 +29,11 @@ const resetDb = async () => {
     await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
     await client.query(schemaSql);
     await client.query(seedSql);
+    const passwordHash = await bcrypt.hash(testAdminPassword, 10);
+    await client.query(
+      'UPDATE users SET password_hash = $1 WHERE email = $2',
+      [passwordHash, 'dev@flussio.local']
+    );
   } finally {
     await client.end();
   }
@@ -50,14 +58,15 @@ const jsonRequest = async (url, options = {}) => {
 const login = async () => {
   const response = await jsonRequest(`${baseUrl}/api/auth/login`, {
     method: 'POST',
-    body: JSON.stringify({ email: 'dev@flussio.local', password: 'flussio123' }),
+    body: JSON.stringify({ email: 'dev@flussio.local', password: testAdminPassword }),
   });
   assert.equal(response.status, 200);
   return response.body.token;
 };
 
 test.before(async () => {
-  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_secret';
+  testAdminPassword = crypto.randomBytes(32).toString('base64url');
+  process.env.JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
   await resetDb();
 
   server = app.listen(0);
@@ -75,7 +84,7 @@ test.after(async () => {
 test('login ok', async () => {
   const response = await jsonRequest(`${baseUrl}/api/auth/login`, {
     method: 'POST',
-    body: JSON.stringify({ email: 'dev@flussio.local', password: 'flussio123' }),
+    body: JSON.stringify({ email: 'dev@flussio.local', password: testAdminPassword }),
   });
 
   assert.equal(response.status, 200);
@@ -182,4 +191,38 @@ test('transaction list supports related search, filters, sorting and total count
 
   const invalidSort = await jsonRequest(`${baseUrl}/api/transactions?sort_by=created_at`, { headers });
   assert.equal(invalidSort.status, 400);
+});
+
+test('movement export and import preserve the property association', async () => {
+  const token = await login();
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const exportResponse = await fetch(
+    `${baseUrl}/api/transactions/export?q=${encodeURIComponent('Fattura vendita')}`,
+    { headers }
+  );
+  assert.equal(exportResponse.status, 200);
+  const csv = await exportResponse.text();
+  assert.match(csv, /;property;/);
+  assert.match(csv, /Immobile Centro/);
+
+  const formData = new FormData();
+  formData.append('file', new Blob([csv], { type: 'text/csv' }), 'movements-roundtrip.csv');
+  const importResponse = await fetch(`${baseUrl}/api/settings/movements/import-csv`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  assert.equal(importResponse.status, 201);
+  const importResult = await importResponse.json();
+  assert.equal(importResult.imported, 1);
+  assert.equal(importResult.skipped, 0);
+
+  const importedMovements = await jsonRequest(
+    `${baseUrl}/api/transactions?q=${encodeURIComponent('Fattura vendita')}&property_id=1`,
+    { headers }
+  );
+  assert.equal(importedMovements.status, 200);
+  assert.equal(importedMovements.headers.get('x-total-count'), '2');
+  assert.ok(importedMovements.body.every((movement) => movement.property_name === 'Immobile Centro'));
 });
