@@ -41,7 +41,9 @@ test('fresh installation executes migrations not declared as folded', async () =
        '010_20260825__repair_saved_reports.sql',
        '011_20260825__recurring_template_account.sql',
        '012_20260825__auth_sessions.sql',
-       '013_20260831__property_codes.sql'
+       '012_20260831__prepare_property_codes.sql',
+       '013_20260831__property_codes.sql',
+       '014_20260831__collision_safe_property_codes.sql'
      )
      ORDER BY filename`
   );
@@ -52,7 +54,9 @@ test('fresh installation executes migrations not declared as folded', async () =
     { filename: '010_20260825__repair_saved_reports.sql', note: 'executed' },
     { filename: '011_20260825__recurring_template_account.sql', note: 'executed' },
     { filename: '012_20260825__auth_sessions.sql', note: 'executed' },
+    { filename: '012_20260831__prepare_property_codes.sql', note: 'executed' },
     { filename: '013_20260831__property_codes.sql', note: 'executed' },
+    { filename: '014_20260831__collision_safe_property_codes.sql', note: 'executed' },
   ]);
 
   await query("INSERT INTO companies (name) VALUES ('Property code test')");
@@ -88,4 +92,74 @@ test('repair migration restores saved_reports on an affected v1.2.0 schema', asy
      WHERE filename = '010_20260825__repair_saved_reports.sql'`
   );
   assert.equal(repairResult.rows[0].note, 'executed');
+});
+
+test('property code migrations survive occupied primary and fallback codes', async () => {
+  await resetSchema();
+  await runMigrations();
+
+  await query('DROP TRIGGER IF EXISTS trg_properties_external_id ON properties');
+  await query('DROP FUNCTION IF EXISTS assign_property_external_id()');
+  await query('ALTER TABLE properties ALTER COLUMN external_id DROP NOT NULL');
+  await query(
+    `DELETE FROM schema_migrations
+     WHERE filename IN (
+       '012_20260831__prepare_property_codes.sql',
+       '013_20260831__property_codes.sql',
+       '014_20260831__collision_safe_property_codes.sql'
+     )`
+  );
+
+  const companyResult = await query(
+    "INSERT INTO companies (name) VALUES ('Property collision test') RETURNING id"
+  );
+  const companyId = companyResult.rows[0].id;
+  const targetResult = await query(
+    `INSERT INTO properties (company_id, name, external_id)
+     VALUES ($1, 'Target senza codice', NULL)
+     RETURNING id`,
+    [companyId]
+  );
+  const targetId = targetResult.rows[0].id;
+  const targetBaseCode = `IMM-${String(targetId).padStart(6, '0')}`;
+
+  const blockerResult = await query(
+    `INSERT INTO properties (company_id, name, external_id)
+     VALUES
+       ($1, 'Blocco codice base', $2),
+       ($1, 'Blocco vecchio fallback', $3)
+     RETURNING id, external_id`,
+    [companyId, targetBaseCode, `IMM-AUTO-${companyId}-${targetId}`]
+  );
+  const baseBlockerId = blockerResult.rows.find((row) => row.external_id === targetBaseCode).id;
+  const fallbackBlockerId = blockerResult.rows.find(
+    (row) => row.external_id === `IMM-AUTO-${companyId}-${targetId}`
+  ).id;
+
+  await runMigrations();
+
+  const migratedTarget = await query(
+    'SELECT external_id FROM properties WHERE id = $1',
+    [targetId]
+  );
+  assert.equal(migratedTarget.rows[0].external_id, `${targetBaseCode}-1`);
+
+  const sequenceResult = await query('SELECT last_value FROM properties_id_seq');
+  const nextId = Number(sequenceResult.rows[0].last_value) + 1;
+  const nextBaseCode = `IMM-${String(nextId).padStart(6, '0')}`;
+  await query(
+    `UPDATE properties
+     SET external_id = CASE id WHEN $2 THEN $4 ELSE $5 END
+     WHERE company_id = $1 AND id IN ($2, $3)`,
+    [companyId, baseBlockerId, fallbackBlockerId, nextBaseCode, `${nextBaseCode}-1`]
+  );
+
+  const generatedResult = await query(
+    `INSERT INTO properties (company_id, name)
+     VALUES ($1, 'Nuovo immobile con collisioni')
+     RETURNING id, external_id`,
+    [companyId]
+  );
+  assert.equal(generatedResult.rows[0].id, nextId);
+  assert.equal(generatedResult.rows[0].external_id, `${nextBaseCode}-2`);
 });
