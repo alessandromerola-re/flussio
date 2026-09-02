@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api.js';
@@ -7,6 +7,7 @@ import { getErrorMessage } from '../utils/errorMessages.js';
 import Modal from '../components/Modal.jsx';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
 import { formatCurrency, formatCurrencyFromCents, parseEuroInputToCents } from '../utils/currency.js';
+import { buildCategoryRows, filterRegistryItems } from '../utils/registryView.js';
 
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = { name: '', direction: 'income', parent_id: '', color: '#2ecc71', is_active: true };
@@ -50,43 +51,61 @@ const RegistryPage = () => {
   const [importPreview, setImportPreview] = useState([]);
   const [importSummary, setImportSummary] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
+  const [loadedTabs, setLoadedTabs] = useState({});
+  const [tabErrors, setTabErrors] = useState({});
+  const [viewByTab, setViewByTab] = useState({});
+  const loadedTabsRef = useRef({});
+  const loadingTabsRef = useRef({});
+  const translationRef = useRef(t);
+  translationRef.current = t;
 
-  const loadData = async () => {
+  const loadTabData = useCallback(async (targetTab, { force = false } = {}) => {
+    if (loadingTabsRef.current[targetTab] || (!force && loadedTabsRef.current[targetTab])) return;
+    loadingTabsRef.current[targetTab] = true;
+    setTabErrors((current) => ({ ...current, [targetTab]: '' }));
     setLoadError('');
-    const results = await Promise.allSettled([
-      api.getAccounts(),
-      api.getCategories(),
-      api.getContacts(),
-      api.getProperties(),
-      api.getJobs({ active: 0, include_closed: 1 }),
-    ]);
-
-    const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
-
-    if (accountsResult.status === 'fulfilled') setAccounts(accountsResult.value);
-    if (categoriesResult.status === 'fulfilled') setCategories(categoriesResult.value);
-    if (contactsResult.status === 'fulfilled') setContacts(contactsResult.value);
-    if (propertiesResult.status === 'fulfilled') setProperties(propertiesResult.value);
-    if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value);
-
-    if (results.some((result) => result.status === 'rejected')) setLoadError(getErrorMessage(t, null));
-  };
-
-  useEffect(() => {
-    loadData();
+    try {
+      const loaders = {
+        accounts: async () => setAccounts(await api.getAccounts()),
+        categories: async () => setCategories(await api.getCategories()),
+        contacts: async () => setContacts(await api.getContacts()),
+        properties: async () => setProperties(await api.getProperties()),
+        jobs: async () => setJobs(await api.getJobs({ active: 0, include_closed: 1 })),
+      };
+      await loaders[targetTab]();
+      loadedTabsRef.current[targetTab] = true;
+      setLoadedTabs((current) => ({ ...current, [targetTab]: true }));
+    } catch (error) {
+      setTabErrors((current) => ({ ...current, [targetTab]: getErrorMessage(translationRef.current, error) }));
+    } finally {
+      loadingTabsRef.current[targetTab] = false;
+    }
   }, []);
 
-  const groupedCategories = useMemo(() => {
-    const parents = categories.filter((cat) => !cat.parent_id);
-    const children = categories.filter((cat) => cat.parent_id);
-    return parents.map((parent) => ({
-      ...parent,
-      children: children.filter((child) => child.parent_id === parent.id),
-    }));
-  }, [categories]);
+  useEffect(() => {
+    loadTabData(tab);
+  }, [tab, loadTabData]);
+
+  const categoryRows = useMemo(() => buildCategoryRows(categories), [categories]);
 
   const categoryParentOptions = useMemo(() => {
     const byId = new Map(categories.map((cat) => [cat.id, cat]));
+    const blockedIds = new Set();
+    if (editingId) {
+      blockedIds.add(String(editingId));
+      categories.forEach((cat) => {
+        let cursor = cat;
+        const seen = new Set();
+        while (cursor?.parent_id && !seen.has(String(cursor.id))) {
+          seen.add(String(cursor.id));
+          if (String(cursor.parent_id) === String(editingId)) {
+            blockedIds.add(String(cat.id));
+            break;
+          }
+          cursor = byId.get(cursor.parent_id);
+        }
+      });
+    }
     const getDepth = (cat) => {
       let depth = 0;
       let cursor = cat;
@@ -98,10 +117,31 @@ const RegistryPage = () => {
       return depth;
     };
 
-    return categories
-      .filter((cat) => (editingId ? String(cat.id) !== String(editingId) : true))
-      .map((cat) => ({ ...cat, depth: getDepth(cat) }));
-  }, [categories, editingId]);
+    return categoryRows
+      .filter((cat) => !blockedIds.has(String(cat.id)))
+      .map((cat) => ({ ...cat, depth: Number.isFinite(cat.depth) ? cat.depth : getDepth(cat) }));
+  }, [categories, categoryRows, editingId]);
+
+  const currentView = viewByTab[tab] || { search: '', status: 'all', sort: 'name-asc' };
+  const updateCurrentView = (patch) => setViewByTab((current) => ({
+    ...current,
+    [tab]: { search: '', status: 'all', sort: 'name-asc', ...(current[tab] || {}), ...patch },
+  }));
+
+  const dataForTab = {
+    accounts,
+    categories: categoryRows,
+    contacts,
+    jobs,
+    properties,
+  };
+  const visibleItems = useMemo(() => filterRegistryItems({
+    items: dataForTab[tab] || [],
+    tab,
+    ...currentView,
+    categories,
+    contacts,
+  }), [tab, currentView.search, currentView.status, currentView.sort, accounts, categoryRows, categories, contacts, jobs, properties]);
 
   const resetForms = () => {
     setAccountForm(initialAccount);
@@ -113,16 +153,25 @@ const RegistryPage = () => {
     setJobFormError('');
   };
 
+  const ensureFormReferences = async (targetTab) => {
+    const tasks = [];
+    if (targetTab === 'contacts' && !loadedTabs.categories) tasks.push(loadTabData('categories'));
+    if ((targetTab === 'properties' || targetTab === 'jobs') && !loadedTabs.contacts) tasks.push(loadTabData('contacts'));
+    await Promise.all(tasks);
+  };
+
   const openCreateModal = (targetTab) => {
     resetForms();
     setTab(targetTab);
     setCreateModalTab(targetTab);
+    void ensureFormReferences(targetTab);
   };
 
   const openEditModal = (targetTab, id) => {
     setTab(targetTab);
     setEditingId(id);
     setCreateModalTab(targetTab);
+    void ensureFormReferences(targetTab);
   };
 
   const closeCreateModal = () => {
@@ -148,7 +197,7 @@ const RegistryPage = () => {
       await api.createAccount(accountForm);
     }
     closeCreateModal();
-    setAccounts(await api.getAccounts());
+    await loadTabData('accounts', { force: true });
   };
 
   const handleCategorySubmit = async (event) => {
@@ -160,7 +209,7 @@ const RegistryPage = () => {
       await api.createCategory(payload);
     }
     closeCreateModal();
-    setCategories(await api.getCategories());
+    await loadTabData('categories', { force: true });
   };
 
   const handleContactSubmit = async (event) => {
@@ -175,7 +224,7 @@ const RegistryPage = () => {
       await api.createContact(payload);
     }
     closeCreateModal();
-    setContacts(await api.getContacts());
+    await loadTabData('contacts', { force: true });
   };
 
   const handleJobSubmit = async (event) => {
@@ -200,7 +249,7 @@ const RegistryPage = () => {
         await api.createJob(payload);
       }
       closeCreateModal();
-      setJobs(await api.getJobs({ active: 0, include_closed: 1 }));
+      await loadTabData('jobs', { force: true });
     } catch (submitError) {
       setJobFormError(getErrorMessage(t, submitError));
     }
@@ -215,7 +264,7 @@ const RegistryPage = () => {
       await api.createProperty(payload);
     }
     closeCreateModal();
-    setProperties(await api.getProperties());
+    await loadTabData('properties', { force: true });
   };
 
 
@@ -273,7 +322,7 @@ const RegistryPage = () => {
       const entity = entityForTab[tab];
       const result = await api.importEntityCsv(entity, importFile);
       setImportSummary(`OK: ${result.ok} | creati: ${result.created} | aggiornati: ${result.updated} | errori: ${result.errors}`);
-      await loadData();
+      await loadTabData(tab, { force: true });
     } catch (error) {
       setImportSummary(getErrorMessage(t, error));
     }
@@ -289,14 +338,64 @@ const RegistryPage = () => {
       properties: () => api.deleteProperty(id),
     };
     await actions[type]();
-    await loadData();
+    await loadTabData(type, { force: true });
+  };
+
+  const tabLabels = {
+    accounts: t('pages.registry.accounts'),
+    categories: t('pages.registry.categories'),
+    contacts: t('pages.registry.contacts'),
+    jobs: t('pages.registry.jobs'),
+    properties: t('pages.registry.properties'),
+  };
+  const allItems = dataForTab[tab] || [];
+  const hasActiveFilters = Boolean(currentView.search || currentView.status !== 'all');
+  const statusOptions = tab === 'jobs'
+    ? [{ value: 'all', label: t('common.all') }, { value: 'open', label: t('labels.jobOpen') }, { value: 'closed', label: t('labels.jobClosed') }, { value: 'inactive', label: t('labels.inactive') }]
+    : [{ value: 'all', label: t('common.all') }, { value: 'active', label: t('labels.active') }, { value: 'inactive', label: t('labels.inactive') }];
+
+  const renderStatus = (item) => (
+    <span className={`status-badge ${item.is_active === false || (tab === 'jobs' && item.is_closed) ? 'inactive' : 'active'}`}>
+      {tab === 'jobs'
+        ? (item.is_active === false ? t('labels.inactive') : (item.is_closed ? t('labels.jobClosed') : t('labels.jobOpen')))
+        : (item.is_active === false ? t('labels.inactive') : t('labels.active'))}
+    </span>
+  );
+
+  const renderTabState = () => {
+    if (!loadedTabs[tab] && !tabErrors[tab]) {
+      return <div className="registry-loading" role="status">{t('pages.registry.loading', { entity: tabLabels[tab] })}</div>;
+    }
+    if (tabErrors[tab]) {
+      return (
+        <div className="registry-error-state" role="alert">
+          <strong>{t('pages.registry.loadError')}</strong>
+          <span>{tabErrors[tab]}</span>
+          <button type="button" className="ghost" onClick={() => loadTabData(tab, { force: true })}>{t('buttons.retry')}</button>
+        </div>
+      );
+    }
+    if (visibleItems.length === 0) {
+      return (
+        <div className="empty-state">
+          <h3>{hasActiveFilters ? t('pages.registry.noResults') : t('pages.registry.emptyTitle', { entity: tabLabels[tab] })}</h3>
+          <p className="muted">{hasActiveFilters ? t('pages.registry.emptyFiltered') : t('pages.registry.emptyDescription', { entity: tabLabels[tab].toLocaleLowerCase() })}</p>
+          {hasActiveFilters ? (
+            <button type="button" className="ghost" onClick={() => updateCurrentView({ search: '', status: 'all' })}>{t('buttons.reset')}</button>
+          ) : canPermission('write') ? (
+            <button type="button" onClick={() => openCreateModal(tab)}>{t('pages.registry.createFirst', { entity: tabLabels[tab] })}</button>
+          ) : null}
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
     <div className="page">
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="registry-header-actions">
           {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv} disabled={exportLoading}>
             {exportLoading ? 'Export in corso...' : 'Esporta CSV'}
           </button>}
@@ -311,21 +410,58 @@ const RegistryPage = () => {
 
       {loadError && <div className="error">{loadError}</div>}
 
-      <div className="tabs">
-        <button type="button" className={tab === 'accounts' ? 'active' : ''} onClick={() => setTab('accounts')}>{t('pages.registry.accounts')}</button>
-        <button type="button" className={tab === 'categories' ? 'active' : ''} onClick={() => setTab('categories')}>{t('pages.registry.categories')}</button>
-        <button type="button" className={tab === 'contacts' ? 'active' : ''} onClick={() => setTab('contacts')}>{t('pages.registry.contacts')}</button>
-        <button type="button" className={tab === 'jobs' ? 'active' : ''} onClick={() => setTab('jobs')}>{t('pages.registry.jobs')}</button>
-        <button type="button" className={tab === 'properties' ? 'active' : ''} onClick={() => setTab('properties')}>{t('pages.registry.propertiesBeta')}</button>
-      </div>
+      <nav className="tabs registry-tabs desktop-only" aria-label={t('pages.registry.selectRegistry')}>
+        {Object.entries(tabLabels).map(([tabId, label]) => (
+          <button key={tabId} type="button" aria-pressed={tab === tabId} className={tab === tabId ? 'active' : ''} onClick={() => setTab(tabId)}>{label}</button>
+        ))}
+      </nav>
 
-      {tab === 'accounts' && (
+      <label className="registry-mobile-selector mobile-only">
+        <span>{t('pages.registry.selectRegistry')}</span>
+        <select value={tab} onChange={(event) => setTab(event.target.value)}>
+          {Object.entries(tabLabels).map(([tabId, label]) => <option key={tabId} value={tabId}>{label}</option>)}
+        </select>
+      </label>
+
+      <section className="registry-toolbar card" aria-label={t('pages.registry.tools')}>
+        <label className="registry-search">
+          <span>{t('forms.search')}</span>
+          <input
+            type="search"
+            value={currentView.search}
+            onChange={(event) => updateCurrentView({ search: event.target.value })}
+            placeholder={t('pages.registry.searchPlaceholder', { entity: tabLabels[tab].toLocaleLowerCase() })}
+          />
+        </label>
+        <label>
+          <span>{t('pages.registry.status')}</span>
+          <select value={currentView.status} onChange={(event) => updateCurrentView({ status: event.target.value })}>
+            {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>{t('pages.registry.sort')}</span>
+          <select value={currentView.sort} onChange={(event) => updateCurrentView({ sort: event.target.value })}>
+            <option value="name-asc">{t('pages.registry.sortNameAsc')}</option>
+            <option value="name-desc">{t('pages.registry.sortNameDesc')}</option>
+            <option value="status">{t('pages.registry.sortStatus')}</option>
+          </select>
+        </label>
+        <div className="registry-result-count" aria-live="polite">
+          <strong>{visibleItems.length}</strong>
+          <span>{t('pages.registry.results', { count: visibleItems.length, total: allItems.length })}</span>
+        </div>
+      </section>
+
+      {renderTabState()}
+
+      {tab === 'accounts' && visibleItems.length > 0 && (
         <div className="card">
           <ul className="list">
-            {accounts.map((account) => (
+            {visibleItems.map((account) => (
               <li key={account.id} className="list-item-row">
                 <div>
-                  <strong>{account.name}</strong>
+                  <div className="registry-item-title"><strong>{account.name}</strong>{renderStatus(account)}</div>
                   <div className="muted">{t(`labels.${account.type}`)}</div>
                   <div className="muted">{t('forms.openingBalance')}: {formatCurrency(account.opening_balance)}</div>
                   <div className="muted">{t('forms.currentBalance')}: {formatCurrency(account.balance)}</div>
@@ -356,91 +492,56 @@ const RegistryPage = () => {
         </div>
       )}
 
-      {tab === 'categories' && (
+      {tab === 'categories' && visibleItems.length > 0 && (
         <div className="card">
           <ul className="list">
-            {groupedCategories.map((parent) => (
-              <li key={parent.id}>
-                <div className="list-item-row">
-                  <div>
-                    <div className="category-label">
-                      <span className="dot" style={{ background: parent.color || '#2ecc71' }} />
-                      <strong>{parent.name}</strong>
-                    </div>
-                    <div className="muted">{t(`pages.movements.${parent.direction}`)}</div>
+            {visibleItems.map((category) => (
+              <li key={category.id} className="list-item-row registry-category-row">
+                <div className="registry-category-content" data-depth={category.depth || 0} style={{ '--category-depth': Math.min(category.depth || 0, 8) }}>
+                  <div className="category-label">
+                    <span className="dot" style={{ background: category.color || '#2ecc71' }} />
+                    <strong>{category.name}</strong>
+                    {renderStatus(category)}
                   </div>
-                  <div className="row-actions">
-                    {canPermission('write') && (
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() => {
-                          setCategoryForm({
-                            name: parent.name,
-                            direction: parent.direction,
-                            parent_id: parent.parent_id ? String(parent.parent_id) : '',
-                            color: parent.color || '#2ecc71',
-                            is_active: parent.is_active,
-                          });
-                          openEditModal('categories', parent.id);
-                        }}
-                      >
-                        {t('buttons.edit')}
-                      </button>
-                    )}
-                    {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('categories', parent.id)}>{t('buttons.delete')}</button>}
-                  </div>
+                  <div className="muted">{category.depth > 0 ? category.path : t(`pages.movements.${category.direction}`)}</div>
                 </div>
-                {parent.children?.length > 0 && (
-                  <ul className="sub-list">
-                    {parent.children.map((child) => (
-                      <li key={child.id} className="list-item-row">
-                        <div>
-                          <div className="category-label indent">
-                            <span className="dot" style={{ background: child.color || '#2ecc71' }} />
-                            <span>{child.name}</span>
-                          </div>
-                        </div>
-                        <div className="row-actions">
-                          {canPermission('write') && (
-                            <button
-                              type="button"
-                              className="ghost"
-                              onClick={() => {
-                                setCategoryForm({
-                                  name: child.name,
-                                  direction: child.direction,
-                                  parent_id: child.parent_id ? String(child.parent_id) : '',
-                                  color: child.color || '#2ecc71',
-                                  is_active: child.is_active,
-                                });
-                                openEditModal('categories', child.id);
-                              }}
-                            >
-                              {t('buttons.edit')}
-                            </button>
-                          )}
-                          {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('categories', child.id)}>{t('buttons.delete')}</button>}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="row-actions">
+                  {canPermission('write') && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setCategoryForm({
+                          name: category.name,
+                          direction: category.direction,
+                          parent_id: category.parent_id ? String(category.parent_id) : '',
+                          color: category.color || '#2ecc71',
+                          is_active: category.is_active,
+                        });
+                        openEditModal('categories', category.id);
+                      }}
+                    >
+                      {t('buttons.edit')}
+                    </button>
+                  )}
+                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('categories', category.id)}>{t('buttons.delete')}</button>}
+                </div>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {tab === 'contacts' && (
+      {tab === 'contacts' && visibleItems.length > 0 && (
         <div className="card">
           <ul className="list">
-            {contacts.map((contact) => (
+            {visibleItems.map((contact) => (
               <li key={contact.id} className="list-item-row">
                 <div>
-                  <strong>{contact.name}</strong>
+                  <div className="registry-item-title"><strong>{contact.name}</strong>{renderStatus(contact)}</div>
                   <div className="muted">{contact.email || t('common.none')}</div>
                   <div className="muted">{contact.phone || t('common.none')}</div>
+                  {contact.default_category_name && <div className="muted">{t('forms.defaultCategory')}: {contact.default_category_name}</div>}
                 </div>
                 <div className="row-actions">
                   {canPermission('write') && (
@@ -469,13 +570,13 @@ const RegistryPage = () => {
         </div>
       )}
 
-      {tab === 'jobs' && (
+      {tab === 'jobs' && visibleItems.length > 0 && (
         <div className="card">
           <ul className="list">
-            {jobs.map((job) => (
+            {visibleItems.map((job) => (
               <li key={job.id} className="list-item-row">
                 <div>
-                  <strong>{job.title || job.name}</strong>
+                  <div className="registry-item-title"><strong>{job.title || job.name}</strong>{renderStatus(job)}</div>
                   <div className="muted">{job.code || '—'}</div>
                   <div className="muted">{job.is_closed ? t('labels.jobClosed') : t('labels.jobOpen')}</div>
                   <div className="muted">
@@ -522,14 +623,15 @@ const RegistryPage = () => {
         </div>
       )}
 
-      {tab === 'properties' && (
+      {tab === 'properties' && visibleItems.length > 0 && (
         <div className="card">
           <ul className="list">
-            {properties.map((property) => (
+            {visibleItems.map((property) => (
               <li key={property.id} className="list-item-row">
                 <div>
-                  <strong>{property.name}</strong>
+                  <div className="registry-item-title"><strong>{property.name}</strong>{renderStatus(property)}</div>
                   <div className="muted">{t('forms.propertyCode')}: {property.external_id}</div>
+                  {property.contact_name && <div className="muted">{t('forms.referenceContact')}: {property.contact_name}</div>}
                   <div className="muted">{property.notes || t('common.none')}</div>
                 </div>
                 <div className="row-actions">
@@ -587,6 +689,7 @@ const RegistryPage = () => {
               <label>{t('forms.name')}<input type="text" value={accountForm.name} onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} required /></label>
               <label>{t('forms.type')}<select value={accountForm.type} onChange={(event) => setAccountForm({ ...accountForm, type: event.target.value })}><option value="cash">{t('labels.cash')}</option><option value="bank">{t('labels.bank')}</option><option value="card">{t('labels.card')}</option></select></label>
               <label>{t('forms.openingBalance')}<input type="number" step="0.01" value={accountForm.opening_balance} onChange={(event) => setAccountForm({ ...accountForm, opening_balance: event.target.value })} /></label>
+              <label>{t('pages.registry.status')}<select value={accountForm.is_active ? 'active' : 'inactive'} onChange={(event) => setAccountForm({ ...accountForm, is_active: event.target.value === 'active' })}><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option></select></label>
               <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
             </form>
           )}
@@ -598,6 +701,7 @@ const RegistryPage = () => {
               <label>{t('forms.direction')}<select value={categoryForm.direction} onChange={(event) => setCategoryForm({ ...categoryForm, direction: event.target.value, parent_id: '' })}><option value="income">{t('pages.movements.income')}</option><option value="expense">{t('pages.movements.expense')}</option></select></label>
               <label>{t('forms.parentCategory')}<select value={categoryForm.parent_id} onChange={(event) => handleCategoryParentChange(event.target.value)}><option value="">{t('common.none')}</option>{categoryParentOptions.map((cat) => <option key={cat.id} value={cat.id}>{`${'— '.repeat(cat.depth)}${cat.name} (${t(`pages.movements.${cat.direction}`)})`}</option>)}</select></label>
               <label>{t('forms.color')}<div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><input type="color" value={categoryForm.color || '#2ecc71'} onChange={(event) => setCategoryForm({ ...categoryForm, color: event.target.value })} /><span style={{ width: 24, height: 24, borderRadius: 4, border: '1px solid #d1d5db', background: categoryForm.color || '#2ecc71' }} /></div></label>
+              <label>{t('pages.registry.status')}<select value={categoryForm.is_active ? 'active' : 'inactive'} onChange={(event) => setCategoryForm({ ...categoryForm, is_active: event.target.value === 'active' })}><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option></select></label>
               <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
             </form>
           )}
@@ -608,7 +712,8 @@ const RegistryPage = () => {
               <label>{t('forms.name')}<input type="text" value={contactForm.name} onChange={(event) => setContactForm({ ...contactForm, name: event.target.value })} required /></label>
               <label>{t('forms.email')}<input type="email" value={contactForm.email} onChange={(event) => setContactForm({ ...contactForm, email: event.target.value })} /></label>
               <label>{t('forms.phone')}<input type="text" value={contactForm.phone} onChange={(event) => setContactForm({ ...contactForm, phone: event.target.value })} /></label>
-              <label>{t('forms.defaultCategory')}<select value={contactForm.default_category_id} onChange={(event) => setContactForm({ ...contactForm, default_category_id: event.target.value })}><option value="">{t('common.none')}</option>{categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name} ({t(`pages.movements.${cat.direction}`)})</option>)}</select></label>
+              <label>{t('forms.defaultCategory')}<select value={contactForm.default_category_id} onChange={(event) => setContactForm({ ...contactForm, default_category_id: event.target.value })}><option value="">{t('common.none')}</option>{categoryRows.map((cat) => <option key={cat.id} value={cat.id}>{`${'— '.repeat(cat.depth)}${cat.name} (${t(`pages.movements.${cat.direction}`)})`}</option>)}</select></label>
+              <label>{t('pages.registry.status')}<select value={contactForm.is_active ? 'active' : 'inactive'} onChange={(event) => setContactForm({ ...contactForm, is_active: event.target.value === 'active' })}><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option></select></label>
               <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
             </form>
           )}
@@ -632,7 +737,7 @@ const RegistryPage = () => {
 
           {createModalTab === 'properties' && (
             <form onSubmit={handlePropertySubmit}>
-              <h2>{t('pages.registry.propertiesBeta')}</h2>
+              <h2>{t('pages.registry.properties')}</h2>
               {editingId ? (
                 <label>{t('forms.propertyCode')}<input type="text" value={propertyForm.external_id} readOnly /></label>
               ) : (
@@ -641,6 +746,7 @@ const RegistryPage = () => {
               <label>{t('forms.name')}<input type="text" value={propertyForm.name} onChange={(event) => setPropertyForm({ ...propertyForm, name: event.target.value })} required /></label>
               <label>{t('forms.referenceContact')}<select value={propertyForm.contact_id} onChange={(event) => setPropertyForm({ ...propertyForm, contact_id: event.target.value })}><option value="">{t('common.none')}</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label>
               <label>{t('forms.notes')}<textarea value={propertyForm.notes} onChange={(event) => setPropertyForm({ ...propertyForm, notes: event.target.value })} /></label>
+              <label>{t('pages.registry.status')}<select value={propertyForm.is_active ? 'active' : 'inactive'} onChange={(event) => setPropertyForm({ ...propertyForm, is_active: event.target.value === 'active' })}><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option></select></label>
               <div className="modal-actions"><button type="button" className="ghost" onClick={closeCreateModal}>{t('buttons.cancel')}</button><button type="submit">{t('buttons.save')}</button></div>
             </form>
           )}
