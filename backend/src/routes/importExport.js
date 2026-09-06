@@ -101,11 +101,11 @@ const exportEntity = async (entity, companyId) => {
     };
   }
   if (entity === 'properties') {
-    const r = await query(`SELECT p.external_id,p.name,p.notes,p.is_active,c.external_id AS contact_external_id,c.name AS contact_name
+    const r = await query(`SELECT p.external_id,p.name,p.address,p.notes,p.is_active,c.external_id AS contact_external_id,c.name AS contact_name
       FROM properties p LEFT JOIN contacts c ON c.id=p.contact_id WHERE p.company_id=$1 ORDER BY p.id`, [companyId]);
     return {
-      headers: ['external_id', 'name', 'notes', 'is_active', 'contact_external_id', 'contact_name'],
-      rows: r.rows.map((x) => [x.external_id || slug(x.name), x.name, x.notes || '', x.is_active, x.contact_external_id || (x.contact_name ? slug(x.contact_name) : ''), x.contact_name || '']),
+      headers: ['external_id', 'name', 'notes', 'is_active', 'contact_external_id', 'contact_name', 'address'],
+      rows: r.rows.map((x) => [x.external_id || slug(x.name), x.name, x.notes || '', x.is_active, x.contact_external_id || (x.contact_name ? slug(x.contact_name) : ''), x.contact_name || '', x.address || '']),
     };
   }
   if (entity === 'recurring_templates') {
@@ -258,10 +258,10 @@ router.post('/:entity', rawUpload, async (req, res) => {
           const contactId = contactExternal ? await resolveByExternal('contacts', contactExternal, contactExternal) : null;
           const found = await client.query('SELECT id FROM properties WHERE company_id=$1 AND external_id=$2', [req.companyId, externalId]);
           if (found.rowCount) {
-            await client.query('UPDATE properties SET name=$1,notes=$2,contact_id=$3,is_active=$4 WHERE id=$5', [row[idx('name')], row[idx('notes')] || null, contactId, asBool(row[idx('is_active')]), found.rows[0].id]);
+            await client.query('UPDATE properties SET name=$1,notes=$2,contact_id=$3,is_active=$4,address=CASE WHEN $6::boolean THEN $7::text ELSE address END WHERE id=$5', [row[idx('name')], row[idx('notes')] || null, contactId, asBool(row[idx('is_active')]), found.rows[0].id, idx('address') >= 0, row[idx('address')] || null]);
             updated += 1;
           } else {
-            await client.query('INSERT INTO properties (company_id,external_id,name,notes,contact_id,is_active) VALUES ($1,$2,$3,$4,$5,$6)', [req.companyId, externalId, row[idx('name')], row[idx('notes')] || null, contactId, asBool(row[idx('is_active')])]);
+            await client.query('INSERT INTO properties (company_id,external_id,name,notes,contact_id,is_active,address) VALUES ($1,$2,$3,$4,$5,$6,$7)', [req.companyId, externalId, row[idx('name')], row[idx('notes')] || null, contactId, asBool(row[idx('is_active')]), row[idx('address')] || null]);
             created += 1;
           }
         } else if (entity === 'recurring_templates') {

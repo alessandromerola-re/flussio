@@ -65,6 +65,7 @@ CREATE TABLE contacts (
 );
 
 CREATE TABLE properties (
+  address TEXT,
   id SERIAL PRIMARY KEY,
   company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   name TEXT NOT NULL,

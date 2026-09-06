@@ -166,3 +166,13 @@ describe('DashboardPage DOM behaviour', () => {
     expect(document.body.textContent).not.toContain('120,00');
   });
 });
+
+it('shows only signed percentages while preserving favorable expense semantics', async () => {
+  renderDashboard();
+  const decrease = await screen.findByText('-20.0%');
+  expect(decrease.className).toContain('positive');
+  expect(decrease.getAttribute('aria-label')).toContain('favorevole');
+  expect(screen.getByText('+20.0%')).toBeTruthy();
+  expect(screen.queryByText(/Andamento favorevole/)).toBeNull();
+  expect(screen.queryByText(/Andamento sfavorevole/)).toBeNull();
+});

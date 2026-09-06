@@ -6,6 +6,7 @@ import { can, isRecurringEnabled } from './utils/permissions.js';
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const MovementsPage = lazy(() => import('./pages/MovementsPage.jsx'));
 const RegistryPage = lazy(() => import('./pages/RegistryPage.jsx'));
+const PropertyDetailPage = lazy(() => import('./pages/PropertyDetailPage.jsx'));
 const JobDetailPage = lazy(() => import('./pages/JobDetailPage.jsx'));
 const RecurringTemplatesPage = lazy(() => import('./pages/RecurringTemplatesPage.jsx'));
 const UsersAdminPage = lazy(() => import('./pages/UsersAdminPage.jsx'));
@@ -33,6 +34,10 @@ const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
   {
     path: '/registry',
     element: token ? <RegistryPage /> : <Navigate to="/login" replace />,
+  },
+  {
+    path: '/registry/properties/:id',
+    element: token ? <PropertyDetailPage /> : <Navigate to="/login" replace />,
   },
   {
     path: '/jobs/:id',

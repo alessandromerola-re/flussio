@@ -200,6 +200,7 @@ export const api = {
   updateContact: (id, payload) => request(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteContact: (id) => request(`/contacts/${id}`, { method: 'DELETE' }),
   getProperties: () => request('/properties'),
+  getProperty: (id, filters = {}) => request(`/properties/${id}${toQueryString(filters)}`),
   createProperty: (payload) => request('/properties', { method: 'POST', body: JSON.stringify(payload) }),
   updateProperty: (id, payload) => request(`/properties/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteProperty: (id) => request(`/properties/${id}`, { method: 'DELETE' }),
