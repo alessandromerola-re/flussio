@@ -2657,3 +2657,14 @@ body {
   .property-summary strong { font-size: clamp(1rem, 4.5vw, 1.4rem); }
   .property-movements li { grid-template-columns: minmax(0, 1fr); gap: 0.4rem; }
 }
+.admin-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.admin-membership { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .6rem; margin-bottom: 1rem; padding: .75rem; border: 1px solid var(--border, #dce3ed); border-radius: 12px; }
+.admin-membership > small { grid-column: 1 / -1; }
+.admin-membership select { width: 100%; min-width: 0; }
+.admin-advanced { margin: .8rem 0; overflow-wrap: anywhere; }
+.admin-advanced summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.admin-reset { overflow-wrap: anywhere; }
+.admin-reset input { width: 100%; min-width: 0; }
+.users-cell small { display: block; margin-top: .3rem; }
+.settings-page .card { width: 100%; box-sizing: border-box; }
+@media (max-width: 540px) { .admin-membership { grid-template-columns: minmax(0, 1fr); } }
