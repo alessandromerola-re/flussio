@@ -59,3 +59,13 @@ it('allows viewers to inspect history without showing mutation controls', async 
   expect(screen.queryByText('buttons.new')).toBeNull(); expect(screen.queryByText('buttons.edit')).toBeNull();
   expect(screen.getByText('pages.recurring.history')).toBeTruthy();
 });
+
+it('renders UTC due dates and history near midnight on the Rome calendar day', async () => {
+  api.getRecurringTemplates.mockResolvedValue([{ ...template, next_run_at: '2026-08-31T22:05:00Z' }]);
+  api.getRecurringRuns.mockResolvedValue({ rows: [{ id: 1, cycle_key: '2026-09', run_at: '2026-08-31T22:05:00Z', run_type: 'auto' }], has_more: false });
+  setup();
+  expect(await screen.findByText('pages.recurring.nextRun: 01/09/2026')).toBeTruthy();
+  fireEvent.click(screen.getByText('pages.recurring.history'));
+  expect(await within(screen.getByRole('dialog')).findByText('01/09/2026')).toBeTruthy();
+  expect(screen.queryByText(/31\/08\/2026/)).toBeNull();
+});

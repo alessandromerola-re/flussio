@@ -5,7 +5,7 @@ import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import Modal from '../components/Modal.jsx';
 import RecurringHistory from '../components/RecurringHistory.jsx';
-import { formatDateIT, formatDateInTimeZone } from '../utils/date.js';
+import { formatTimestampDateIT, formatDateInTimeZone } from '../utils/date.js';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import { formatCurrency } from '../utils/currency.js';
@@ -309,7 +309,7 @@ const RecurringTemplatesPage = () => {
                   <div className="muted">{t(`pages.recurring.${template.frequency}`)} · {t('forms.interval')}: {template.interval}</div>
                   <div className="muted">{t('pages.movements.amount')}: {formatCurrency(template.amount)}</div>
                   <div className="muted">{t('pages.movements.account')}: {template.account_name || t('pages.recurring.accountMissing')}</div>
-                  <div className="muted">{t('pages.recurring.nextRun')}: {formatDateIT(template.next_run_at) || t('common.notSet')}</div>
+                  <div className="muted">{t('pages.recurring.nextRun')}: {formatTimestampDateIT(template.next_run_at) || t('common.notSet')}</div>
                   <span className="badge">{t(template.is_active ? 'labels.active' : 'labels.inactive')}</span>
                   {(!template.account_id || !template.account_name || template.account_is_active === false) && <p className="error">{t('pages.recurring.incompleteHint')}</p>}
                   {template.recurring_template_id && <div className="muted">#{template.recurring_template_id}</div>}
