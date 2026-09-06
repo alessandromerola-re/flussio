@@ -28,6 +28,8 @@ const emptyForm = {
 const maxAttachmentMb = 20;
 
 const defaultFilters = {
+  recurring_template_id: '',
+  transaction_id: '',
   date_from: '',
   date_to: '',
   type: '',
@@ -150,6 +152,8 @@ const MovementsPage = () => {
 
     const nextFilters = {
       ...defaultFilters,
+      recurring_template_id: searchParams.get('recurring_template_id') || '',
+      transaction_id: searchParams.get('transaction_id') || '',
       date_from: searchParams.get('date_from') || '',
       date_to: searchParams.get('date_to') || '',
       type: searchParams.get('type') || '',
@@ -450,6 +454,8 @@ const MovementsPage = () => {
 
   const activeFilterChips = useMemo(() => {
     const labels = [];
+    if (filters.recurring_template_id) labels.push({ key: 'recurring_template_id', label: `${t('pages.recurring.title')} #${filters.recurring_template_id}` });
+    if (filters.transaction_id) labels.push({ key: 'transaction_id', label: `${t('pages.movements.details')} #${filters.transaction_id}` });
 
     if (filters.date_from) labels.push({ key: 'date_from', label: `${t('pages.movements.dateFrom')}: ${filters.date_from}` });
     if (filters.date_to) labels.push({ key: 'date_to', label: `${t('pages.movements.dateTo')}: ${filters.date_to}` });

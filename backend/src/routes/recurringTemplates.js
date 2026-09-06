@@ -113,12 +113,36 @@ const validatePayload = async (payload, companyId) => {
   return { valid: true };
 };
 
+router.get('/status', (req, res) => res.json({
+  generator_enabled: String(process.env.RECURRING_GENERATOR_ENABLED || 'false').toLowerCase() === 'true',
+}));
+
+router.get('/:id/runs', async (req, res) => {
+  const id = Number(req.params.id);
+  const offset = Number(req.query.offset || 0);
+  if (!Number.isSafeInteger(id) || id <= 0 || id > 2147483647 || !Number.isSafeInteger(offset) || offset < 0 || offset > 2147483647) {
+    return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Parametri non validi.');
+  }
+  try {
+    const template = await query('SELECT id FROM recurring_templates WHERE id=$1 AND company_id=$2', [id, req.companyId]);
+    if (!template.rowCount) return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
+    const result = await query(`SELECT r.id, r.cycle_key, r.run_at, r.run_type, t.id AS generated_movement_id
+      FROM recurring_runs r JOIN recurring_templates rt ON rt.id=r.template_id
+      LEFT JOIN transactions t ON t.id=r.generated_movement_id AND t.company_id=rt.company_id
+      WHERE rt.id=$1 AND rt.company_id=$2 ORDER BY r.run_at DESC, r.id DESC LIMIT 21 OFFSET $3`, [id, req.companyId, offset]);
+    return res.json({ rows: result.rows.slice(0, 20), has_more: result.rows.length > 20 });
+  } catch (error) {
+    console.error(error);
+    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const result = await query(
       `
       SELECT rt.*,
-             a.name AS account_name,
+             a.name AS account_name, a.is_active AS account_is_active,
              c.name AS category_name,
              ct.name AS contact_name,
              p.name AS property_name,

@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
+import Modal from '../components/Modal.jsx';
+import RecurringHistory from '../components/RecurringHistory.jsx';
+import { formatDateIT, formatDateInTimeZone } from '../utils/date.js';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import { formatCurrency } from '../utils/currency.js';
@@ -29,6 +32,16 @@ const initialForm = {
 
 const RecurringTemplatesPage = () => {
   const { t } = useTranslation();
+  const [showForm, setShowForm] = useState(false);
+  const [history, setHistory] = useState(null);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [generatorEnabled, setGeneratorEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const actionLock = useRef(false);
+  const requestId = useRef(0);
   const [templates, setTemplates] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -44,29 +57,47 @@ const RecurringTemplatesPage = () => {
   const [pendingTemplateId, setPendingTemplateId] = useState(null);
 
   const loadData = async () => {
-    const [templatesData, categoriesData, contactsData, propertiesData, jobsData, accountsData] = await Promise.all([
-      api.getRecurringTemplates(),
-      api.getCategories(),
-      api.getContacts(),
-      api.getProperties(),
-      api.getJobs({ active: 0, include_closed: 1 }),
-      api.getAccounts(),
-    ]);
-    setTemplates(templatesData);
-    setCategories(categoriesData);
-    setContacts(contactsData);
-    setProperties(propertiesData);
-    setJobs(jobsData);
-    setAccounts(accountsData);
+    const request = ++requestId.current;
+    setLoading(true); setLoadError(null);
+    try {
+      const [templatesData, categoriesData, contactsData, propertiesData, jobsData, accountsData, generator] = await Promise.all([
+        api.getRecurringTemplates(), api.getCategories(), api.getContacts(), api.getProperties(),
+        api.getJobs({ active: 0, include_closed: 1 }), api.getAccounts(), api.getRecurringStatus(),
+      ]);
+      if (request !== requestId.current) return;
+      setTemplates(templatesData); setCategories(categoriesData); setContacts(contactsData);
+      setProperties(propertiesData); setJobs(jobsData); setAccounts(accountsData);
+      setGeneratorEnabled(generator.generator_enabled === true);
+    } catch (failure) { if (request === requestId.current) setLoadError(failure); }
+    finally { if (request === requestId.current) setLoading(false); }
   };
 
   useEffect(() => {
-    loadData().catch(() => setError(t('errors.SERVER_ERROR')));
+    loadData();
+    return () => { requestId.current += 1; };
   }, []);
+
+  const runAction = async (action) => {
+    if (actionLock.current) return;
+    actionLock.current = true; setBusy(true); setError(''); setMessage('');
+    try { await action(); }
+    catch (failure) { setError(getErrorMessage(t, failure)); }
+    finally { actionLock.current = false; setBusy(false); }
+  };
+  const openNew = () => {
+    setEditingId(null); setForm({ ...initialForm, start_date: formatDateInTimeZone(new Date()) });
+    setError(''); setMessage(''); setShowForm(true);
+  };
+  const visibleTemplates = templates.filter((item) => {
+    const incomplete = !item.account_id || !item.account_name || item.account_is_active === false;
+    const matchesStatus = status === 'all' || (status === 'active' && item.is_active) || (status === 'inactive' && !item.is_active) || (status === 'incomplete' && incomplete);
+    return matchesStatus && [item.title, item.account_name, item.contact_name, item.property_name, item.job_title].join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
+  });
 
   const resetForm = () => {
     setForm(initialForm);
     setEditingId(null);
+    setShowForm(false);
   };
 
   const handleSave = async (event) => {
@@ -193,18 +224,30 @@ const RecurringTemplatesPage = () => {
       </div>
 
       {message && <div className="success" aria-live="polite">{message}</div>}
-      {error && <div className="error" role="alert">{error}</div>}
+      {error && !showForm && <div className="error" role="alert">{error}</div>}
 
+      {!loading && !loadError && <p className="card" role="status">{t(generatorEnabled ? 'pages.recurring.generatorOn' : 'pages.recurring.generatorOff')}</p>}
+      {loading && <p role="status">{t('common.loading')}</p>}
+      {loadError && <div role="alert" className="error">{getErrorMessage(t, loadError)} <button onClick={loadData}>{t('buttons.retry')}</button></div>}
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
-        {canPermission('write') && <button type="button" onClick={handleGenerateDue}>{t('buttons.generateDue')}</button>}
-        {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>}
+        {canPermission('write') && <button type="button" disabled={busy || loading || Boolean(loadError) || !generatorEnabled} onClick={() => { if (window.confirm(t('pages.recurring.confirmGenerate'))) runAction(handleGenerateDue); }}>{t('buttons.generateDue')}</button>}
+        {canPermission('export') && <button type="button" className="ghost" disabled={busy} onClick={() => runAction(handleExportCsv)}>Esporta CSV</button>}
         {canPermission('import') && <input type="file" accept=".csv,text/csv" onChange={handleImportFile} />}
-        {canPermission('import') && <button type="button" className="ghost" onClick={handleImportCsv} disabled={!importFile}>Importa CSV</button>}
+        {canPermission('import') && <button type="button" className="ghost" onClick={() => runAction(handleImportCsv)} disabled={!importFile || busy}>Importa CSV</button>}
       </div>
       {importPreview.length > 0 && <pre className="card" style={{ maxHeight: 140, overflow: 'auto' }}>{importPreview.join('\n')}</pre>}
 
-      <div className="grid-two">
-        <form className="card" onSubmit={handleSave}>
+      {canPermission('write') && <button type="button" disabled={loading || Boolean(loadError) || busy} onClick={openNew}>{t('buttons.new')}</button>}
+      <section className="card recurring-filters" aria-label={t('pages.recurring.filters')}>
+        <label>{t('forms.search')}<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <label>{t('pages.registry.status')}<select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="all">{t('common.all')}</option><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option><option value="incomplete">{t('pages.recurring.incomplete')}</option>
+        </select></label><span aria-live="polite">{visibleTemplates.length} / {templates.length}</span>
+      </section>
+      <Modal isOpen={showForm && canPermission('write')} onClose={() => setShowForm(false)} dismissible={!busy} title={editingId ? t('buttons.edit') : t('buttons.new')}>
+        <form onSubmit={(event) => { event.preventDefault(); runAction(() => handleSave(event)); }}>
+          {error && <p className="error" role="alert">{error}</p>}
+          <fieldset disabled={busy} className="recurring-fieldset">
           <h2>{editingId ? t('buttons.edit') : t('buttons.new')}</h2>
           <label>
             {t('forms.name')}
@@ -243,35 +286,42 @@ const RecurringTemplatesPage = () => {
           )}
           <label>{t('pages.movements.amount')}<input type="number" step="0.01" min="0.01" value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} required /></label>
           <label>{t('pages.movements.type')}<select value={form.movement_type} onChange={(event) => setForm((prev) => ({ ...prev, movement_type: event.target.value }))}><option value="income">{t('pages.movements.income')}</option><option value="expense">{t('pages.movements.expense')}</option></select></label>
-          <label>{t('pages.movements.account')}<select value={form.account_id} onChange={(event) => setForm((prev) => ({ ...prev, account_id: event.target.value }))} required><option value="">{t('pages.recurring.selectAccount')}</option>{accounts.filter((x) => x.is_active !== false).map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.movements.dateFrom')}<input type="date" value={form.start_date} onChange={(event) => setForm((prev) => ({ ...prev, start_date: event.target.value }))} /></label>
-          <label>{t('pages.movements.dateTo')}<input type="date" value={form.end_date} onChange={(event) => setForm((prev) => ({ ...prev, end_date: event.target.value }))} /></label>
+          <label>{t('pages.movements.account')}<select value={form.account_id} onChange={(event) => setForm((prev) => ({ ...prev, account_id: event.target.value }))} required><option value="">{t('pages.recurring.selectAccount')}</option>{accounts.filter((x) => x.is_active !== false || String(x.id) === String(form.account_id)).map((x)=><option key={x.id} value={x.id} disabled={x.is_active === false}>{x.name}{x.is_active === false ? ` (${t('labels.inactive')})` : ''}</option>)}</select></label>
+          <label>{t('pages.movements.dateFrom')}<input required type="date" value={form.start_date} onChange={(event) => setForm((prev) => ({ ...prev, start_date: event.target.value }))} /></label>
+          <label>{t('pages.movements.dateTo')}<input min={form.start_date || undefined} type="date" value={form.end_date} onChange={(event) => setForm((prev) => ({ ...prev, end_date: event.target.value }))} /></label>
           <label>{t('pages.movements.category')}<select value={form.category_id} onChange={(event) => setForm((prev) => ({ ...prev, category_id: event.target.value }))}><option value="">{t('common.none')}</option>{categories.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.contact')}<select value={form.contact_id} onChange={(event) => setForm((prev) => ({ ...prev, contact_id: event.target.value }))}><option value="">{t('common.none')}</option>{contacts.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.registry.propertiesBeta')}<select value={form.property_id} onChange={(event) => setForm((prev) => ({ ...prev, property_id: event.target.value }))}><option value="">{t('common.none')}</option>{properties.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label>{t('pages.registry.properties')}<select value={form.property_id} onChange={(event) => setForm((prev) => ({ ...prev, property_id: event.target.value }))}><option value="">{t('common.none')}</option>{properties.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.job')}<select value={form.job_id} onChange={(event) => setForm((prev) => ({ ...prev, job_id: event.target.value }))}><option value="">{t('common.none')}</option>{jobs.map((x)=><option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>
           <label>{t('forms.notes')}<input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} /></label>
-          {canPermission('write') && <button type="submit" className="desktop-only">{t('buttons.save')}</button>}
+          <button type="submit">{busy ? t('common.loading') : t('buttons.save')}</button>
+          </fieldset>
         </form>
+      </Modal>
 
-        <div className="card">
+        {!loading && !loadError && <div className="card">
           <h2>{t('pages.recurring.list')}</h2>
           <ul className="list">
-            {templates.map((template) => (
+            {visibleTemplates.map((template) => (
               <li key={template.id} className="list-item-row">
                 <div>
                   <strong>{template.title}</strong>
-                  <div className="muted">{template.frequency} · {template.interval}</div>
+                  <div className="muted">{t(`pages.recurring.${template.frequency}`)} · {t('forms.interval')}: {template.interval}</div>
                   <div className="muted">{t('pages.movements.amount')}: {formatCurrency(template.amount)}</div>
                   <div className="muted">{t('pages.movements.account')}: {template.account_name || t('pages.recurring.accountMissing')}</div>
-                  <div className="muted">next: {template.next_run_at}</div>
+                  <div className="muted">{t('pages.recurring.nextRun')}: {formatDateIT(template.next_run_at) || t('common.notSet')}</div>
+                  <span className="badge">{t(template.is_active ? 'labels.active' : 'labels.inactive')}</span>
+                  {(!template.account_id || !template.account_name || template.account_is_active === false) && <p className="error">{t('pages.recurring.incompleteHint')}</p>}
                   {template.recurring_template_id && <div className="muted">#{template.recurring_template_id}</div>}
                 </div>
                 <div className="row-actions">
+                  <button type="button" onClick={() => setHistory(template)}>{t('pages.recurring.history')}</button>
+                  <Link to={`/movements?recurring_template_id=${template.id}`}>{t('nav.movements')}</Link>
                   {canPermission('write') && <button
                     type="button"
-                    className="ghost"
+                    className="ghost" disabled={busy}
                     onClick={() => {
+                      setError(''); setShowForm(true);
                       setEditingId(template.id);
                       setForm({
                         title: template.title || '',
@@ -296,24 +346,18 @@ const RecurringTemplatesPage = () => {
                   >
                     {t('buttons.edit')}
                   </button>}
-                  {canPermission('write') && <button type="button" className="ghost" onClick={() => handleGenerateNow(template.id)}>{t('buttons.generateNow')}</button>}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" disabled={pendingTemplateId === template.id} onClick={() => handleActiveChange(template)}>
+                  {canPermission('write') && <button type="button" className="ghost" disabled={busy || !generatorEnabled || !template.is_active || !template.account_id || template.account_is_active === false} onClick={() => { if (window.confirm(t('pages.recurring.confirmGenerate'))) runAction(() => handleGenerateNow(template.id)); }}>{t('buttons.generateNow')}</button>}
+                  {canPermission('delete_sensitive') && <button type="button" className="danger" disabled={busy} onClick={() => runAction(() => handleActiveChange(template))}>
                     {pendingTemplateId === template.id ? t('common.loading') : template.is_active ? t('buttons.deactivate') : t('buttons.activate')}
                   </button>}
                 </div>
               </li>
             ))}
           </ul>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: '1rem' }}>
-        <h2>{t('pages.recurring.movementLinks')}</h2>
-        <div className="muted">{t('pages.recurring.movementLinksHint')}</div>
-        {accounts.length > 0 && <div className="muted">{t('pages.recurring.accountsLoaded')}: {accounts.length}</div>}
-        <Link to="/movements">{t('nav.movements')}</Link>
-      </div>
-      {canPermission('write') && <FloatingAddButton onClick={() => setEditingId(null)} label={t('buttons.new')} />}
+          {!visibleTemplates.length && <p>{t(templates.length ? 'pages.registry.noResults' : 'pages.recurring.empty')}</p>}
+        </div>}
+      {history && <RecurringHistory key={history.id} template={history} onClose={() => setHistory(null)} />}
+      {canPermission('write') && !showForm && !loading && !loadError && !busy && <FloatingAddButton onClick={openNew} ariaLabel={t('buttons.new')} />}
     </div>
   );
 };

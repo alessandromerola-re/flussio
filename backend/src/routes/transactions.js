@@ -124,6 +124,14 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
     where.push(`t.job_id = $${params.length}`);
   }
 
+  for (const [key, column] of [['recurring_template_id', 'recurring_template_id'], ['transaction_id', 'id']]) {
+    if (filters[key] == null || filters[key] === '') continue;
+    const id = parseInteger(filters[key]);
+    if (id == null || id <= 0 || id > 2147483647) return { error: true };
+    params.push(id);
+    where.push(`t.${column} = $${params.length}`);
+  }
+
   if (filters.q != null && filters.q !== '') {
     if (typeof filters.q !== 'string') {
       return { error: true };

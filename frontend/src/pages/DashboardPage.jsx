@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { buildDashboardRange } from '../utils/dashboardRange.js';
 import { useTranslation } from 'react-i18next';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import {
@@ -14,12 +16,11 @@ import {
 } from 'chart.js';
 import { api } from '../services/api.js';
 import { formatCurrencyFromCents } from '../utils/currency.js';
-import { formatDateInTimeZone } from '../utils/date.js';
+import { formatDateIT } from '../utils/date.js';
 import { financialDeltaClass, financialDeltaLabel } from '../utils/financialSemantics.js';
 
 ChartJS.register(LineElement, BarElement, ArcElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
-const toIsoDate = formatDateInTimeZone;
 const centsToEuro = (cents) => formatCurrencyFromCents(Number(cents || 0)) || formatCurrencyFromCents(0);
 const absCents = (value) => Math.abs(Number(value || 0));
 
@@ -36,30 +37,13 @@ const deltaLabel = (delta, inverse = false) => financialDeltaLabel(delta, format
 
 const dimensionOptions = ['category', 'contact', 'account', 'job'];
 
-const buildRangeFromPreset = (preset) => {
-  const now = new Date();
-
-  if (preset === 'last30days') {
-    const from = new Date(now);
-    from.setDate(from.getDate() - 29);
-    return { from: toIsoDate(from), to: toIsoDate(now) };
-  }
-
-  if (preset === 'currentmonth') {
-    return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: toIsoDate(now) };
-  }
-
-  if (preset === 'currentyear') {
-    return { from: toIsoDate(new Date(now.getFullYear(), 0, 1)), to: toIsoDate(now) };
-  }
-
-  return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth() - 5, 1)), to: toIsoDate(now) };
-};
-
 const DashboardPage = () => {
   const { t } = useTranslation();
 
   const [period, setPeriod] = useState('last6months');
+  const [customRange, setCustomRange] = useState(() => buildDashboardRange('last6months'));
+  const [draftRange, setDraftRange] = useState(() => buildDashboardRange('last6months'));
+  const [refresh, setRefresh] = useState(0);
   const [incomeDimension, setIncomeDimension] = useState('category');
   const [expenseDimension, setExpenseDimension] = useState('category');
 
@@ -87,7 +71,9 @@ const DashboardPage = () => {
   const sectionRequestIdsRef = useRef({ income: 0, expense: 0, top: 0 });
   const mountedRef = useRef(true);
 
-  const activeRange = useMemo(() => buildRangeFromPreset(period), [period]);
+  const activeRange = useMemo(() => period === 'custom' ? customRange : buildDashboardRange(period), [period, customRange, refresh]);
+  const movementUrl = (type = '') => `/movements?${new URLSearchParams({ date_from: activeRange.from, date_to: activeRange.to, ...(type ? { type } : {}) })}`;
+  const invalidCustomRange = !draftRange.from || !draftRange.to || draftRange.from > draftRange.to;
 
 
   useEffect(() => {
@@ -115,7 +101,7 @@ const DashboardPage = () => {
     } catch {
       if (!mountedRef.current || sectionRequestId !== sectionRequestIdsRef.current[key]) return;
       sectionSetters[key](null);
-      setSectionErrors((previous) => ({ ...previous, [key]: 'Impossibile caricare questa sezione.' }));
+      setSectionErrors((previous) => ({ ...previous, [key]: t('pages.dashboard.sectionError') }));
     }
   };
 
@@ -137,14 +123,14 @@ const DashboardPage = () => {
     const [summaryResult, incomeResult, expenseResult, topResult] = results;
     if (summaryResult.status === 'rejected') {
       setSummary(null);
-      setLoadError('Impossibile caricare i dati della dashboard.');
+      setLoadError(t('pages.dashboard.loadError'));
     } else {
       setSummary(summaryResult.value);
     }
     const errors = {};
     const applySection = (result, key, setter) => {
       if (result.status === 'fulfilled') setter(result.value);
-      else { setter(null); errors[key] = 'Impossibile caricare questa sezione.'; }
+      else { setter(null); errors[key] = t('pages.dashboard.sectionError'); }
     };
     applySection(incomeResult, 'income', setIncomePie);
     applySection(expenseResult, 'expense', setExpensePie);
@@ -165,7 +151,7 @@ const DashboardPage = () => {
         sectionRequestIdsRef.current[key] += 1;
       });
     };
-  }, [activeRange.from, activeRange.to, period, incomeDimension, expenseDimension]);
+  }, [activeRange.from, activeRange.to, period, incomeDimension, expenseDimension, refresh]);
 
   const bucketSeries = summary?.by_bucket || [];
 
@@ -419,14 +405,23 @@ const DashboardPage = () => {
           <label htmlFor="period" className="muted">
             {t('pages.dashboard.period')}
           </label>
-          <select id="period" value={period} onChange={(event) => setPeriod(event.target.value)}>
+          <select id="period" value={period} onChange={(event) => { if (event.target.value === 'custom') { setCustomRange(activeRange); setDraftRange(activeRange); } setPeriod(event.target.value); }}>
             <option value="last30days">{t('pages.dashboard.last30days')}</option>
             <option value="currentmonth">{t('pages.dashboard.currentMonth')}</option>
             <option value="last6months">{t('pages.dashboard.last6months')}</option>
             <option value="currentyear">{t('pages.dashboard.currentYear')}</option>
+            <option value="custom">{t('pages.dashboard.custom')}</option>
           </select>
         </div>
       </div>
+
+      {period === 'custom' && <form className="card property-period dashboard-custom-period" onSubmit={(event) => { event.preventDefault(); if (!invalidCustomRange) setCustomRange({ ...draftRange }); }}>
+        <label>{t('pages.movements.dateFrom')}<input type="date" required value={draftRange.from} onChange={(event) => setDraftRange({ ...draftRange, from: event.target.value })} /></label>
+        <label>{t('pages.movements.dateTo')}<input type="date" required min={draftRange.from || undefined} value={draftRange.to} onChange={(event) => setDraftRange({ ...draftRange, to: event.target.value })} /></label>
+        <button disabled={invalidCustomRange} type="submit">{t('buttons.apply')}</button>
+        {invalidCustomRange && <p role="alert">{t('pages.property.invalidPeriod')}</p>}
+      </form>}
+      <div className="dashboard-range-summary"><span>{t('pages.jobs.appliedPeriod')}: {formatDateIT(activeRange.from)} – {formatDateIT(activeRange.to)}</span><button type="button" className="secondary" disabled={loading} onClick={() => setRefresh((value) => value + 1)}>{t('pages.dashboard.refresh')}</button></div>
 
       <div aria-live="polite">
         {loading && (
@@ -441,28 +436,33 @@ const DashboardPage = () => {
             </div>
           </div>
         )}
-        {loadError && <div className="error" role="alert">{loadError} <button type="button" onClick={loadDashboard}>Riprova</button></div>}
+        {loadError && <div className="error" role="alert">{loadError} <button type="button" onClick={loadDashboard}>{t('buttons.retry')}</button></div>}
       </div>
 
       {!loading && !loadError && summary && <>
 
+      <p className="muted">{t('pages.dashboard.cashflowHint')}</p>
+      {summary.previous?.from && summary.previous?.to && <p className="muted">{t('pages.dashboard.comparedWith')}: {formatDateIT(summary.previous.from)} – {formatDateIT(summary.previous.to)}</p>}
       <div className="kpi-grid">
         <div className="card kpi kpi-income">
           <span>{t('pages.dashboard.income')}</span>
           <small className={deltaClassName(kpiDeltas.income)} aria-label={deltaLabel(kpiDeltas.income)} title={deltaLabel(kpiDeltas.income)}>{formatDelta(kpiDeltas.income)}</small>
           <strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong>
+          <Link className="dashboard-kpi-link" to={movementUrl('income')}>{t('pages.dashboard.open.' + 'income')}</Link>
         </div>
 
         <div className="card kpi kpi-expense">
           <span>{t('pages.dashboard.expense')}</span>
           <small className={deltaClassName(kpiDeltas.expense, true)} aria-label={deltaLabel(kpiDeltas.expense, true)} title={deltaLabel(kpiDeltas.expense, true)}>{formatDelta(kpiDeltas.expense)}</small>
           <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
+          <Link className="dashboard-kpi-link" to={movementUrl('expense')}>{t('pages.dashboard.open.' + 'expense')}</Link>
         </div>
 
         <div className="card kpi kpi-net">
           <span>{t('pages.dashboard.net')}</span>
           <small className={deltaClassName(kpiDeltas.net)} aria-label={deltaLabel(kpiDeltas.net)} title={deltaLabel(kpiDeltas.net)}>{formatDelta(kpiDeltas.net)}</small>
           <strong>{centsToEuro(summary.net_sum_cents)}</strong>
+          <Link className="dashboard-kpi-link" to={movementUrl('')}>{t('pages.dashboard.open.' + 'net')}</Link>
         </div>
       </div>
 
@@ -487,7 +487,7 @@ const DashboardPage = () => {
           <h2>{t('pages.dashboard.incomeBy')}</h2>
           {renderDimensionTabs(incomeDimension, setIncomeDimension)}
           <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
-            {sectionErrors.income && <div className="error" role="alert">{sectionErrors.income} <button type="button" onClick={() => retrySection('income')}>Riprova</button></div>}
+            {sectionErrors.income && <div className="error" role="alert">{sectionErrors.income} <button type="button" onClick={() => retrySection('income')}>{t('buttons.retry')}</button></div>}
             {!sectionErrors.income && (pieToChartData(incomePie) ? (
               isMobile || shouldFallbackPieToList(incomePie) ? (
                 <ul className="list dashboard-pie-fallback-list">
@@ -509,7 +509,7 @@ const DashboardPage = () => {
           <h2>{t('pages.dashboard.expenseBy')}</h2>
           {renderDimensionTabs(expenseDimension, setExpenseDimension)}
           <div className="dashboard-chart-wrap dashboard-chart-wrap--pie">
-            {sectionErrors.expense && <div className="error" role="alert">{sectionErrors.expense} <button type="button" onClick={() => retrySection('expense')}>Riprova</button></div>}
+            {sectionErrors.expense && <div className="error" role="alert">{sectionErrors.expense} <button type="button" onClick={() => retrySection('expense')}>{t('buttons.retry')}</button></div>}
             {!sectionErrors.expense && (pieToChartData(expensePie) ? (
               isMobile || shouldFallbackPieToList(expensePie) ? (
                 <ul className="list dashboard-pie-fallback-list">
@@ -538,7 +538,7 @@ const DashboardPage = () => {
           </div>
         )}
         <div className={`dashboard-chart-wrap dashboard-chart-wrap--bar ${showAllTopExpenses ? 'dashboard-chart-wrap--scroll' : ''}`}>
-          {sectionErrors.top ? <div className="error" role="alert">{sectionErrors.top} <button type="button" onClick={() => retrySection('top')}>Riprova</button></div> : (topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted dashboard-empty-chart">{t('pages.dashboard.emptyPeriod')}</p>)}
+          {sectionErrors.top ? <div className="error" role="alert">{sectionErrors.top} <button type="button" onClick={() => retrySection('top')}>{t('buttons.retry')}</button></div> : (topExpensesBarData.labels.length ? <Bar data={topExpensesBarData} options={topExpensesOptions} /> : <p className="muted dashboard-empty-chart">{t('pages.dashboard.emptyPeriod')}</p>)}
         </div>
       </div>
       </>}

@@ -133,6 +133,12 @@ describe('MovementsPage responsive UX', () => {
   });
 });
 
+it('preserves recurring execution deep links and exposes their filter chips', async () => {
+  render(<MemoryRouter initialEntries={['/movements?transaction_id=10&recurring_template_id=4']}><MovementsPage /></MemoryRouter>);
+  await waitFor(() => expect(api.getTransactions).toHaveBeenCalledWith(expect.objectContaining({ transaction_id: '10', recurring_template_id: '4' })));
+  expect(screen.getByText(/Dettaglio movimento #10/)).toBeTruthy();
+});
+
 it('opens creation from a job with that job already selected', async () => {
   api.getJobs.mockResolvedValue([{ id: 7, title: 'Infissi', code: 'C7' }]);
   render(<MemoryRouter initialEntries={['/movements?job_id=7&new=1']}><MovementsPage /></MemoryRouter>);

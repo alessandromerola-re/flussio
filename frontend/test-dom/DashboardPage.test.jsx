@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import React, { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -15,6 +16,9 @@ vi.mock('react-i18next', () => ({
     'pages.dashboard.topExpensesByCategory': 'Top uscite',
     'pages.dashboard.loading': 'Caricamento dashboard…',
     'common.none': 'Nessun dato',
+    'buttons.retry': 'Riprova',
+    'pages.dashboard.loadError': 'Impossibile caricare i dati della dashboard.',
+    'pages.dashboard.sectionError': 'Impossibile caricare questa sezione.',
   }[key] || key) }),
 }));
 
@@ -44,7 +48,31 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
-const renderDashboard = (element = <DashboardPage />) => render(element);
+const renderDashboard = (element = <DashboardPage />) => render(<MemoryRouter>{element}</MemoryRouter>);
+
+it('applies custom dates to every request and movement link, leaving drafts unapplied', async () => {
+  renderDashboard(); await screen.findByText('+20.0%');
+  fireEvent.change(screen.getByLabelText('Periodo'), { target: { value: 'custom' } });
+  await screen.findByText('+20.0%');
+  const before = api.getDashboardSummary.mock.calls.length;
+  fireEvent.change(screen.getByLabelText('pages.movements.dateFrom'), { target: { value: '2026-08-01' } });
+  fireEvent.change(screen.getByLabelText('pages.movements.dateTo'), { target: { value: '2026-08-31' } });
+  expect(api.getDashboardSummary.mock.calls.length).toBe(before);
+  fireEvent.click(screen.getByText('buttons.apply'));
+  await waitFor(() => expect(api.getDashboardSummary).toHaveBeenLastCalledWith({ from: '2026-08-01', to: '2026-08-31', period: 'custom' }));
+  await screen.findByText('+20.0%');
+  const link = screen.getByRole('link', { name: 'pages.dashboard.open.expense' });
+  expect(link.getAttribute('href')).toBe('/movements?date_from=2026-08-01&date_to=2026-08-31&type=expense');
+  expect(api.getDashboardPie).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-08-01', to: '2026-08-31' }));
+});
+
+it('refreshes the current period and displays server comparison dates', async () => {
+  api.getDashboardSummary.mockResolvedValue(summary({ previous: { from: '2026-01-01', to: '2026-01-31' } }));
+  renderDashboard(); await screen.findByText(/01\/01\/2026 – 31\/01\/2026/);
+  const count = api.getDashboardSummary.mock.calls.length;
+  fireEvent.click(screen.getByText('pages.dashboard.refresh'));
+  await waitFor(() => expect(api.getDashboardSummary.mock.calls.length).toBe(count + 1));
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

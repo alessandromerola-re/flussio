@@ -228,6 +228,8 @@ export const api = {
   updateSavedReport: (id, payload) => request(`/reports/advanced/saved/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteSavedReport: (id) => request(`/reports/advanced/saved/${id}`, { method: 'DELETE' }),
   getRecurringTemplates: () => request('/recurring-templates'),
+  getRecurringStatus: () => request('/recurring-templates/status'),
+  getRecurringRuns: (id, offset = 0) => request(`/recurring-templates/${id}/runs${toQueryString({ offset })}`),
   getRecurringTemplate: (id) => request(`/recurring-templates/${id}`),
   createRecurringTemplate: (payload) => request('/recurring-templates', { method: 'POST', body: JSON.stringify(payload) }),
   updateRecurringTemplate: (id, payload) => request(`/recurring-templates/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
