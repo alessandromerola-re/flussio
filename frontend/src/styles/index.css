@@ -2615,6 +2615,16 @@ body {
 }
 .kpi-grid .kpi strong { flex-basis: 100%; margin-top: 0.35rem; }
 .property-detail { display: grid; gap: 1rem; min-width: 0; }
+.job-comparison-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.job-comparison dl, .job-progress dl { display: grid; gap: 0.75rem; }
+.job-comparison dl > div, .job-progress dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; }
+.job-comparison dd, .job-progress dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.job-comparison dt, .job-progress dt { color: #64748b; }
+.job-progress { margin: 1rem 0; }
+.job-progress summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.job-progress summary::after { content: '⌄'; margin-left: auto; padding-left: 0.5rem; }
+.job-progress[open] summary::after { content: '⌃'; }
+@media (max-width: 900px) { .job-comparison-grid { grid-template-columns: minmax(0, 1fr); } }
 .property-detail h1, .property-detail dd, .property-detail li { overflow-wrap: anywhere; }
 .property-detail .page-header { margin-bottom: 0; }
 .property-period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto auto; gap: 0.75rem; align-items: end; }

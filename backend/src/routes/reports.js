@@ -213,12 +213,10 @@ router.get('/job/:jobId/export.csv', requirePermission('export'), async (req, re
       LEFT JOIN contacts ct ON ct.id = t.contact_id
       LEFT JOIN jobs j ON j.id = t.job_id
       LEFT JOIN LATERAL (
-        SELECT acc.name
+        SELECT STRING_AGG(acc.name, ' → ' ORDER BY ta.id) AS name
         FROM transaction_accounts ta
         JOIN accounts acc ON acc.id = ta.account_id
-        WHERE ta.transaction_id = t.id
-        ORDER BY ta.id
-        LIMIT 1
+        WHERE ta.transaction_id = t.id AND acc.company_id = t.company_id
       ) a ON true
       WHERE t.company_id = $1
         AND t.job_id = $2
@@ -272,7 +270,11 @@ router.get('/job/:jobId/export.csv', requirePermission('export'), async (req, re
       ['meta', 'scostamento_margine_cents', economicSummary.marginVarianceCents],
     ].map((row) => row.map(csvEscape).join(';'));
 
-    const csvContent = `${summaryRows.join('\n')}\n\n${header}\n${lines.join('\n')}`;
+    // Movements-only exports use the same unpaginated company-scoped query,
+    // without comparing the selected period to a lifetime budget.
+    const csvContent = req.query.scope === 'movements'
+      ? `${header}\n${lines.join('\n')}`
+      : `${summaryRows.join('\n')}\n\n${header}\n${lines.join('\n')}`;
     const datePart = new Date().toISOString().slice(0, 10);
     const codePart = job.code ? `_${job.code}` : '';
 
