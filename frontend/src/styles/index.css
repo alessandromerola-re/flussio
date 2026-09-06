@@ -2615,6 +2615,12 @@ body {
 }
 .kpi-grid .kpi strong { flex-basis: 100%; margin-top: 0.35rem; }
 .property-detail { display: grid; gap: 1rem; min-width: 0; }
+.recurring-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.recurring-filters { display: flex; align-items: end; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+.recurring-filters label { flex: 1 1 180px; min-width: 0; }
+.dashboard-range-summary { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+.dashboard-kpi-link { display: flex; align-items: center; min-height: 44px; font-size: 0.85rem; flex-basis: 100%; }
+.dashboard-custom-period { margin-bottom: 1rem; }
 .job-comparison-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
 .job-comparison dl, .job-progress dl { display: grid; gap: 0.75rem; }
 .job-comparison dl > div, .job-progress dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; }
