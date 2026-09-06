@@ -62,7 +62,7 @@ function JobDetail({ id }) {
       // The budget report is always lifetime; the period export contains movements only.
       const { blob } = scope === 'lifetime'
         ? await api.exportJobReportCsv(id, {})
-        : await api.exportTransactions({ job_id: id, ...period });
+        : await api.exportJobReportCsv(id, { ...period, scope: 'movements' });
       if (!mounted.current) return;
       const url = URL.createObjectURL(blob);
       try {

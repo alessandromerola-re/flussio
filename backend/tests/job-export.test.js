@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import jwt from 'jsonwebtoken';
+import app from '../src/app.js';
+import { close, query, resetDb } from './_db.js';
+let server, baseUrl, token, companyId, jobId, foreignId;
+test.before(async () => {
+  process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
+  await resetDb();
+  companyId = (await query("INSERT INTO companies(name) VALUES ('Export') RETURNING id")).rows[0].id;
+  const other = (await query("INSERT INTO companies(name) VALUES ('Other') RETURNING id")).rows[0].id;
+  const user = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'export@test.local','unused','admin') RETURNING id", [companyId])).rows[0];
+  token = jwt.sign({ user_id: user.id, default_company_id: companyId }, process.env.JWT_SECRET);
+  jobId = (await query("INSERT INTO jobs(company_id,name,title) VALUES ($1,'Job','Job') RETURNING id", [companyId])).rows[0].id;
+  foreignId = (await query("INSERT INTO jobs(company_id,name,title) VALUES ($1,'Private','Private') RETURNING id", [other])).rows[0].id;
+  await query("INSERT INTO transactions(company_id,job_id,date,type,amount_total,description) SELECT $1,$2,'2026-09-01','income',1,'row-' || n FROM generate_series(1,5001) AS n", [companyId, jobId]);
+  await query("INSERT INTO transactions(company_id,job_id,date,type,amount_total,description) VALUES ($1,$2,'2026-08-31','income',1,'outside-period')", [companyId, jobId]);
+  await query("INSERT INTO transactions(company_id,job_id,date,type,amount_total,description) VALUES ($1,$2,'2026-09-01','income',1,'foreign-company')", [other, jobId]);
+  const accounts = await query("INSERT INTO accounts(company_id,name,type) VALUES ($1,'Cash','cash'),($1,'Bank','bank') RETURNING id", [companyId]);
+  const tx = (await query("SELECT id FROM transactions WHERE company_id=$1 ORDER BY id LIMIT 1", [companyId])).rows[0].id;
+  for (const account of accounts.rows) await query("INSERT INTO transaction_accounts(transaction_id,account_id,direction,amount) VALUES ($1,$2,'in',0.50)", [tx, account.id]);
+  server = app.listen(0); await new Promise((resolve) => server.once('listening', resolve));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+test.after(async () => { if (server) await new Promise((resolve) => server.close(resolve)); await close(); });
+const request = (id, filters) => fetch(`${baseUrl}/api/reports/job/${id}/export.csv?${filters}`, { headers: { Authorization: `Bearer ${token}`, 'X-Company-Id': String(companyId) } });
+test('period CSV exports every movement beyond 5000 without budget metadata, duplicates or foreign rows', async () => {
+  const response = await request(jobId, 'scope=movements&date_from=2026-09-01&date_to=2026-09-01');
+  assert.equal(response.status, 200);
+  const csv = await response.text(); const lines = csv.trim().split('\n');
+  assert.equal(lines.length, 5002);
+  assert.equal(new Set(lines.slice(1).map((line) => line.split(';').at(-1))).size, 5001);
+  assert.ok(csv.includes('Cash → Bank'));
+  assert.ok(!csv.includes('meta;')); assert.ok(!csv.includes('outside-period')); assert.ok(!csv.includes('foreign-company'));
+});
+test('lifetime CSV retains report metadata and inaccessible jobs return 404', async () => {
+  const response = await request(jobId, ''); const csv = await response.text();
+  assert.equal(response.status, 200); assert.ok(csv.startsWith('meta;')); assert.ok(csv.includes('outside-period'));
+  assert.equal((await request(foreignId, 'scope=movements')).status, 404);
+});

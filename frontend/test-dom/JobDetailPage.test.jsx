@@ -60,11 +60,12 @@ it('handles inactive jobs, missing budgets and empty periods for viewers', async
 });
 it('exports the applied period rather than draft dates and leaves lifetime exports unfiltered', async () => {
   // Fail before download to verify scope and visible recoverable errors.
-  api.exportTransactions.mockRejectedValue(new Error('offline')); api.exportJobReportCsv.mockRejectedValue(new Error('offline'));
+  api.exportJobReportCsv.mockRejectedValue(new Error('offline'));
   setup(); await screen.findByText('Infissi Centro');
   fireEvent.change(screen.getByLabelText('pages.movements.dateFrom'), { target: { value: '2026-09-01' } });
   fireEvent.click(screen.getByText('pages.jobs.exportPeriod'));
-  await waitFor(() => expect(api.exportTransactions).toHaveBeenCalledWith({ job_id: '5', date_from: '', date_to: '' }));
+  await waitFor(() => expect(api.exportJobReportCsv).toHaveBeenCalledWith('5', { date_from: '', date_to: '', scope: 'movements' }));
+  expect(api.exportTransactions).not.toHaveBeenCalled();
   await screen.findByRole('alert');
   fireEvent.click(screen.getByText('pages.jobs.exportLifetime'));
   await waitFor(() => expect(api.exportJobReportCsv).toHaveBeenCalledWith('5', {}));
