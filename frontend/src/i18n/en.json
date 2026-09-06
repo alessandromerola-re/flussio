@@ -421,5 +421,22 @@
   "pages.jobs.plannedMiniLine": "Planned: {{revenue}} / {{cost}} / {{margin}}",
   "pages.settings.companyDeleted": "Company \"{{name}}\" deleted.",
   "pages.settings.confirmDeleteCompany1": "You are about to delete company \"{{name}}\". Continue?",
-  "pages.settings.confirmDeleteCompany2": "Please confirm deletion of \"{{name}}\". This action cannot be undone."
+  "pages.settings.confirmDeleteCompany2": "Please confirm deletion of \"{{name}}\". This action cannot be undone.",
+  "pages.property.title": "Property details",
+  "pages.property.from": "From",
+  "pages.property.to": "To",
+  "pages.property.apply": "Apply",
+  "pages.property.allTime": "All time",
+  "pages.property.invalidPeriod": "The end date must be on or after the start date.",
+  "pages.property.data": "Property information",
+  "pages.property.cashflow": "Cash flow for the period",
+  "pages.property.cashflowHint": "Recorded income and expenses for the selected period. Transfers are excluded from totals.",
+  "pages.property.movements": "Linked movements",
+  "pages.property.openMovements": "Open in Movements",
+  "pages.property.empty": "No linked movements in the selected period.",
+  "pages.property.pagination": "Property movements pagination",
+  "pages.property.previous": "Previous",
+  "pages.property.next": "Next",
+  "pages.property.page": "Page",
+  "forms.address": "Address"
 }

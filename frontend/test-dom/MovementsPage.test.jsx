@@ -132,3 +132,10 @@ describe('MovementsPage responsive UX', () => {
     expect(screen.getByLabelText('Allegati')).toBeTruthy();
   });
 });
+
+it('opens creation from a property with that property already selected', async () => {
+  render(<MemoryRouter initialEntries={['/movements?property_id=1&new=1']}><MovementsPage /></MemoryRouter>);
+  const dialog = await screen.findByRole('dialog');
+  await waitFor(() => expect(within(dialog).getByLabelText('Immobile').value).toBe('1'));
+  expect(api.getTransactions).toHaveBeenCalledWith(expect.objectContaining({ property_id: '1' }));
+});

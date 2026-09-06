@@ -2596,3 +2596,48 @@ body {
     font-size: 0.98rem;
   }
 }
+
+/* Keep KPI labels and percentages in normal flow, including narrow screens. */
+.kpi-grid > .kpi:not(.dashboard-skeleton-card) {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.kpi-grid .kpi > span { flex: 1 1 auto; }
+.kpi-grid .kpi-delta-badge {
+  position: static;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.kpi-grid .kpi strong { flex-basis: 100%; margin-top: 0.35rem; }
+.property-detail { display: grid; gap: 1rem; min-width: 0; }
+.property-detail h1, .property-detail dd, .property-detail li { overflow-wrap: anywhere; }
+.property-detail .page-header { margin-bottom: 0; }
+.property-period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto auto; gap: 0.75rem; align-items: end; }
+.property-period label { min-width: 0; margin: 0; }
+.property-period input { width: 100%; min-width: 0; box-sizing: border-box; }
+.property-info dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0; }
+.property-info dt { color: #64748b; font-size: 0.875rem; }
+.property-info dd { margin: 0.3rem 0 0; font-weight: 600; }
+.property-contact-line { display: block; font-weight: 400; }
+.property-notes { margin-top: 1rem; white-space: pre-wrap; }
+.property-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.property-summary strong { display: block; margin-top: 0.6rem; font-size: 1.4rem; overflow-wrap: anywhere; }
+.property-action { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: 0.5rem 1rem; border-radius: 0.6rem; background: #2563eb; color: white; text-decoration: none; }
+.property-movements-heading { display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.property-movements { list-style: none; padding: 0; margin: 0; }
+.property-movements li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid #e2e8f0; }
+.property-pagination { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-top: 1rem; }
+@media (max-width: 768px) {
+  .property-period, .property-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .property-summary > :last-child { grid-column: 1 / -1; }
+  .property-info dl { grid-template-columns: minmax(0, 1fr); }
+  .property-detail .page-header { align-items: stretch; }
+  .property-detail .page-header h1 { font-size: 1.5rem; }
+  .property-summary strong { font-size: clamp(1rem, 4.5vw, 1.4rem); }
+  .property-movements li { grid-template-columns: minmax(0, 1fr); gap: 0.4rem; }
+}

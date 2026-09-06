@@ -48,7 +48,8 @@ const defaultFilters = {
 const MovementsPage = () => {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const [form, setForm] = useState(emptyForm);
+  const newPropertyId = searchParams.get('new') === '1' && canPermission('write') ? searchParams.get('property_id') || '' : '';
+  const [form, setForm] = useState(() => ({ ...emptyForm, date: formatDateInTimeZone(new Date()), property_id: newPropertyId }));
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -88,7 +89,7 @@ const MovementsPage = () => {
   const [showFilterContactResults, setShowFilterContactResults] = useState(false);
   const [filterContactActiveIndex, setFilterContactActiveIndex] = useState(-1);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [movementModalOpen, setMovementModalOpen] = useState(false);
+  const [movementModalOpen, setMovementModalOpen] = useState(Boolean(newPropertyId));
   const [submitLoading, setSubmitLoading] = useState(false);
   const [createdMovementId, setCreatedMovementId] = useState(null);
   const [searchInput, setSearchInput] = useState('');
@@ -552,7 +553,7 @@ const MovementsPage = () => {
   const openNewMovementModal = async () => {
     await loadLookupData();
     setEditingMovementId(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, date: formatDateInTimeZone(new Date()), property_id: filters.property_id });
     setContactSearch('');
     setNewAttachmentFile(null);
     setError('');

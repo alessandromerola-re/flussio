@@ -449,19 +449,19 @@ const DashboardPage = () => {
       <div className="kpi-grid">
         <div className="card kpi kpi-income">
           <span>{t('pages.dashboard.income')}</span>
-          <small className={deltaClassName(kpiDeltas.income)}>{deltaLabel(kpiDeltas.income)}</small>
+          <small className={deltaClassName(kpiDeltas.income)} aria-label={deltaLabel(kpiDeltas.income)} title={deltaLabel(kpiDeltas.income)}>{formatDelta(kpiDeltas.income)}</small>
           <strong className="positive">{centsToEuro(summary.income_sum_cents)}</strong>
         </div>
 
         <div className="card kpi kpi-expense">
           <span>{t('pages.dashboard.expense')}</span>
-          <small className={deltaClassName(kpiDeltas.expense, true)}>{deltaLabel(kpiDeltas.expense, true)}</small>
+          <small className={deltaClassName(kpiDeltas.expense, true)} aria-label={deltaLabel(kpiDeltas.expense, true)} title={deltaLabel(kpiDeltas.expense, true)}>{formatDelta(kpiDeltas.expense)}</small>
           <strong className="negative">{centsToEuro(absCents(summary.expense_sum_cents))}</strong>
         </div>
 
         <div className="card kpi kpi-net">
           <span>{t('pages.dashboard.net')}</span>
-          <small className={deltaClassName(kpiDeltas.net)}>{deltaLabel(kpiDeltas.net)}</small>
+          <small className={deltaClassName(kpiDeltas.net)} aria-label={deltaLabel(kpiDeltas.net)} title={deltaLabel(kpiDeltas.net)}>{formatDelta(kpiDeltas.net)}</small>
           <strong>{centsToEuro(summary.net_sum_cents)}</strong>
         </div>
       </div>

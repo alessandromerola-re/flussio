@@ -421,5 +421,22 @@
   "pages.jobs.plannedMiniLine": "Previsto: {{revenue}} / {{cost}} / {{margin}}",
   "pages.settings.companyDeleted": "Azienda \"{{name}}\" eliminata.",
   "pages.settings.confirmDeleteCompany1": "Stai per eliminare l'azienda \"{{name}}\". Vuoi continuare?",
-  "pages.settings.confirmDeleteCompany2": "Confermi definitivamente l'eliminazione di \"{{name}}\"? Questa azione è irreversibile."
+  "pages.settings.confirmDeleteCompany2": "Confermi definitivamente l'eliminazione di \"{{name}}\"? Questa azione è irreversibile.",
+  "pages.property.title": "Scheda immobile",
+  "pages.property.from": "Dal",
+  "pages.property.to": "Al",
+  "pages.property.apply": "Applica",
+  "pages.property.allTime": "Tutto lo storico",
+  "pages.property.invalidPeriod": "La data finale deve essere successiva o uguale a quella iniziale.",
+  "pages.property.data": "Dati immobile",
+  "pages.property.cashflow": "Flussi di cassa del periodo",
+  "pages.property.cashflowHint": "Entrate e uscite registrate nel periodo selezionato. I giroconti non concorrono ai totali.",
+  "pages.property.movements": "Movimenti collegati",
+  "pages.property.openMovements": "Apri in Movimenti",
+  "pages.property.empty": "Nessun movimento collegato nel periodo selezionato.",
+  "pages.property.pagination": "Paginazione movimenti immobile",
+  "pages.property.previous": "Precedente",
+  "pages.property.next": "Successiva",
+  "pages.property.page": "Pagina",
+  "forms.address": "Indirizzo"
 }

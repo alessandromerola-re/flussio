@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
@@ -12,7 +12,7 @@ import { buildCategoryRows, filterRegistryItems } from '../utils/registryView.js
 const initialAccount = { name: '', type: 'cash', opening_balance: 0, is_active: true };
 const initialCategory = { name: '', direction: 'income', parent_id: '', color: '#2ecc71', is_active: true };
 const initialContact = { name: '', email: '', phone: '', default_category_id: '', is_active: true };
-const initialProperty = { external_id: '', name: '', notes: '', contact_id: '', is_active: true };
+const initialProperty = { external_id: '', name: '', address: '', notes: '', contact_id: '', is_active: true };
 const initialJob = {
   code: '',
   title: '',
@@ -29,7 +29,8 @@ const initialJob = {
 const RegistryPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [tab, setTab] = useState('jobs');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => ['jobs', 'properties', 'contacts', 'accounts', 'categories'].includes(searchParams.get('tab')) ? searchParams.get('tab') : 'jobs');
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -629,7 +630,7 @@ const RegistryPage = () => {
             {visibleItems.map((property) => (
               <li key={property.id} className="list-item-row">
                 <div>
-                  <div className="registry-item-title"><strong>{property.name}</strong>{renderStatus(property)}</div>
+                  <div className="registry-item-title"><Link to={`/registry/properties/${property.id}`}><strong>{property.name}</strong></Link>{renderStatus(property)}</div>
                   <div className="muted">{t('forms.propertyCode')}: {property.external_id}</div>
                   {property.contact_name && <div className="muted">{t('forms.referenceContact')}: {property.contact_name}</div>}
                   <div className="muted">{property.notes || t('common.none')}</div>
@@ -643,6 +644,7 @@ const RegistryPage = () => {
                         setPropertyForm({
                           external_id: property.external_id || '',
                           name: property.name,
+                          address: property.address || '',
                           notes: property.notes || '',
                           contact_id: property.contact_id ? String(property.contact_id) : '',
                           is_active: property.is_active,
@@ -744,6 +746,7 @@ const RegistryPage = () => {
                 <div className="muted" style={{ marginBottom: '0.75rem' }}>{t('forms.propertyCodeAuto')}</div>
               )}
               <label>{t('forms.name')}<input type="text" value={propertyForm.name} onChange={(event) => setPropertyForm({ ...propertyForm, name: event.target.value })} required /></label>
+              <label>{t('forms.address')}<input value={propertyForm.address} onChange={(event) => setPropertyForm({ ...propertyForm, address: event.target.value })} /></label>
               <label>{t('forms.referenceContact')}<select value={propertyForm.contact_id} onChange={(event) => setPropertyForm({ ...propertyForm, contact_id: event.target.value })}><option value="">{t('common.none')}</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}</select></label>
               <label>{t('forms.notes')}<textarea value={propertyForm.notes} onChange={(event) => setPropertyForm({ ...propertyForm, notes: event.target.value })} /></label>
               <label>{t('pages.registry.status')}<select value={propertyForm.is_active ? 'active' : 'inactive'} onChange={(event) => setPropertyForm({ ...propertyForm, is_active: event.target.value === 'active' })}><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option></select></label>
