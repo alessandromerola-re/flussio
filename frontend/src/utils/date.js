@@ -37,6 +37,14 @@ export const formatDateIT = (value) => {
   return `${day}/${month}/${year}`;
 };
 
+// Timestamps represent instants; date-only fields represent calendar dates.
+export const formatTimestampDateIT = (value) => {
+  if (typeof value === 'string' && isoDateRegex.test(value)) return formatDateIT(value);
+  if (!(value instanceof Date) && typeof value !== 'string') return '';
+  if (!value) return '';
+  return formatDateIT(formatDateInTimeZone(value instanceof Date ? value : new Date(value)));
+};
+
 export const formatDayMonthIT = (value) => {
   const isoDate = toIsoDatePart(value);
   if (!isoDateRegex.test(isoDate)) {
