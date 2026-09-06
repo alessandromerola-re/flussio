@@ -133,6 +133,14 @@ describe('MovementsPage responsive UX', () => {
   });
 });
 
+it('opens creation from a job with that job already selected', async () => {
+  api.getJobs.mockResolvedValue([{ id: 7, title: 'Infissi', code: 'C7' }]);
+  render(<MemoryRouter initialEntries={['/movements?job_id=7&new=1']}><MovementsPage /></MemoryRouter>);
+  const dialog = await screen.findByRole('dialog');
+  await waitFor(() => expect(within(dialog).getByLabelText('Commessa').value).toBe('7'));
+  expect(api.getTransactions).toHaveBeenCalledWith(expect.objectContaining({ job_id: '7' }));
+});
+
 it('opens creation from a property with that property already selected', async () => {
   render(<MemoryRouter initialEntries={['/movements?property_id=1&new=1']}><MovementsPage /></MemoryRouter>);
   const dialog = await screen.findByRole('dialog');
