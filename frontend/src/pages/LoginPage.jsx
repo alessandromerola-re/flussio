@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, setActiveCompanyId, setToken } from '../services/api.js';
@@ -14,22 +14,31 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const passwordId = useId();
+  const loginLock = useRef(false);
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (loginLock.current) return;
+    const current = generation.current;
+    loginLock.current = true;
     setError(null);
     setLoading(true);
     try {
-      const data = await api.login({ email, password, remember });
+      const data = await api.login({ email: email.trim(), password, remember });
+      if (current !== generation.current) return;
       setToken(data.token, data.role, remember);
       localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
       setActiveCompanyId(data.default_company_id);
       onLogin(data.token);
       navigate('/dashboard');
     } catch (err) {
-      setError(getErrorMessage(t, err));
+      if (current === generation.current) setError(getErrorMessage(t, err));
     } finally {
-      setLoading(false);
+      loginLock.current = false;
+      if (current === generation.current) setLoading(false);
     }
   };
 
@@ -79,19 +88,26 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
               onChange={(event) => setEmail(event.target.value)}
               placeholder={t('placeholders.email')}
               autoComplete="email"
+              name="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              disabled={loading}
               required
             />
           </label>
 
-          <label>
-            {t('forms.password')}
+          <div className="auth-password-group">
+            <label htmlFor={passwordId}>{t('forms.password')}</label>
             <div className="password-field">
               <input
+                id={passwordId}
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder={t('placeholders.password')}
                 autoComplete="current-password"
+                disabled={loading}
                 required
               />
               <button
@@ -100,15 +116,21 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
                 onClick={() => setShowPassword((current) => !current)}
                 aria-label={showPassword ? t('forms.hidePassword') : t('forms.showPassword')}
                 aria-pressed={showPassword}
+                aria-controls={passwordId}
+                title={showPassword ? t('forms.hidePassword') : t('forms.showPassword')}
               >
-                {showPassword ? t('forms.hidePassword') : t('forms.showPassword')}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                  {showPassword && <path d="m3 3 18 18" />}
+                </svg>
               </button>
             </div>
-          </label>
+          </div>
 
           <div className="auth-row">
             <label className="checkbox-row">
-              <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+              <input type="checkbox" checked={remember} disabled={loading} onChange={(event) => setRemember(event.target.checked)} />
               <span>{t('forms.rememberMe')}</span>
             </label>
           </div>
@@ -119,10 +141,10 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
             {loading ? t('common.loading') : t('buttons.login')}
           </button>
 
-          <div className="auth-helper-card">
-            <strong>{t('pages.login.firstAccessTitle')}</strong>
+          <details className="auth-helper-card">
+            <summary>{t('pages.login.firstAccessTitle')}</summary>
             <p>{t('pages.login.firstAccessText')}</p>
-          </div>
+          </details>
         </form>
 
       </div>

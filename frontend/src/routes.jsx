@@ -10,7 +10,6 @@ const PropertyDetailPage = lazy(() => import('./pages/PropertyDetailPage.jsx'));
 const JobDetailPage = lazy(() => import('./pages/JobDetailPage.jsx'));
 const RecurringTemplatesPage = lazy(() => import('./pages/RecurringTemplatesPage.jsx'));
 const UsersAdminPage = lazy(() => import('./pages/UsersAdminPage.jsx'));
-const RoadmapPage = lazy(() => import('./pages/RoadmapPage.jsx'));
 const SettingsAdminPage = lazy(() => import('./pages/SettingsAdminPage.jsx'));
 const AdvancedReportsPage = lazy(() => import('./pages/AdvancedReportsPage.jsx'));
 
@@ -58,7 +57,7 @@ const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
   },
   {
     path: '/roadmap',
-    element: token ? (can('read', 'roadmap') ? <RoadmapPage /> : <Navigate to="/dashboard" replace />) : <Navigate to="/login" replace />,
+    element: <Navigate to={token ? '/dashboard' : '/login'} replace />,
   },
 
   {
