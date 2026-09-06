@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, getActiveCompanyId, getIsSuperAdmin } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
@@ -16,6 +16,15 @@ const UsersAdminPage = () => {
   const [message, setMessage] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [companies, setCompanies] = useState([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const generation = useRef(0);
+  const mounted = useRef(false);
+  const originalAccess = useRef([]);
+  const [resetResult, setResetResult] = useState(null);
+  const [showToken, setShowToken] = useState(false);
 
 
   const isSuperAdmin = getIsSuperAdmin();
@@ -27,24 +36,43 @@ const UsersAdminPage = () => {
   }, [companies, isSuperAdmin, activeCompanyId]);
 
   const loadUsers = async () => {
-    if (!canPermission('users_manage')) return;
-    setUsers(await api.getUsers());
-  };
-
-  const loadCompanies = async () => {
-    if (isSuperAdmin) {
-      setCompanies(await api.getCompanies());
-      return;
+    if (!mounted.current || !canPermission('users_manage')) return;
+    const current = ++generation.current;
+    setLoading(true);
+    setError('');
+    try {
+      const [list, companyList] = await Promise.all([
+        api.getUsers(),
+        isSuperAdmin ? api.getCompanies() : Promise.resolve(JSON.parse(localStorage.getItem('flussio_companies') || '[]')),
+      ]);
+      if (current !== generation.current) return;
+      setUsers(list);
+      setCompanies(companyList || []);
+    } catch (loadError) {
+      if (current === generation.current) setError(getErrorMessage(t, loadError));
+    } finally {
+      if (current === generation.current) setLoading(false);
     }
-
-    const localCompanies = JSON.parse(localStorage.getItem('flussio_companies') || '[]');
-    setCompanies(localCompanies || []);
   };
 
   useEffect(() => {
-    loadUsers().catch(() => setMessage(getErrorMessage(t, null)));
-    loadCompanies().catch(() => setMessage(getErrorMessage(t, null)));
+    mounted.current = true;
+    loadUsers();
+    return () => { mounted.current = false; generation.current += 1; };
   }, []);
+
+  const runAction = async (action) => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try { await action(); }
+    catch (actionError) { if (mounted.current) setError(getErrorMessage(t, actionError)); }
+    finally { lock.current = false; if (mounted.current) setBusy(false); }
+  };
+
+  const unusedCompanies = availableCompanies.filter((company) => !form.memberships.some((membership) => Number(membership.company_id) === Number(company.id)));
 
   if (!canPermission('users_manage')) {
     return <div className="page"><div className="error">{t('errors.FORBIDDEN')}</div></div>;
@@ -64,6 +92,7 @@ const UsersAdminPage = () => {
     }));
 
   const openCreate = () => {
+    if (busy || loading || error) return;
     const defaultCompanyId = activeCompanyId || availableCompanies[0]?.id || '';
     setForm({
       ...initialForm,
@@ -76,12 +105,14 @@ const UsersAdminPage = () => {
     setMessage('');
     try {
       const detail = await api.getUser(userId);
+      if (!mounted.current) return;
       const memberships = (detail.memberships || []).map((membership) => ({
         company_id: String(membership.company_id),
         role: membership.role,
         is_active: membership.is_active !== false,
       }));
 
+      originalAccess.current = memberships;
       setForm({
         id: detail.id,
         email: detail.email,
@@ -91,7 +122,7 @@ const UsersAdminPage = () => {
       });
       setModalOpen(true);
     } catch (error) {
-      setMessage(getErrorMessage(t, error));
+      setError(getErrorMessage(t, error));
     }
   };
 
@@ -101,9 +132,13 @@ const UsersAdminPage = () => {
 
     const memberships = toPayloadMemberships();
     if (memberships.length === 0) {
-      setMessage(t('errors.VALIDATION_MISSING_FIELDS'));
+      setError(t('errors.VALIDATION_MISSING_FIELDS'));
       return;
     }
+
+    if (form.id && isSuperAdmin && !form.is_active && !window.confirm(t('adminUx.globalDisableConfirm'))) return;
+    const removesAccess = form.id && originalAccess.current.some((old) => old.is_active && !memberships.some((next) => Number(next.company_id) === Number(old.company_id) && next.is_active));
+    if (removesAccess && !window.confirm(t('adminUx.accessChangesConfirm'))) return;
 
     try {
       if (form.id) {
@@ -123,17 +158,18 @@ const UsersAdminPage = () => {
       closeModal();
       await loadUsers();
     } catch (error) {
-      setMessage(getErrorMessage(t, error));
+      setError(getErrorMessage(t, error));
     }
   };
 
   const handleToggleMembership = async (user) => {
+    if (user.membership_active && !window.confirm(t('adminUx.disableAccessConfirm', { email: user.email }))) return;
     setMessage('');
     try {
       await api.updateUser(user.id, { membership_active: !user.membership_active });
       await loadUsers();
     } catch (error) {
-      setMessage(getErrorMessage(t, error));
+      setError(getErrorMessage(t, error));
     }
   };
 
@@ -146,7 +182,8 @@ const UsersAdminPage = () => {
   };
 
   const addMembership = () => {
-    const fallbackCompanyId = activeCompanyId || availableCompanies[0]?.id || '';
+    const fallbackCompanyId = unusedCompanies[0]?.id;
+    if (!fallbackCompanyId) return;
     setForm((prev) => ({
       ...prev,
       memberships: [...prev.memberships, { ...emptyMembership, company_id: fallbackCompanyId }],
@@ -164,14 +201,19 @@ const UsersAdminPage = () => {
     <div className="page users-page">
       <div className="page-header users-page-header">
         <h1>{t('pages.users.title')}</h1>
-        <button type="button" className="primary users-new-desktop" onClick={openCreate}>
+        <button type="button" className="primary users-new-desktop" onClick={openCreate} disabled={busy || loading || Boolean(error)}>
           {t('buttons.new')}
         </button>
       </div>
 
-      {message && <div className="muted users-feedback">{message}</div>}
+      <p className="muted">{t('adminUx.membershipHint')}</p>
+      {message && <div className="success users-feedback" role="status">{message}</div>}
+      {error && !modalOpen && <div className="error" role="alert">{error} <button type="button" onClick={loadUsers} disabled={busy || loading}>{t('buttons.retry')}</button></div>}
+      {loading && <p role="status">{t('common.loading')}</p>}
 
+      <fieldset className="admin-fieldset" disabled={busy || loading}>
       <div className="card users-card">
+        {!loading && !error && users.length === 0 && <p>{t('adminUx.noUsers')}</p>}
         <div className="users-table-head">
           <span>{t('forms.email')}</span>
           <span>{t('forms.role')}</span>
@@ -187,20 +229,22 @@ const UsersAdminPage = () => {
               </div>
 
               <div className="users-cell">
-                <span className="muted">{user.role}</span>
+                <span>{t(`adminUx.roles.${user.role}`)}</span>
+                <small className="muted">{t(`adminUx.roleHints.${user.role}`)}</small>
               </div>
 
               <div className="users-cell">
                 <span className={`users-status-pill ${user.membership_active ? 'active' : 'inactive'}`}>
-                  {user.membership_active ? 'active' : 'inactive'}
+                  {t(user.membership_active ? 'adminUx.accessActive' : 'adminUx.accessInactive')}
                 </span>
+                {user.is_active === false && <small className="error">{t('adminUx.globalInactive')}</small>}
               </div>
 
               <div className="users-cell users-actions">
                 <button
                   type="button"
                   className="ghost users-action-btn"
-                  onClick={() => openEdit(user.id)}
+                  onClick={() => runAction(() => openEdit(user.id))}
                 >
                   {t('buttons.edit')}
                 </button>
@@ -208,7 +252,7 @@ const UsersAdminPage = () => {
                 <button
                   type="button"
                   className="ghost users-action-btn"
-                  onClick={() => handleToggleMembership(user)}
+                  onClick={() => runAction(() => handleToggleMembership(user))}
                 >
                   {user.membership_active ? t('buttons.deactivate') : t('buttons.activate')}
                 </button>
@@ -216,10 +260,13 @@ const UsersAdminPage = () => {
                 <button
                   type="button"
                   className="ghost users-action-btn"
-                  onClick={async () => {
+                  onClick={() => runAction(async () => {
+                    if (!window.confirm(t('adminUx.resetConfirm', { email: user.email }))) return;
                     const out = await api.createResetToken(user.id);
-                    setMessage(out.token ? `${t('pages.users.resetToken')}: ${out.token}` : t('pages.users.resetByEmail'));
-                  }}
+                    if (!mounted.current) return;
+                    setShowToken(false);
+                    setResetResult({ ...out, email: user.email });
+                  })}
                 >
                   {t('pages.users.generateReset')}
                 </button>
@@ -228,11 +275,14 @@ const UsersAdminPage = () => {
           ))}
         </ul>
       </div>
+      </fieldset>
 
-      <Modal isOpen={modalOpen} onClose={closeModal}>
+      <Modal isOpen={modalOpen} dismissible={!busy} onClose={closeModal}>
         <div>
-          <form onSubmit={submit} className="users-create-form">
+          <form onSubmit={(event) => { event.preventDefault(); runAction(() => submit(event)); }} className="users-create-form">
+            <fieldset className="admin-fieldset" disabled={busy}>
             <h2>{form.id ? t('pages.users.editUser') : t('pages.users.addUser')}</h2>
+            {error && <div className="error" role="alert">{error}</div>}
             <label>
               {t('forms.email')}
               <input
@@ -263,14 +313,15 @@ const UsersAdminPage = () => {
                   checked={form.is_active}
                   onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))}
                 />
-                {t('forms.active')}
+                {t('adminUx.globalActive')}
               </label>
             )}
 
             <h3>{t('pages.users.companyAccess')}</h3>
             {form.memberships.map((membership, index) => (
-              <div key={`${membership.company_id}-${index}`} className="row-actions" style={{ alignItems: 'center', marginBottom: '0.5rem' }}>
+              <div key={index} className="admin-membership">
                 <select
+                  aria-label={`${t('pages.users.selectCompany')} ${index + 1}`}
                   value={membership.company_id}
                   onChange={(event) => setMembershipAt(index, 'company_id', event.target.value)}
                   disabled={!isSuperAdmin}
@@ -278,19 +329,18 @@ const UsersAdminPage = () => {
                 >
                   <option value="">{t('pages.users.selectCompany')}</option>
                   {availableCompanies.map((company) => (
-                    <option key={company.id} value={company.id}>{company.name}</option>
+                    <option key={company.id} value={company.id} disabled={form.memberships.some((other, otherIndex) => otherIndex !== index && Number(other.company_id) === Number(company.id))}>{company.name}</option>
                   ))}
                 </select>
 
                 <select
+                  aria-label={`${t('forms.role')} ${index + 1}`}
                   value={membership.role}
                   onChange={(event) => setMembershipAt(index, 'role', event.target.value)}
                 >
-                  <option value="admin">admin</option>
-                  <option value="editor">editor</option>
-                  <option value="operatore">operatore</option>
-                  <option value="viewer">viewer</option>
+                  {['admin', 'editor', 'operatore', 'viewer'].map((role) => <option key={role} value={role}>{t(`adminUx.roles.${role}`)}</option>)}
                 </select>
+                <small className="muted">{t(`adminUx.roleHints.${membership.role}`)}</small>
 
                 <label className="checkbox-row" style={{ margin: 0 }}>
                   <input
@@ -298,7 +348,7 @@ const UsersAdminPage = () => {
                     checked={membership.is_active}
                     onChange={(event) => setMembershipAt(index, 'is_active', event.target.checked)}
                   />
-                  {t('forms.active')}
+                  {t('adminUx.accessActive')}
                 </label>
 
                 {isSuperAdmin && form.memberships.length > 1 && (
@@ -310,7 +360,7 @@ const UsersAdminPage = () => {
             ))}
 
             <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
-              {isSuperAdmin
+              {isSuperAdmin && unusedCompanies.length > 0
                 ? <button type="button" className="ghost" onClick={addMembership}>{t('pages.users.addCompanyAccess')}</button>
                 : <span />}
               <div>
@@ -318,11 +368,26 @@ const UsersAdminPage = () => {
                 <button type="button" className="ghost" onClick={closeModal}>{t('buttons.close')}</button>
               </div>
             </div>
+            </fieldset>
           </form>
         </div>
       </Modal>
 
-      <FloatingAddButton onClick={openCreate} ariaLabel={t('buttons.new')} />
+      <Modal isOpen={Boolean(resetResult)} onClose={() => { setResetResult(null); setShowToken(false); }}>
+        {resetResult && <div className="admin-reset">
+          <h2>{t('pages.users.generateReset')}</h2>
+          <p>{resetResult.email}</p>
+          <p className="warning">{t(resetResult.token ? 'adminUx.resetPrivate' : 'adminUx.resetDeliveryUnconfirmed')}</p>
+          {resetResult.token && <label>{t('pages.users.resetToken')}
+            <input type={showToken ? 'text' : 'password'} value={resetResult.token} readOnly autoComplete="off" />
+          </label>}
+          {resetResult.expires_at && <p>{t('adminUx.expiresAt')}: {new Date(resetResult.expires_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}</p>}
+          {resetResult.token && <button type="button" onClick={() => setShowToken(!showToken)}>{t(showToken ? 'adminUx.hideToken' : 'adminUx.showToken')}</button>}
+          <button type="button" className="ghost" onClick={() => { setResetResult(null); setShowToken(false); }}>{t('buttons.close')}</button>
+        </div>}
+      </Modal>
+
+      {!busy && !loading && !error && <FloatingAddButton onClick={openCreate} ariaLabel={t('buttons.new')} />}
     </div>
   );
 };
