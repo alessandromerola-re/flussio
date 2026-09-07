@@ -273,7 +273,6 @@ export const api = {
   createUser: (payload) => request('/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (id, payload) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   createResetToken: (id) => request(`/users/${id}/reset-password-token`, { method: 'POST' }),
-  getScaffoldingRoadmap: () => request('/scaffolding/roadmap'),
 
   getBranding: () => request('/settings/branding'),
   downloadBrandLogo: () => request('/settings/branding/logo', { responseType: 'blob' }),

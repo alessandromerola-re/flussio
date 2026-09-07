@@ -16,14 +16,13 @@ const actionToPermission = {
 };
 
 export const getRole = getStoredRole;
-export const isRoadmapEnabled = () => String(import.meta.env.VITE_SHOW_ROADMAP || 'false').toLowerCase() === 'true';
 export const isRecurringEnabled = () => String(import.meta.env.VITE_SHOW_RECURRING || 'false').toLowerCase() === 'true';
 
 export const canPermission = (permission, role = getRole()) => Boolean(rolePermissions[role]?.[permission]);
 
 export const can = (action, resource = null, role = getRole()) => {
   if (resource === 'roadmap') {
-    return canPermission('users_manage', role) && isRoadmapEnabled();
+    return false;
   }
   const permission = actionToPermission[action] || action;
   return canPermission(permission, role);

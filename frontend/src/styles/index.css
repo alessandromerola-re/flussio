@@ -340,15 +340,25 @@ a {
 }
 
 .password-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
+  position: relative;
+  min-width: 0;
 }
 
+.auth-password-group { margin-bottom: 1rem; }
+.auth-password-group label { display: block; margin-bottom: .5rem; }
+.auth-form .password-field input { padding-right: 3.6rem; }
+.auth-helper-card summary { cursor: pointer; min-height: 44px; align-content: center; font-weight: 600; }
+
 .password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 48px;
   min-height: 48px;
-  padding: 0.75rem 1rem;
+  padding: 0;
   border-radius: 14px;
   background: #eff6ff;
   color: #1d4ed8;
@@ -986,9 +996,10 @@ button.danger {
     font-size: 1.65rem;
   }
 
-  .password-field {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  .auth-form .auth-helper-card { padding: .6rem .85rem; }
+  .auth-form .auth-helper-card p { margin-bottom: .3rem; }
+  .auth-mobile-brand { flex-wrap: wrap; margin-bottom: 1rem; }
+  .auth-form .auth-divider { margin: 1rem 0; }
 
   .auth-row {
     flex-wrap: wrap;

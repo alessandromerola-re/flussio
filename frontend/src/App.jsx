@@ -197,7 +197,6 @@ const App = () => {
     const administration = [
       ...(can('manage_users') ? [{ path: '/users', label: t('nav.users'), icon: 'users' }] : []),
       ...(can('manage_users') ? [{ path: '/settings', label: t('nav.settings'), icon: 'settings' }] : []),
-      ...(can('read', 'roadmap') ? [{ path: '/roadmap', label: t('nav.roadmap'), icon: 'roadmap' }] : []),
     ];
     return [
       { id: 'core', label: t('nav.firstNote'), items: core },
