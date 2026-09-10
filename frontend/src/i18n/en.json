@@ -1,4 +1,9 @@
 {
+  "reportsIntegrity.unapplied": "Configuration changed: run the report to apply it. Results and export refer to the last run.",
+  "reportsIntegrity.period": "Applied period",
+  "reportsIntegrity.received": "Result received (Rome time)",
+  "reportsIntegrity.exportHint": "CSV uses the displayed result’s configuration and reads data again at export time. Movements changed since the run may affect values.",
+  "reportsIntegrity.limitHint": "The {{limit}} row limit was reached: table, chart and CSV may be partial. Totals include all filtered movements.",
   "adminUx.accessChangesConfirm": "Saving will disable or remove some company access. Continue?",
   "adminUx.membershipHint": "Role and access status apply to the selected company. Global user status applies to all companies.",
   "adminUx.noUsers": "No users in this company.",

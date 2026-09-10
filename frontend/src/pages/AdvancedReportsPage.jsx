@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { ADV_REPORT_TEMPLATES } from '../utils/advancedReportTemplates.js';
 import { formatCurrencyFromCents } from '../utils/currency.js';
-import { formatDateInTimeZone } from '../utils/date.js';
+import { formatDateInTimeZone, formatDateIT } from '../utils/date.js';
 
 const metricOptions = ['income_sum_cents', 'expense_sum_cents', 'net_sum_cents', 'count', 'avg_abs_cents'];
 const groupOptions = ['month', 'day', 'week', 'quarter', 'year', 'category', 'account', 'contact', 'job', 'property', 'type', 'recurring'];
@@ -98,6 +98,10 @@ const AdvancedReportsPage = () => {
   const [error, setError] = useState('');
   const [lookups, setLookups] = useState({ accounts: [], categories: [], contacts: [], jobs: [], properties: [] });
   const [chartConfig, setChartConfig] = useState({ type: 'line', x: 'month', series: ['net_sum_cents'] });
+  const requestGeneration = useRef(0);
+  const exportLock = useRef(false);
+  const [exporting, setExporting] = useState(false);
+  useEffect(() => () => { requestGeneration.current += 1; }, []);
 
   const canExport = canPermission('export');
 
@@ -126,17 +130,22 @@ const AdvancedReportsPage = () => {
     init();
   }, [t]);
 
-  const runReport = async (nextSpec = spec) => {
+  const runReport = async (nextSpec = spec, nextChart = chartConfig) => {
+    const current = ++requestGeneration.current;
+    const submitted = JSON.parse(JSON.stringify(nextSpec));
     setError('');
     setLoading(true);
+    setResult(null);
     try {
-      const response = await api.runAdvancedReport(nextSpec);
-      setSpec(response.spec);
-      setResult(response);
+      const response = await api.runAdvancedReport(submitted);
+      if (current !== requestGeneration.current) return;
+      setSpec((draft) => JSON.stringify(draft) === JSON.stringify(submitted) ? response.spec : draft);
+      setChartConfig(nextChart);
+      setResult({ ...response, receivedAt: new Date().toISOString() });
     } catch {
-      setError(t('errors.SERVER_ERROR'));
+      if (current === requestGeneration.current) setError(t('errors.SERVER_ERROR'));
     } finally {
-      setLoading(false);
+      if (current === requestGeneration.current) setLoading(false);
     }
   };
 
@@ -151,9 +160,8 @@ const AdvancedReportsPage = () => {
       limit: template.tableDefaults.limit,
     };
 
-    setChartConfig(template.chart);
     setSpec(nextSpec);
-    await runReport(nextSpec);
+    await runReport(nextSpec, template.chart);
   };
 
   const handleMetricToggle = (metric) => {
@@ -165,6 +173,8 @@ const AdvancedReportsPage = () => {
   };
 
   const handleDrilldown = (row) => {
+    if (!result) return;
+    const spec = result.spec;
     const params = new URLSearchParams();
     if (spec.dateFrom) params.set('date_from', spec.dateFrom);
     if (spec.dateTo) params.set('date_to', spec.dateTo);
@@ -190,7 +200,13 @@ const AdvancedReportsPage = () => {
   };
 
   const exportCsv = async () => {
-    const { blob, headers } = await api.exportAdvancedReportCsv(spec);
+    if (!result || loading || exportLock.current) return;
+    const current = requestGeneration.current;
+    exportLock.current = true;
+    setExporting(true); setError('');
+    try {
+    const { blob, headers } = await api.exportAdvancedReportCsv(result.spec);
+    if (current !== requestGeneration.current) return;
     const disposition = headers.get('content-disposition') || '';
     const match = disposition.match(/filename="?([^";]+)"?/i);
     const filename = match?.[1] || `flussio_report_advanced_${new Date().toISOString().slice(0, 10)}.csv`;
@@ -202,6 +218,12 @@ const AdvancedReportsPage = () => {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    } catch {
+      if (current === requestGeneration.current) setError(t('errors.SERVER_ERROR'));
+    } finally {
+      exportLock.current = false;
+      setExporting(false);
+    }
   };
 
   const saveReport = async () => {
@@ -240,6 +262,9 @@ const AdvancedReportsPage = () => {
 
   const rows = result?.rows || [];
   const totals = result?.totals;
+  const appliedSpec = result?.spec;
+  const unappliedChanges = Boolean(result && JSON.stringify(spec) !== JSON.stringify(appliedSpec));
+  const missingDimensions = (row) => (appliedSpec?.groupBy || []).some((dimension) => ['category', 'account', 'contact', 'job', 'property'].includes(dimension) && row[`${dimension}_id`] == null);
   const groupBy1 = spec.groupBy[0] || '';
   const groupBy2Options = useMemo(
     () => groupOptions.filter((option) => option !== groupBy1 && !(timeBuckets.has(groupBy1) && timeBuckets.has(option))),
@@ -256,8 +281,8 @@ const AdvancedReportsPage = () => {
     if (rows[0]?.property_name != null) dims.push('property_name');
     if (rows[0]?.type != null) dims.push('type');
     if (rows[0]?.recurring != null) dims.push('recurring');
-    return [...dims, ...spec.metrics];
-  }, [rows, spec.metrics]);
+    return [...dims, ...(appliedSpec?.metrics || [])];
+  }, [rows, appliedSpec]);
 
   const chartRows = useMemo(() => {
     if (!rows.length || !chartConfig?.series?.length) return [];
@@ -286,7 +311,9 @@ const AdvancedReportsPage = () => {
   return (
     <div className="page">
       <div className="page-header"><h1>{t('pages.reportsAdvanced.title')}</h1></div>
-      {error && <div className="error">{error}</div>}
+      {error && <div className="error" role="alert">{error}</div>}
+      {loading && <p role="status">{t('common.loading')}</p>}
+      {unappliedChanges && <p className="warning" role="status">{t('reportsIntegrity.unapplied')}</p>}
 
       <div className="card report-ready-card">
         <h2>{t('pages.reportsAdvanced.readyReports')}</h2>
@@ -357,7 +384,7 @@ const AdvancedReportsPage = () => {
 
         <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>{metricOptions.map((metric) => <label key={metric} style={{ margin: 0 }}><input type="checkbox" checked={spec.metrics.includes(metric)} onChange={() => handleMetricToggle(metric)} /> {renderMetricLabel(metric)}</label>)}</div>
 
-        <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv}>{t('buttons.exportCsv')}</button>}</div>
+        <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv} disabled={!result || loading || exporting}>{t('buttons.exportCsv')}</button>}</div>
       </details>
 
       {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><ul className="list" style={{ marginTop: '1rem' }}>{savedReports.map((item) => <li key={item.id}><button type="button" className="list-item" onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
@@ -365,8 +392,12 @@ const AdvancedReportsPage = () => {
       {result && (
         <div className="card report-result">
           <h2>{t('pages.reportsAdvanced.results')}</h2>
+          <p>{t('reportsIntegrity.period')}: {formatDateIT(appliedSpec.dateFrom) || '—'} – {formatDateIT(appliedSpec.dateTo) || '—'}</p>
+          <p className="muted">{t('reportsIntegrity.received')}: {new Date(result.receivedAt).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}</p>
+          <p className="muted">{t('reportsIntegrity.exportHint')}</p>
+          {rows.length >= appliedSpec.limit && <p className="warning">{t('reportsIntegrity.limitHint', { limit: appliedSpec.limit })}</p>}
           {totals && <div className="row-actions" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}><span>{t('pages.dashboard.income')}: {formatEuro(totals.income_sum_cents)}</span><span>{t('pages.dashboard.expense')}: {formatEuro(totals.expense_sum_cents)}</span><span>{t('pages.dashboard.net')}: {formatEuro(totals.net_sum_cents)}</span><span>{t('pages.reportsAdvanced.metrics.count')}: {totals.count}</span></div>}
-          <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: row.category_id == null ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col.includes('cents') ? formatEuro(row[col]) : String(row[col] ?? '')}</td>)}<td><button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>Apri</button></td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
+          <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: missingDimensions(row) ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col.includes('cents') ? formatEuro(row[col]) : String(row[col] ?? '')}</td>)}<td><button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>Apri</button></td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
         </div>
       )}
       </div>
