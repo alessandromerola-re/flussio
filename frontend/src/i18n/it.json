@@ -1,4 +1,9 @@
 {
+  "reportsIntegrity.unapplied": "Configurazione modificata: esegui il report per applicarla. Risultati ed esportazione si riferiscono all’ultima esecuzione.",
+  "reportsIntegrity.period": "Periodo applicato",
+  "reportsIntegrity.received": "Risultato ricevuto (ora italiana)",
+  "reportsIntegrity.exportHint": "Il CSV usa la configurazione del risultato visualizzato e rilegge i dati al momento dell’esportazione. Eventuali movimenti modificati nel frattempo possono cambiare i valori.",
+  "reportsIntegrity.limitHint": "Raggiunto il limite di {{limit}} righe: tabella, grafico e CSV potrebbero essere parziali. I totali comprendono tutti i movimenti filtrati.",
   "adminUx.accessChangesConfirm": "Salvando, alcuni accessi aziendali verranno disattivati o rimossi. Confermi?",
   "adminUx.membershipHint": "Ruolo e stato di accesso si riferiscono all’azienda selezionata. Lo stato globale dell’utente vale invece per tutte le aziende.",
   "adminUx.noUsers": "Nessun utente presente in questa azienda.",
