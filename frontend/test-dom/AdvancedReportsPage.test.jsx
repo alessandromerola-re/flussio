@@ -29,7 +29,7 @@ it('keeps export and result columns bound to the applied configuration after edi
   await waitFor(() => expect(api.exportAdvancedReportCsv).toHaveBeenCalledWith(applied));
   await screen.findByRole('alert');
   fireEvent.click(screen.getByLabelText('Apri movimenti riga 1'));
-  expect(screen.getByTestId('location').textContent).toContain(`date_from=${applied.dateFrom}`);
+  expect(screen.getByTestId('location').textContent).toContain(`date_from=${applied.dateFrom > '2026-09-01' ? applied.dateFrom : '2026-09-01'}`);
 });
 it('does not mark a time aggregate as missing a category', async () => {
   setup(); fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');

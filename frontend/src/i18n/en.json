@@ -1,4 +1,12 @@
 {
+  "reportDetail.cashflow_only": "Income and expenses only",
+  "reportDetail.description_q": "Text in description",
+  "reportDetail.include_category_children": "Includes child categories",
+  "reportDetail.missing_account": "No account",
+  "reportDetail.missing_category": "No category",
+  "reportDetail.missing_contact": "No contact",
+  "reportDetail.missing_job": "No job",
+  "reportDetail.missing_property": "No property",
   "reportsIntegrity.reconciled": "Row sums match totals for the selected monetary metrics.",
   "reportsIntegrity.difference": "Row sums differ from totals. Check the amounts allocated to accounts; differences below are row sums minus totals.",
   "reportsIntegrity.accountBasis": "Amounts allocated to accounts: a split movement contributes its assigned share to each account. Without an account filter, general totals count each movement once; per-account counts are not additive. Unlinked movements remain in a separate group. Movement details show the full movement amount.",

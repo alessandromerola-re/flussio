@@ -52,6 +52,19 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
 
   const where = ['t.company_id = $1'];
   const params = [companyId];
+  for (const key of ['cashflow_only','include_category_children','missing_account','missing_category','missing_contact','missing_job','missing_property']) {
+    if (filters[key] != null && filters[key] !== '' && !['0','1'].includes(String(filters[key]))) return { error: true };
+  }
+  if (String(filters.cashflow_only) === '1') where.push("t.type IN ('income','expense')");
+  for (const dimension of ['category','contact','job','property']) {
+    if (String(filters[`missing_${dimension}`]) === '1') where.push(`t.${dimension}_id IS NULL`);
+  }
+  if (String(filters.missing_account) === '1') where.push('NOT EXISTS (SELECT 1 FROM transaction_accounts missing_ta JOIN accounts missing_a ON missing_a.id = missing_ta.account_id AND missing_a.company_id = t.company_id WHERE missing_ta.transaction_id = t.id)');
+  if (filters.description_q != null && filters.description_q !== '') {
+    if (typeof filters.description_q !== 'string') return { error: true };
+    params.push(`%${filters.description_q.trim()}%`);
+    where.push(`COALESCE(t.description,'') ILIKE $${params.length}`);
+  }
 
   if (filters.date_from) {
     if (!isoDateRegex.test(filters.date_from)) {
@@ -84,7 +97,7 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
   if (accountId != null) {
     params.push(accountId);
     where.push(
-      `EXISTS (SELECT 1 FROM transaction_accounts ta2 WHERE ta2.transaction_id = t.id AND ta2.account_id = $${params.length})`
+      `EXISTS (SELECT 1 FROM transaction_accounts ta2 JOIN accounts account_filter ON account_filter.id = ta2.account_id AND account_filter.company_id = t.company_id WHERE ta2.transaction_id = t.id AND ta2.account_id = $${params.length})`
     );
   }
 
@@ -94,7 +107,13 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
   }
   if (categoryId != null) {
     params.push(categoryId);
-    where.push(`t.category_id = $${params.length}`);
+    where.push(String(filters.include_category_children) === '1' ? `t.category_id IN (
+      WITH RECURSIVE report_categories AS (
+        SELECT id FROM categories WHERE company_id = $1 AND id = $${params.length}
+        UNION
+        SELECT child.id FROM categories child JOIN report_categories parent ON parent.id = child.parent_id WHERE child.company_id = $1
+      ) SELECT id FROM report_categories
+    )` : `t.category_id = $${params.length}`);
   }
 
   const contactId = parseInteger(filters.contact_id);

@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
 import { query, resetDb, close } from './_db.js';
+import { reportDrilldownParams } from '../../frontend/src/utils/reportDrilldown.js';
 let server, baseUrl, token, company, bank, cash, foreignAccount, parent, child, foreignCategory, split;
 const request = async (path, spec) => {
   const response = await fetch(`${baseUrl}/api/reports/advanced/${path}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'X-Company-Id': String(company), 'Content-Type': 'application/json' }, body: JSON.stringify(spec) });
@@ -98,4 +99,38 @@ test('inconsistent historical allocations produce an explicit reconciliation dif
     assert.equal(result.data.reconciliation.income_sum_cents,'-1000');
     assert.equal(result.data.reconciliation.net_sum_cents,'-1000');
   } finally { await query('UPDATE transactions SET amount_total=100 WHERE id=$1',[split]); }
+});
+
+test('drilldown returns precisely the movements and monetary shares behind each row', async () => {
+  await query("UPDATE transactions SET date='2026-09-25' WHERE company_id=$1 AND amount_total=20",[company]);
+  const inputs = [
+    ...['day','week','month','quarter','year','category','account','contact','property','job','type','recurring'].map((dimension) => spec({groupBy:[dimension]})),
+    spec({groupBy:['week','account']}), spec({groupBy:['month','category'],filters:{categoryId:parent,includeCategoryChildren:true}}),
+    spec({groupBy:['contact'],filters:{categoryId:parent,includeCategoryChildren:true,hasAttachments:false}}),
+    spec({groupBy:['category'],filters:{accountId:cash,text:'Golden',hasAttachments:true}}),
+    spec({groupBy:['account'],filters:{type:'transfer'}}),
+  ];
+  for (const input of inputs) {
+    const report = await request('run',input); assert.equal(report.status,200,JSON.stringify(input));
+    for (const row of report.data.rows) {
+      const params = reportDrilldownParams(report.data.spec,row);
+      const result = await fetch(`${baseUrl}/api/transactions?${params}`,{headers:{Authorization:`Bearer ${token}`,'X-Company-Id':String(company)}});
+      assert.equal(result.status,200,params.toString());
+      const movements = await result.json();
+      assert.equal(movements.length,Number(row.count),params.toString());
+      const accountId = params.get('account_id');
+      const cents = (movement) => Math.round((accountId ? movement.accounts.filter((entry) => Number(entry.account_id) === Number(accountId)).reduce((sum,entry) => sum+Number(entry.amount),0) : Number(movement.amount_total))*100);
+      const income = movements.filter((m) => m.type === 'income').reduce((sum,m) => sum+cents(m),0);
+      const expense = movements.filter((m) => m.type === 'expense').reduce((sum,m) => sum+Math.abs(cents(m)),0);
+      assert.deepEqual([income,expense,income-expense],[Number(row.income_sum_cents),Number(row.expense_sum_cents),Number(row.net_sum_cents)],params.toString());
+    }
+  }
+});
+
+test('description-only drilldown does not broaden matching to category names', async () => {
+  const report = await request('run',spec({filters:{text:'Parent'}}));
+  assert.equal(report.data.totals.count,0);
+  const params = reportDrilldownParams(report.data.spec,report.data.rows[0]);
+  const result = await fetch(`${baseUrl}/api/transactions?${params}`,{headers:{Authorization:`Bearer ${token}`,'X-Company-Id':String(company)}});
+  assert.deepEqual(await result.json(),[]);
 });
