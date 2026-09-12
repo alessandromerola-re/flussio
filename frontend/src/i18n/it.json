@@ -1,4 +1,12 @@
 {
+  "reportDetail.cashflow_only": "Solo entrate e uscite",
+  "reportDetail.description_q": "Testo nella descrizione",
+  "reportDetail.include_category_children": "Include categorie figlie",
+  "reportDetail.missing_account": "Senza conto",
+  "reportDetail.missing_category": "Senza categoria",
+  "reportDetail.missing_contact": "Senza contatto",
+  "reportDetail.missing_job": "Senza commessa",
+  "reportDetail.missing_property": "Senza immobile",
   "reportsIntegrity.reconciled": "Le somme delle righe coincidono con i totali per le metriche monetarie selezionate.",
   "reportsIntegrity.difference": "Le somme delle righe differiscono dai totali. Verifica le quote attribuite ai conti; gli scostamenti sotto sono calcolati come somma righe meno totale.",
   "reportsIntegrity.accountBasis": "Importi attribuiti ai conti: un movimento ripartito contribuisce a ciascun conto per la sua quota. Senza filtro conto, i totali generali contano il movimento una sola volta; i conteggi per conto non sono sommabili. I movimenti senza conto restano in un gruppo dedicato. Il dettaglio Movimenti mostra l’importo completo del movimento.",

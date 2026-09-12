@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { ADV_REPORT_TEMPLATES } from '../utils/advancedReportTemplates.js';
+import { reportDrilldownParams } from '../utils/reportDrilldown.js';
 import { formatCurrencyFromCents } from '../utils/currency.js';
 import { formatDateInTimeZone, formatDateIT } from '../utils/date.js';
 
@@ -174,29 +175,8 @@ const AdvancedReportsPage = () => {
 
   const handleDrilldown = (row) => {
     if (!result) return;
-    const spec = result.spec;
-    const params = new URLSearchParams();
-    if (spec.dateFrom) params.set('date_from', spec.dateFrom);
-    if (spec.dateTo) params.set('date_to', spec.dateTo);
-    if (spec.filters.type && spec.filters.type !== 'all') params.set('type', spec.filters.type);
-    if (spec.filters.accountId) params.set('account_id', spec.filters.accountId);
-    if (spec.filters.categoryId) params.set('category_id', spec.filters.categoryId);
-    if (spec.filters.contactId) params.set('contact_id', spec.filters.contactId);
-    if (spec.filters.jobId) params.set('job_id', spec.filters.jobId);
-    if (spec.filters.propertyId) params.set('property_id', spec.filters.propertyId);
-    if (spec.filters.text) params.set('q', spec.filters.text);
-    if (spec.filters.isRecurring != null) params.set('is_recurring', spec.filters.isRecurring ? '1' : '0');
-    if (spec.filters.hasAttachments != null) params.set('has_attachments', spec.filters.hasAttachments ? '1' : '0');
-
-    if (row.account_id) params.set('account_id', row.account_id);
-    if (row.category_id) params.set('category_id', row.category_id);
-    if (row.contact_id) params.set('contact_id', row.contact_id);
-    if (row.job_id) params.set('job_id', row.job_id);
-    if (row.property_id) params.set('property_id', row.property_id);
-    if (row.type) params.set('type', row.type);
-    if (row.recurring != null) params.set('is_recurring', row.recurring ? '1' : '0');
-
-    navigate(`/movements?${params.toString()}`);
+    try { navigate(`/movements?${reportDrilldownParams(result.spec, row).toString()}`); }
+    catch { setError(t('errors.SERVER_ERROR')); }
   };
 
   const exportCsv = async () => {

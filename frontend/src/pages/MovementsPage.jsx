@@ -28,6 +28,14 @@ const emptyForm = {
 const maxAttachmentMb = 20;
 
 const defaultFilters = {
+  cashflow_only: '',
+  description_q: '',
+  include_category_children: '',
+  missing_account: '',
+  missing_category: '',
+  missing_contact: '',
+  missing_job: '',
+  missing_property: '',
   recurring_template_id: '',
   transaction_id: '',
   date_from: '',
@@ -152,6 +160,7 @@ const MovementsPage = () => {
 
     const nextFilters = {
       ...defaultFilters,
+      ...Object.fromEntries(['cashflow_only','description_q','include_category_children','missing_account','missing_category','missing_contact','missing_job','missing_property'].map((key) => [key, searchParams.get(key) || ''])),
       recurring_template_id: searchParams.get('recurring_template_id') || '',
       transaction_id: searchParams.get('transaction_id') || '',
       date_from: searchParams.get('date_from') || '',
@@ -454,6 +463,10 @@ const MovementsPage = () => {
 
   const activeFilterChips = useMemo(() => {
     const labels = [];
+    for (const key of ['cashflow_only','include_category_children','missing_account','missing_category','missing_contact','missing_job','missing_property']) {
+      if (filters[key] === '1') labels.push({ key, label: t(`reportDetail.${key}`) });
+    }
+    if (filters.description_q) labels.push({ key: 'description_q', label: `${t('reportDetail.description_q')}: ${filters.description_q}` });
     if (filters.recurring_template_id) labels.push({ key: 'recurring_template_id', label: `${t('pages.recurring.title')} #${filters.recurring_template_id}` });
     if (filters.transaction_id) labels.push({ key: 'transaction_id', label: `${t('pages.movements.details')} #${filters.transaction_id}` });
 

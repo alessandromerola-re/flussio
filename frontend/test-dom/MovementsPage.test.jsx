@@ -147,6 +147,13 @@ it('opens creation from a job with that job already selected', async () => {
   expect(api.getTransactions).toHaveBeenCalledWith(expect.objectContaining({ job_id: '7' }));
 });
 
+it('preserves report filters and lets users remove a single detail constraint', async () => {
+  render(<MemoryRouter initialEntries={['/movements?cashflow_only=1&description_q=rent&missing_contact=1&category_id=1&include_category_children=1']}><MovementsPage /></MemoryRouter>);
+  await waitFor(() => expect(api.getTransactions).toHaveBeenCalledWith(expect.objectContaining({ cashflow_only: '1', description_q: 'rent', missing_contact: '1', category_id: '1', include_category_children: '1' })));
+  fireEvent.click(screen.getByRole('button', { name: /reportDetail.missing_contact/ }));
+  await waitFor(() => expect(api.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ missing_contact: '', cashflow_only: '1', description_q: 'rent', category_id: '1', include_category_children: '1' })));
+});
+
 it('opens creation from a property with that property already selected', async () => {
   render(<MemoryRouter initialEntries={['/movements?property_id=1&new=1']}><MovementsPage /></MemoryRouter>);
   const dialog = await screen.findByRole('dialog');
