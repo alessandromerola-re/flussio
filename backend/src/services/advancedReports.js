@@ -100,6 +100,15 @@ export const validateAndNormalizeSpec = (specInput, companyId) => {
     if (groupBy.length === 2) break;
   }
 
+  const reportKind = spec.reportKind || 'standard';
+  if (!['standard','budget','yoy','mom','quality'].includes(reportKind)) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'reportKind' } };
+  const qualityDimensions = spec.qualityDimensions ?? ['account','category'];
+  if (reportKind === 'quality' && (!Array.isArray(qualityDimensions) || !qualityDimensions.length || qualityDimensions.some((d) => !['account','category','contact','job','property'].includes(d)))) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'qualityDimensions' } };
+  if (['yoy','mom'].includes(reportKind) && (!dateFrom || !dateTo || dateFrom < '1901-01-01' || Number(dateTo.slice(0,4))*12+Number(dateTo.slice(5,7))-(Number(dateFrom.slice(0,4))*12+Number(dateFrom.slice(5,7)))>119)) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'dateFrom' } };
+  // Whole-job budgets cannot meaningfully be compared with filtered or prorated actuals.
+  if (reportKind === 'budget' && (type !== 'all' || accountId != null || categoryId != null || contactId != null || propertyId != null || filtersInput.text || parseBooleanOrNull(filtersInput.isRecurring) != null || parseBooleanOrNull(filtersInput.hasAttachments) != null)) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'filters' } };
+  if ((reportKind === 'yoy' && type !== 'all') || (reportKind === 'mom' && type !== 'expense')) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'type' } };
+  if (reportKind !== 'standard' && groupBy.join(',') !== (reportKind === 'budget' ? 'job' : reportKind === 'quality' ? '' : 'month')) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'groupBy' } };
   const limitRaw = Number(spec.limit);
   if (groupBy.filter((dimension) => ['day', 'week', 'month', 'quarter', 'year'].includes(dimension)).length > 1) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'groupBy' } };
   const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 200;
@@ -111,6 +120,8 @@ export const validateAndNormalizeSpec = (specInput, companyId) => {
 
   return {
     companyId,
+    reportKind,
+    ...(reportKind === 'quality' ? { qualityDimensions: [...new Set(qualityDimensions)] } : {}),
     dateFrom,
     dateTo,
     filters: {
@@ -127,7 +138,7 @@ export const validateAndNormalizeSpec = (specInput, companyId) => {
     },
     groupBy,
     metrics,
-    sort: { by: sortBy, dir: sortDirRaw },
+    sort: reportKind === 'standard' ? { by: sortBy, dir: sortDirRaw } : { by: reportKind === 'budget' ? 'job_id' : reportKind === 'quality' ? 'dimension' : 'bucket', dir: 'asc' },
     limit,
   };
 };
@@ -193,7 +204,7 @@ const csvEscape = (value) => {
   return stringValue;
 };
 
-const buildFilterSql = (spec) => {
+export const buildFilterSql = (spec) => {
   const where = ['t.company_id = $1'];
   const params = [spec.companyId];
   let withRecursive = '';
@@ -274,7 +285,7 @@ const buildFilterSql = (spec) => {
 
 // One row per movement/account, including multiple legs on the same account.
 // General totals use movement amounts; account reports use assigned amounts.
-const accountJoin = (spec, grouped = false) => (grouped || spec.filters.accountId != null) ? `
+export const accountJoin = (spec, grouped = false) => (grouped || spec.filters.accountId != null) ? `
     LEFT JOIN LATERAL (
       SELECT acc.id, acc.name, SUM(ta.amount) AS allocated_amount
       FROM transaction_accounts ta

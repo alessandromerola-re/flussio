@@ -1,3 +1,4 @@
+import { runSpecialReport } from '../services/reportComparisons.js';
 import express from 'express';
 import { query, getClient } from '../db/index.js';
 import { requirePermission, getRole } from '../middleware/permissions.js';
@@ -22,6 +23,11 @@ router.post('/run', async (req, res) => {
 
     client = await getClient();
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    if (normalized.reportKind !== 'standard') {
+      const result = await runSpecialReport(client, normalized);
+      await client.query('COMMIT');
+      return res.json({spec:normalized,...result,generated_at:new Date().toISOString()});
+    }
     const rowsResult = await client.query(aggregate.text, aggregate.values);
     const totalsResult = await client.query(totals.text, totals.values);
     await client.query('COMMIT');
@@ -52,6 +58,7 @@ router.post('/run', async (req, res) => {
 });
 
 router.post('/export.csv', requirePermission('export'), async (req, res) => {
+  let client;
   const normalized = validateAndNormalizeSpec(req.body, req.companyId);
   if (normalized.error) {
     return sendError(res, 400, normalized.error.code, 'Spec report non valida.', { field: normalized.error.field });
@@ -59,7 +66,12 @@ router.post('/export.csv', requirePermission('export'), async (req, res) => {
 
   try {
     const aggregate = buildAdvancedReportQuery(normalized);
-    const rowsResult = await query(aggregate.text, aggregate.values);
+    client = await getClient();
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const rowsResult = normalized.reportKind === 'standard'
+      ? await client.query(aggregate.text, aggregate.values)
+      : await runSpecialReport(client, normalized);
+    await client.query('COMMIT');
     const csv = toCsv(rowsResult.rows);
 
     const datePart = new Date().toISOString().slice(0, 10);
@@ -67,9 +79,10 @@ router.post('/export.csv', requirePermission('export'), async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="flussio_report_advanced_${datePart}.csv"`);
     return res.status(200).send(csv);
   } catch (error) {
+    await client?.query('ROLLBACK').catch(() => {});
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
-  }
+  } finally { client?.release(); }
 });
 
 router.get('/saved', async (req, res) => {

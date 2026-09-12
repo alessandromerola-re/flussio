@@ -87,3 +87,21 @@ it('shows allocation differences without claiming that totals reconcile', async 
   expect(screen.getByText('reportsIntegrity.difference')).toBeTruthy();
   expect(screen.queryByText('reportsIntegrity.reconciled')).toBeNull();
 });
+
+it('renders comparison values and opens the previous applied period after editing dates',async()=>{
+ api.runAdvancedReport.mockImplementation(async(spec)=>({spec,rows:[{bucket:'2026-09',current_from:'2026-09-01',current_to:'2026-09-12',previous_from:'2025-09-01',previous_to:'2025-09-12',current_cents:'20000',previous_cents:'0',delta_cents:'20000',change_pct:null,count:1}],columns:['current_cents','previous_cents','change_pct'],report_note:'calendarComparison'}));
+ setup();fireEvent.click(screen.getByText('reportsTemplates.yoyMonthlyNet.title'));await screen.findByRole('table');
+ expect(within(screen.getByRole('table')).getByText('—')).toBeTruthy();
+ fireEvent.change(screen.getByLabelText('pages.movements.dateFrom'),{target:{value:'2020-01-01'}});
+ fireEvent.click(screen.getByText('reportComparison.openPrevious'));
+ expect(screen.getByTestId('location').textContent).toContain('date_from=2025-09-01');
+ expect(screen.getByTestId('location').textContent).toContain('date_to=2025-09-12');
+});
+it('budget mode locks incompatible filters and exposes a way back to custom reports',async()=>{
+ setup();fireEvent.click(screen.getByText('reportsTemplates.jobsBudgetVsActual.title'));await screen.findByRole('table');
+ expect(screen.getByLabelText('pages.movements.dateFrom').disabled).toBe(true);
+ expect(screen.getByLabelText('pages.movements.account').disabled).toBe(true);
+ expect(screen.getByLabelText('pages.movements.job').disabled).toBe(false);
+ fireEvent.click(screen.getByText('reportComparison.custom'));
+ expect(screen.getByLabelText('pages.movements.dateFrom').disabled).toBe(false);
+});
