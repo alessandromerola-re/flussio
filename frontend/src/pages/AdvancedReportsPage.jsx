@@ -173,9 +173,9 @@ const AdvancedReportsPage = () => {
     });
   };
 
-  const handleDrilldown = (row) => {
+  const handleDrilldown = (row, previous = false) => {
     if (!result) return;
-    try { navigate(`/movements?${reportDrilldownParams(result.spec, row).toString()}`); }
+    try { navigate(`/movements?${reportDrilldownParams(result.spec, row, previous).toString()}`); }
     catch { setError(t('errors.SERVER_ERROR')); }
   };
 
@@ -252,6 +252,7 @@ const AdvancedReportsPage = () => {
   );
 
   const columns = useMemo(() => {
+    if (result?.columns) return result.columns;
     const dims = [];
     if (rows[0]?.bucket != null) dims.push('bucket');
     if (rows[0]?.category_name != null) dims.push('category_name');
@@ -262,10 +263,10 @@ const AdvancedReportsPage = () => {
     if (rows[0]?.type != null) dims.push('type');
     if (rows[0]?.recurring != null) dims.push('recurring');
     return [...dims, ...(appliedSpec?.metrics || [])];
-  }, [rows, appliedSpec]);
+  }, [rows, appliedSpec, result]);
 
   const chartRows = useMemo(() => {
-    if (!rows.length || !chartConfig?.series?.length) return [];
+    if (result?.report_note || !rows.length || !chartConfig?.series?.length) return [];
     const topN = chartConfig.topN || rows.length;
     return rows
       .map((row) => ({
@@ -286,7 +287,11 @@ const AdvancedReportsPage = () => {
 
   const renderGroupOptionLabel = (value) => t(`pages.reportsAdvanced.groupOptions.${value}`, value);
   const renderMetricLabel = (value) => t(`pages.reportsAdvanced.metrics.${value}`, value);
-  const renderColumnLabel = (value) => (value.includes('cents') || value === 'count' ? renderMetricLabel(value) : t(dimensionLabelKey[value] || value, value));
+  const renderColumnLabel = (value) => result?.columns ? t(`reportComparison.${value}`, value) : (value.includes('cents') || value === 'count' ? renderMetricLabel(value) : t(dimensionLabelKey[value] || value, value));
+
+  const special = spec.reportKind && spec.reportKind !== 'standard';
+  const budget = spec.reportKind === 'budget';
+  const renderCell = (row, col) => row[col] == null ? '—' : col.includes('cents') ? formatEuro(row[col]) : col.endsWith('_pct') ? `${row[col]}%` : col === 'dimension' ? renderGroupOptionLabel(row[col]) : col.endsWith('_from') || col.endsWith('_to') ? formatDateIT(row[col]) : String(row[col]);
 
   return (
     <div className="page">
@@ -302,7 +307,7 @@ const AdvancedReportsPage = () => {
             <button key={template.key} type="button" className="list-item" onClick={() => applyReadyTemplate(template)} style={{ textAlign: 'left' }}>
               <strong>{t(template.titleKey)}</strong>
               <small style={{ display: 'block' }}>{t(template.descriptionKey)}</small>
-              <small className="muted">{t('pages.reportsAdvanced.chartType')}: {t(`pages.reportsAdvanced.chartTypes.${template.chart.type}`)}</small>
+              {!template.spec.reportKind && <small className="muted">{t('pages.reportsAdvanced.chartType')}: {t(`pages.reportsAdvanced.chartTypes.${template.chart.type}`)}</small>}
             </button>
           ))}
         </div>
@@ -338,31 +343,33 @@ const AdvancedReportsPage = () => {
       <div className="report-layout">
       <details className="card report-builder" open>
         <summary><strong>{t('pages.movements.filters')}</strong></summary>
+        {special && <p>{t(`reportComparison.mode.${spec.reportKind}`)} <button type="button" className="ghost" onClick={() => setSpec({...baseSpec, ...getLast30Range(), reportKind:'standard'})}>{t('reportComparison.custom')}</button></p>}
+        {spec.reportKind === 'quality' && <fieldset><legend>{t('reportComparison.dimensions')}</legend>{['account','category','contact','job','property'].map((dimension) => <label key={dimension}><input type="checkbox" checked={(spec.qualityDimensions || ['account','category']).includes(dimension)} onChange={(e) => setSpec((prev) => ({...prev,qualityDimensions:e.target.checked ? [...(prev.qualityDimensions || ['account','category']),dimension] : (prev.qualityDimensions || ['account','category']).filter((d) => d !== dimension)}))} />{renderGroupOptionLabel(dimension)}</label>)}</fieldset>}
         <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>
-          <button type="button" className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getCurrentMonthRange() }))}>{t('pages.reportsAdvanced.datePresets.currentMonth')}</button>
-          <button type="button" className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getLast30Range() }))}>{t('pages.reportsAdvanced.datePresets.last30Days')}</button>
-          <button type="button" className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getYtdRange() }))}>{t('pages.reportsAdvanced.datePresets.currentYear')}</button>
+          <button type="button" disabled={budget} className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getCurrentMonthRange() }))}>{t('pages.reportsAdvanced.datePresets.currentMonth')}</button>
+          <button type="button" disabled={budget} className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getLast30Range() }))}>{t('pages.reportsAdvanced.datePresets.last30Days')}</button>
+          <button type="button" disabled={budget} className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getYtdRange() }))}>{t('pages.reportsAdvanced.datePresets.currentYear')}</button>
         </div>
 
         <div className="form-grid" style={{ marginTop: '1rem' }}>
-          <label>{t('pages.movements.dateFrom')}<input type="date" value={spec.dateFrom || ''} onChange={(e) => setSpec((p) => ({ ...p, dateFrom: e.target.value }))} /></label>
-          <label>{t('pages.movements.dateTo')}<input type="date" value={spec.dateTo || ''} onChange={(e) => setSpec((p) => ({ ...p, dateTo: e.target.value }))} /></label>
-          <label>{t('pages.movements.type')}<select value={spec.filters.type} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, type: e.target.value } }))}><option value="all">{t('common.all')}</option><option value="income">{t('pages.movements.income')}</option><option value="expense">{t('pages.movements.expense')}</option><option value="transfer">{t('pages.movements.transfer')}</option></select></label>
-          <label>{t('pages.movements.account')}<select value={spec.filters.accountId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, accountId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.accounts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.movements.category')}<select value={spec.filters.categoryId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, categoryId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.categories.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.movements.contact')}<select value={spec.filters.contactId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, contactId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.contacts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label>{t('pages.movements.dateFrom')}<input type="date" disabled={budget} value={spec.dateFrom || ''} onChange={(e) => setSpec((p) => ({ ...p, dateFrom: e.target.value }))} /></label>
+          <label>{t('pages.movements.dateTo')}<input type="date" disabled={budget} value={spec.dateTo || ''} onChange={(e) => setSpec((p) => ({ ...p, dateTo: e.target.value }))} /></label>
+          <label>{t('pages.movements.type')}<select disabled={budget || ['yoy','mom'].includes(spec.reportKind)} value={spec.filters.type} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, type: e.target.value } }))}><option value="all">{t('common.all')}</option><option value="income">{t('pages.movements.income')}</option><option value="expense">{t('pages.movements.expense')}</option><option value="transfer">{t('pages.movements.transfer')}</option></select></label>
+          <label>{t('pages.movements.account')}<select disabled={budget} value={spec.filters.accountId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, accountId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.accounts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label>{t('pages.movements.category')}<select disabled={budget} value={spec.filters.categoryId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, categoryId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.categories.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label>{t('pages.movements.contact')}<select disabled={budget} value={spec.filters.contactId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, contactId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.contacts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.job')}<select value={spec.filters.jobId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, jobId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.jobs.map((x) => <option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>
-          <label>{t('pages.movements.property')}<select value={spec.filters.propertyId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, propertyId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.properties.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.movements.searchText')}<input value={spec.filters.text || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, text: e.target.value } }))} /></label>
-          <label>{t('pages.reportsAdvanced.recurring')}<select value={toBooleanFilterSelect(spec.filters.isRecurring)} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, isRecurring: toBooleanFilterValue(e.target.value) } }))}><option value="">{t('common.all')}</option><option value="1">{t('common.yes')}</option><option value="0">{t('common.no')}</option></select></label>
-          <label>{t('pages.reportsAdvanced.hasAttachments')}<select value={toBooleanFilterSelect(spec.filters.hasAttachments)} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, hasAttachments: toBooleanFilterValue(e.target.value) } }))}><option value="">{t('common.all')}</option><option value="1">{t('common.yes')}</option><option value="0">{t('common.no')}</option></select></label>
-          <label>{t('pages.reportsAdvanced.groupBy1')}<select value={spec.groupBy[0] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [e.target.value || '', p.groupBy[1]].filter(Boolean) }))}><option value="">{t('common.none')}</option>{groupOptions.map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}</select></label>
-          <label>{t('pages.reportsAdvanced.groupBy2')}<select value={spec.groupBy[1] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [p.groupBy[0], e.target.value || ''].filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i) }))}><option value="">{t('common.none')}</option>{groupBy2Options.map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}</select></label>
+          <label>{t('pages.movements.property')}<select disabled={budget} value={spec.filters.propertyId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, propertyId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.properties.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label>{t('pages.movements.searchText')}<input disabled={budget} value={spec.filters.text || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, text: e.target.value } }))} /></label>
+          <label>{t('pages.reportsAdvanced.recurring')}<select disabled={budget} value={toBooleanFilterSelect(spec.filters.isRecurring)} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, isRecurring: toBooleanFilterValue(e.target.value) } }))}><option value="">{t('common.all')}</option><option value="1">{t('common.yes')}</option><option value="0">{t('common.no')}</option></select></label>
+          <label>{t('pages.reportsAdvanced.hasAttachments')}<select disabled={budget} value={toBooleanFilterSelect(spec.filters.hasAttachments)} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, hasAttachments: toBooleanFilterValue(e.target.value) } }))}><option value="">{t('common.all')}</option><option value="1">{t('common.yes')}</option><option value="0">{t('common.no')}</option></select></label>
+          <label>{t('pages.reportsAdvanced.groupBy1')}<select disabled={Boolean(special)} value={spec.groupBy[0] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [e.target.value || '', p.groupBy[1]].filter(Boolean) }))}><option value="">{t('common.none')}</option>{groupOptions.map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}</select></label>
+          <label>{t('pages.reportsAdvanced.groupBy2')}<select disabled={Boolean(special)} value={spec.groupBy[1] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [p.groupBy[0], e.target.value || ''].filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i) }))}><option value="">{t('common.none')}</option>{groupBy2Options.map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}</select></label>
         </div>
 
         {spec.filters.categoryId && <div className="row-actions" style={{ marginTop: '1rem' }}><label style={{ margin: 0 }}><input type="checkbox" checked={Boolean(spec.filters.includeCategoryChildren)} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, includeCategoryChildren: e.target.checked } }))} /> {t('pages.reportsAdvanced.includeCategoryChildren')}</label></div>}
 
-        <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>{metricOptions.map((metric) => <label key={metric} style={{ margin: 0 }}><input type="checkbox" checked={spec.metrics.includes(metric)} onChange={() => handleMetricToggle(metric)} /> {renderMetricLabel(metric)}</label>)}</div>
+        <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>{metricOptions.map((metric) => <label key={metric} style={{ margin: 0 }}><input type="checkbox" disabled={Boolean(special)} checked={spec.metrics.includes(metric)} onChange={() => handleMetricToggle(metric)} /> {renderMetricLabel(metric)}</label>)}</div>
 
         <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv} disabled={!result || loading || exporting}>{t('buttons.exportCsv')}</button>}</div>
       </details>
@@ -372,7 +379,8 @@ const AdvancedReportsPage = () => {
       {result && (
         <div className="card report-result">
           <h2>{t('pages.reportsAdvanced.results')}</h2>
-          <p>{t('reportsIntegrity.period')}: {formatDateIT(appliedSpec.dateFrom) || '—'} – {formatDateIT(appliedSpec.dateTo) || '—'}</p>
+          {result.report_note && <p role="note">{t(`reportComparison.${result.report_note}`)}</p>}
+          {appliedSpec.reportKind !== 'budget' && <p>{t('reportsIntegrity.period')}: {formatDateIT(appliedSpec.dateFrom) || '—'} – {formatDateIT(appliedSpec.dateTo) || '—'}</p>}
           <p className="muted">{t('reportsIntegrity.received')}: {new Date(result.receivedAt).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}</p>
           <p className="muted">{t('reportsIntegrity.exportHint')}</p>
           {result.amount_basis === 'account_allocations' && <p className="muted">{t('reportsIntegrity.accountBasis')}</p>}
@@ -383,7 +391,7 @@ const AdvancedReportsPage = () => {
           )}
           {(result.truncated ?? (rows.length >= appliedSpec.limit)) && <p className="warning">{t('reportsIntegrity.limitHint', { limit: appliedSpec.limit })}</p>}
           {totals && <div className="row-actions" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}><span>{t('pages.dashboard.income')}: {formatEuro(totals.income_sum_cents)}</span><span>{t('pages.dashboard.expense')}: {formatEuro(totals.expense_sum_cents)}</span><span>{t('pages.dashboard.net')}: {formatEuro(totals.net_sum_cents)}</span><span>{t('pages.reportsAdvanced.metrics.count')}: {totals.count}</span></div>}
-          <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: missingDimensions(row) ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col.includes('cents') ? formatEuro(row[col]) : String(row[col] ?? '')}</td>)}<td><button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>Apri</button></td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
+          <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: missingDimensions(row) ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderCell(row,col)}</td>)}<td>{appliedSpec.reportKind !== 'quality' && <button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>{t('reportComparison.openCurrent')}</button>}{['yoy','mom'].includes(appliedSpec.reportKind) && <button type="button" className="ghost" onClick={() => handleDrilldown(row,true)}>{t('reportComparison.openPrevious')}</button>}</td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
         </div>
       )}
       </div>
