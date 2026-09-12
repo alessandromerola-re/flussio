@@ -134,3 +134,62 @@ test('description-only drilldown does not broaden matching to category names', a
   const result = await fetch(`${baseUrl}/api/transactions?${params}`,{headers:{Authorization:`Bearer ${token}`,'X-Company-Id':String(company)}});
   assert.deepEqual(await result.json(),[]);
 });
+
+test('budget report uses real lifetime budgets, includes empty jobs and preserves unknown budgets',async()=>{
+ const ids=[];
+ try {
+  for(const [name,revenue,cost] of [['Budget',12000,2000],['Empty',0,0],['Unknown',null,null]]) ids.push((await query('INSERT INTO jobs(company_id,name,title,expected_revenue_cents,expected_cost_cents) VALUES($1,$2,$2,$3,$4) RETURNING id',[company,name,revenue,cost])).rows[0].id);
+  await query('UPDATE transactions SET job_id=$1 WHERE id=$2',[ids[0],split]);
+  const input=spec({reportKind:'budget',dateFrom:'2020-01-01',dateTo:'2020-01-02',groupBy:['job']});
+  const report=await request('run',input);assert.equal(report.status,200);
+  const budget=report.data.rows.find(r=>r.job_id===ids[0]);
+  assert.equal(budget.income_sum_cents,'10000');assert.equal(budget.revenue_variance_cents,'-2000');assert.equal(budget.cost_variance_cents,'-2000');
+  assert.equal(report.data.rows.find(r=>r.job_id===ids[1]).count,0);
+  assert.equal(report.data.rows.find(r=>r.job_id===ids[2]).expected_net_cents,null);
+  assert.equal((await request('run',{...input,filters:{accountId:cash}})).status,400);
+  const params=reportDrilldownParams(report.data.spec,budget);assert.equal(params.has('date_from'),false);
+  const csv=await request('export.csv',input);assert.equal(csv.status,200);assert.ok(csv.data.includes('revenue_variance_cents'));assert.ok(csv.data.includes('-2000'));
+ }finally{await query('UPDATE transactions SET job_id=NULL WHERE id=$1',[split]);await query('DELETE FROM jobs WHERE id=ANY($1::int[])',[ids]);}
+});
+test('YoY and MoM compare actual matching periods and retain account allocations',async()=>{
+ const ids=[];
+ try{
+  for(const [date,type,amount] of [['2025-09-10','income',50],['2026-08-10','expense',10]]) {
+   const id=(await query('INSERT INTO transactions(company_id,date,type,amount_total,description) VALUES($1,$2,$3,$4,$5) RETURNING id',[company,date,type,amount,'Previous'])).rows[0].id;ids.push(id);
+   await query("INSERT INTO transaction_accounts(transaction_id,account_id,direction,amount) VALUES($1,$2,$3,$4)",[id,cash,type==='expense'?'out':'in',amount]);
+  }
+  const report=await request('run',spec({reportKind:'yoy',groupBy:['month'],filters:{type:'all',accountId:cash}}));assert.equal(report.status,200);
+  assert.deepEqual([report.data.rows[0].current_cents,report.data.rows[0].previous_cents,report.data.rows[0].delta_cents],['7000','5000','2000']);
+  const previous=reportDrilldownParams(report.data.spec,report.data.rows[0],true);assert.equal(previous.get('date_from'),'2025-09-01');assert.equal(previous.get('account_id'),String(cash));
+  const mom=await request('run',spec({reportKind:'mom',groupBy:['month'],filters:{type:'expense',accountId:cash}}));assert.equal(mom.status,200);
+  assert.deepEqual([mom.data.rows[0].current_cents,mom.data.rows[0].previous_cents,mom.data.rows[0].change_pct],['2000','1000','100.00']);
+  const zero=await request('run',spec({reportKind:'yoy',dateFrom:'2022-01-01',dateTo:'2022-02-28',groupBy:['month']}));assert.equal(zero.data.rows.length,2);assert.equal(zero.data.rows[0].change_pct,null);
+  const limited=await request('run',spec({reportKind:'yoy',dateFrom:'2022-01-01',dateTo:'2022-02-28',groupBy:['month'],limit:1}));assert.equal(limited.data.truncated,true);
+ }finally{await query('DELETE FROM transactions WHERE id=ANY($1::int[])',[ids]);}
+});
+test('quality checks selected links without duplicates and treats cross-company links as invalid',async()=>{
+ const input=spec({reportKind:'quality',groupBy:[],qualityDimensions:['account','category','contact','job','property']});
+ const report=await request('run',input);assert.equal(report.status,200);
+ assert.equal(report.data.rows.length,5);assert.equal(report.data.rows[0].total_count,4);
+ assert.equal(report.data.rows.find(r=>r.dimension==='account').missing_count,1);
+ assert.equal(report.data.rows.find(r=>r.dimension==='category').missing_count,1);
+ assert.equal(report.data.rows.find(r=>r.dimension==='contact').missing_count,4);
+ try{
+  await query('UPDATE transactions SET category_id=$1 WHERE id=$2',[foreignCategory,split]);
+  const altered=await request('run',input);assert.equal(altered.data.rows.find(r=>r.dimension==='category').missing_count,2);
+ }finally{await query('UPDATE transactions SET category_id=$1 WHERE id=$2',[child,split]);}
+ assert.equal((await request('run',{...input,qualityDimensions:[]})).status,400);
+ const foreign=await request('run',{...input,filters:{accountId:foreignAccount}});assert.ok(foreign.data.rows.every(r=>r.total_count===0));
+});
+test('saved comparison specs retain their report kind and export matches calculated row data',async()=>{
+ const input=spec({reportKind:'yoy',groupBy:['month']});
+ const headers={Authorization:`Bearer ${token}`,'X-Company-Id':String(company),'Content-Type':'application/json'};
+ const saved=await fetch(`${baseUrl}/api/reports/advanced/saved`,{method:'POST',headers,body:JSON.stringify({name:'YoY persisted',spec_json:input,is_shared:false})});
+ assert.equal(saved.status,201);
+ const list=await(await fetch(`${baseUrl}/api/reports/advanced/saved`,{headers})).json();
+ const savedSpec=list.find(r=>r.name==='YoY persisted').spec_json;assert.equal(savedSpec.reportKind,'yoy');
+ const report=await request('run',savedSpec);const exported=await request('export.csv',savedSpec);
+ assert.equal(exported.status,200);
+ const lines=exported.data.trim().split('\n');const columns=lines[0].split(';');
+ for(const [i,row] of report.data.rows.entries()) assert.deepEqual(lines[i+1].split(';'),columns.map(k=>row[k]==null?'':String(row[k])));
+});

@@ -77,6 +77,7 @@ export const ADV_REPORT_TEMPLATES = [
     descriptionKey: 'reportsTemplates.jobsBudgetVsActual.desc',
     defaultPreset: 'ytd',
     spec: {
+      reportKind: 'budget',
       dateFrom: '__START__',
       dateTo: '__END__',
       filters: { type: 'all', includeCategoryChildren: true },
@@ -122,10 +123,11 @@ export const ADV_REPORT_TEMPLATES = [
     descriptionKey: 'reportsTemplates.dataQualityMissingLinks.desc',
     defaultPreset: 'last_30_days',
     spec: {
+      reportKind: 'quality',
       dateFrom: '__START__',
       dateTo: '__END__',
       filters: { type: 'all', includeCategoryChildren: true },
-      groupBy: ['category'],
+      groupBy: [],
       metrics: ['count', 'expense_sum_cents', 'income_sum_cents'],
     },
     chart: { type: 'bar', x: 'category', series: ['count'], topN: 12 },
@@ -152,6 +154,7 @@ export const ADV_REPORT_TEMPLATES = [
     descriptionKey: 'reportsTemplates.yoyMonthlyNet.desc',
     defaultPreset: 'ytd',
     spec: {
+      reportKind: 'yoy',
       dateFrom: '__START__',
       dateTo: '__END__',
       filters: { type: 'all', includeCategoryChildren: true },
@@ -167,6 +170,7 @@ export const ADV_REPORT_TEMPLATES = [
     descriptionKey: 'reportsTemplates.momMonthlyExpenses.desc',
     defaultPreset: 'ytd',
     spec: {
+      reportKind: 'mom',
       dateFrom: '__START__',
       dateTo: '__END__',
       filters: { type: 'expense', includeCategoryChildren: true },

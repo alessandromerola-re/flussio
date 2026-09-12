@@ -24,7 +24,13 @@ export const reportBucketRange = (dimension, bucket) => {
   return { from: iso(start), to: iso(end) };
 };
 
-export const reportDrilldownParams = (spec, row) => {
+export const reportDrilldownParams = (spec, row, previous = false) => {
+  if (spec.reportKind === 'quality') throw new Error('Quality summary has no movement drilldown');
+  if (spec.reportKind === 'budget') spec = {...spec, dateFrom:null, dateTo:null};
+  if (['yoy','mom'].includes(spec.reportKind)) {
+    const prefix = previous ? 'previous' : 'current';
+    spec = {...spec, dateFrom:row[`${prefix}_from`],dateTo:row[`${prefix}_to`],groupBy:[]};
+  }
   const params = new URLSearchParams();
   const filters = spec.filters || {};
   if (spec.dateFrom) params.set('date_from', spec.dateFrom);
