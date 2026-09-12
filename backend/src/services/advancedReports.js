@@ -1,4 +1,5 @@
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const validDate = (value) => typeof value === 'string' && isoDateRegex.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
 
 const allowedTypes = new Set(['all', 'income', 'expense', 'transfer']);
 const allowedMetrics = new Set(['income_sum_cents', 'expense_sum_cents', 'net_sum_cents', 'count', 'avg_abs_cents']);
@@ -46,17 +47,24 @@ export const validateAndNormalizeSpec = (specInput, companyId) => {
     dateTo = new Date().toISOString().slice(0, 10);
   }
 
-  if (dateFrom && !isoDateRegex.test(dateFrom)) {
+  if (dateFrom && !validDate(dateFrom)) {
     return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'dateFrom' } };
   }
-  if (dateTo && !isoDateRegex.test(dateTo)) {
+  if (dateTo && !validDate(dateTo)) {
     return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'dateTo' } };
   }
   if (dateFrom && dateTo && dateTo < dateFrom) {
     return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'dateTo' } };
   }
 
-  const type = allowedTypes.has(filtersInput.type) ? filtersInput.type : 'all';
+  if (filtersInput.type != null && !allowedTypes.has(filtersInput.type)) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'type' } };
+  const type = filtersInput.type || 'all';
+  for (const key of ['account', 'contact', 'job', 'property', 'category']) {
+    const raw = filtersInput[`${key}Id`] ?? filtersInput[`${key}_id`];
+    if (raw == null || raw === '') continue;
+    const id = parseIntegerOrNull(raw);
+    if (!['number', 'string'].includes(typeof raw) || id == null || id <= 0 || id > 2147483647) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: `${key}Id` } };
+  }
 
   const accountId = parseIntegerOrNull(filtersInput.accountId ?? filtersInput.account_id);
   const contactId = parseIntegerOrNull(filtersInput.contactId ?? filtersInput.contact_id);
@@ -93,6 +101,7 @@ export const validateAndNormalizeSpec = (specInput, companyId) => {
   }
 
   const limitRaw = Number(spec.limit);
+  if (groupBy.filter((dimension) => ['day', 'week', 'month', 'quarter', 'year'].includes(dimension)).length > 1) return { error: { code: 'VALIDATION_MISSING_FIELDS', field: 'groupBy' } };
   const limit = Number.isInteger(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 200;
 
   const sortByRaw = spec.sort?.by;
@@ -230,7 +239,7 @@ const buildFilterSql = (spec) => {
         SELECT id
         FROM categories
         WHERE company_id = $1 AND id = $${categoryParam}
-        UNION ALL
+        UNION
         SELECT c2.id
         FROM categories c2
         JOIN category_tree ctg ON ctg.id = c2.parent_id
@@ -263,39 +272,52 @@ const buildFilterSql = (spec) => {
   return { where, params, withRecursive };
 };
 
-export const buildAdvancedReportQuery = (spec) => {
+// One row per movement/account, including multiple legs on the same account.
+// General totals use movement amounts; account reports use assigned amounts.
+const accountJoin = (spec, grouped = false) => (grouped || spec.filters.accountId != null) ? `
+    LEFT JOIN LATERAL (
+      SELECT acc.id, acc.name, SUM(ta.amount) AS allocated_amount
+      FROM transaction_accounts ta
+      JOIN accounts acc ON acc.id = ta.account_id AND acc.company_id = t.company_id
+      WHERE ta.transaction_id = t.id
+      GROUP BY acc.id, acc.name
+    ) a ON true` : '';
+
+const expressionFor = (metric, spec, grouped = false) => {
+  const expression = metricExpressions[metric];
+  return grouped || spec.filters.accountId != null
+    ? expression.replaceAll('t.amount_total', 'COALESCE(a.allocated_amount, t.amount_total)')
+    : expression;
+};
+
+export const buildAdvancedReportQuery = (spec, { sentinel = false } = {}) => {
   const { where, params, withRecursive } = buildFilterSql(spec);
 
   const dimensions = spec.groupBy.map((dimension) => dimensionConfig[dimension]).filter(Boolean);
   const selectDimensions = dimensions.flatMap((entry) => entry.select);
   const groupDimensions = dimensions.flatMap((entry) => entry.group);
 
-  const metricSelect = spec.metrics.map((metric) => `${metricExpressions[metric]} AS ${metric}`);
+  const groupedAccounts = spec.groupBy.includes('account');
+  const metricSelect = spec.metrics.map((metric) => `${expressionFor(metric, spec, groupedAccounts)} AS ${metric}`);
 
   const orderAlias =
-    dimensions.find((entry) => entry.alias === spec.sort.by)?.alias ||
+    (spec.groupBy.includes(spec.sort.by) ? dimensionConfig[spec.sort.by].alias : null) ||
     (spec.metrics.includes(spec.sort.by) ? spec.sort.by : dimensions[0]?.alias || spec.metrics[0]);
+  const tieBreakers = selectDimensions.map((select) => select.match(/ AS (\w+)$/i)[1]).filter((alias) => alias !== orderAlias);
 
   const queryText = `${withRecursive ? `${withRecursive}\n` : ''}
     SELECT
       ${[...selectDimensions, ...metricSelect].join(',\n      ')}
     FROM transactions t
-    LEFT JOIN categories c ON c.id = t.category_id
-    LEFT JOIN contacts ct ON ct.id = t.contact_id
-    LEFT JOIN jobs j ON j.id = t.job_id
-    LEFT JOIN properties p ON p.id = t.property_id
-    LEFT JOIN LATERAL (
-      SELECT acc.id, acc.name
-      FROM transaction_accounts ta
-      JOIN accounts acc ON acc.id = ta.account_id
-      WHERE ta.transaction_id = t.id
-      ORDER BY ta.id
-      LIMIT 1
-    ) a ON true
+    LEFT JOIN categories c ON c.id = t.category_id AND c.company_id = t.company_id
+    LEFT JOIN contacts ct ON ct.id = t.contact_id AND ct.company_id = t.company_id
+    LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id
+    LEFT JOIN properties p ON p.id = t.property_id AND p.company_id = t.company_id
+    ${accountJoin(spec, groupedAccounts)}
     WHERE ${where.join(' AND ')}
     ${groupDimensions.length ? `GROUP BY ${groupDimensions.join(', ')}` : ''}
-    ORDER BY ${orderAlias} ${spec.sort.dir.toUpperCase()}
-    LIMIT ${Math.min(spec.limit, 500)}
+    ORDER BY ${orderAlias} ${spec.sort.dir.toUpperCase()}${tieBreakers.length ? `, ${tieBreakers.map((alias) => `${alias} ASC NULLS LAST`).join(', ')}` : ''}
+    LIMIT ${Math.min(spec.limit, 500) + (sentinel ? 1 : 0)}
   `;
 
   return { text: queryText, values: params };
@@ -306,16 +328,9 @@ export const buildTotalsQuery = (spec) => {
   const totalsMetrics = ['income_sum_cents', 'expense_sum_cents', 'net_sum_cents', 'count', ...(spec.metrics.includes('avg_abs_cents') ? ['avg_abs_cents'] : [])];
   const queryText = `${withRecursive ? `${withRecursive}\n` : ''}
     SELECT
-      ${totalsMetrics.map((metric) => `${metricExpressions[metric]} AS ${metric}`).join(',\n      ')}
+      ${totalsMetrics.map((metric) => `${expressionFor(metric, spec)} AS ${metric}`).join(',\n      ')}
     FROM transactions t
-    LEFT JOIN LATERAL (
-      SELECT acc.id
-      FROM transaction_accounts ta
-      JOIN accounts acc ON acc.id = ta.account_id
-      WHERE ta.transaction_id = t.id
-      ORDER BY ta.id
-      LIMIT 1
-    ) a ON true
+    ${accountJoin(spec)}
     WHERE ${where.join(' AND ')}
   `;
 

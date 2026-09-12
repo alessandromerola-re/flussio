@@ -395,7 +395,13 @@ const AdvancedReportsPage = () => {
           <p>{t('reportsIntegrity.period')}: {formatDateIT(appliedSpec.dateFrom) || '—'} – {formatDateIT(appliedSpec.dateTo) || '—'}</p>
           <p className="muted">{t('reportsIntegrity.received')}: {new Date(result.receivedAt).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}</p>
           <p className="muted">{t('reportsIntegrity.exportHint')}</p>
-          {rows.length >= appliedSpec.limit && <p className="warning">{t('reportsIntegrity.limitHint', { limit: appliedSpec.limit })}</p>}
+          {result.amount_basis === 'account_allocations' && <p className="muted">{t('reportsIntegrity.accountBasis')}</p>}
+          {result.reconciliation && Object.keys(result.reconciliation).length > 0 && (
+            Object.values(result.reconciliation).every((delta) => String(delta) === '0')
+              ? <p className="success" role="status">{t('reportsIntegrity.reconciled')}</p>
+              : <div className="warning" role="alert"><p>{t('reportsIntegrity.difference')}</p>{Object.entries(result.reconciliation).filter(([,delta]) => String(delta) !== '0').map(([metric,delta]) => <p key={metric}>{renderMetricLabel(metric)}: {formatEuro(delta)}</p>)}</div>
+          )}
+          {(result.truncated ?? (rows.length >= appliedSpec.limit)) && <p className="warning">{t('reportsIntegrity.limitHint', { limit: appliedSpec.limit })}</p>}
           {totals && <div className="row-actions" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}><span>{t('pages.dashboard.income')}: {formatEuro(totals.income_sum_cents)}</span><span>{t('pages.dashboard.expense')}: {formatEuro(totals.expense_sum_cents)}</span><span>{t('pages.dashboard.net')}: {formatEuro(totals.net_sum_cents)}</span><span>{t('pages.reportsAdvanced.metrics.count')}: {totals.count}</span></div>}
           <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: missingDimensions(row) ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{col.includes('cents') ? formatEuro(row[col]) : String(row[col] ?? '')}</td>)}<td><button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>Apri</button></td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
         </div>

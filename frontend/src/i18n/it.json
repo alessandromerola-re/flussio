@@ -1,4 +1,7 @@
 {
+  "reportsIntegrity.reconciled": "Le somme delle righe coincidono con i totali per le metriche monetarie selezionate.",
+  "reportsIntegrity.difference": "Le somme delle righe differiscono dai totali. Verifica le quote attribuite ai conti; gli scostamenti sotto sono calcolati come somma righe meno totale.",
+  "reportsIntegrity.accountBasis": "Importi attribuiti ai conti: un movimento ripartito contribuisce a ciascun conto per la sua quota. Senza filtro conto, i totali generali contano il movimento una sola volta; i conteggi per conto non sono sommabili. I movimenti senza conto restano in un gruppo dedicato. Il dettaglio Movimenti mostra l’importo completo del movimento.",
   "reportsIntegrity.unapplied": "Configurazione modificata: esegui il report per applicarla. Risultati ed esportazione si riferiscono all’ultima esecuzione.",
   "reportsIntegrity.period": "Periodo applicato",
   "reportsIntegrity.received": "Risultato ricevuto (ora italiana)",

@@ -1,5 +1,5 @@
 import express from 'express';
-import { query } from '../db/index.js';
+import { query, getClient } from '../db/index.js';
 import { requirePermission, getRole } from '../middleware/permissions.js';
 import { sendError } from '../utils/httpErrors.js';
 import { buildAdvancedReportQuery, buildTotalsQuery, toCsv, validateAndNormalizeSpec } from '../services/advancedReports.js';
@@ -10,31 +10,44 @@ const router = express.Router();
 const isSavedReportsTableMissing = (error) => error?.code === '42P01';
 
 router.post('/run', async (req, res) => {
+  let client;
   const normalized = validateAndNormalizeSpec(req.body, req.companyId);
   if (normalized.error) {
     return sendError(res, 400, normalized.error.code, 'Spec report non valida.', { field: normalized.error.field });
   }
 
   try {
-    const aggregate = buildAdvancedReportQuery(normalized);
+    const aggregate = buildAdvancedReportQuery(normalized, { sentinel: true });
     const totals = buildTotalsQuery(normalized);
 
-    const [rowsResult, totalsResult] = await Promise.all([
-      query(aggregate.text, aggregate.values),
-      query(totals.text, totals.values),
-    ]);
+    client = await getClient();
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    const rowsResult = await client.query(aggregate.text, aggregate.values);
+    const totalsResult = await client.query(totals.text, totals.values);
+    await client.query('COMMIT');
 
-    const rows = rowsResult.rows;
+    const rows = rowsResult.rows.slice(0, normalized.limit);
     const totalsRow = totalsResult.rows[0] || { income_sum_cents: 0, expense_sum_cents: 0, net_sum_cents: 0, count: 0 };
+    const truncated = rowsResult.rows.length > normalized.limit;
+    const reconciliation = truncated ? null : Object.fromEntries(normalized.metrics
+      .filter((metric) => ['income_sum_cents', 'expense_sum_cents', 'net_sum_cents'].includes(metric))
+      .map((metric) => [metric, (rows.reduce((sum, row) => sum + BigInt(row[metric] || 0), 0n) - BigInt(totalsRow[metric] || 0)).toString()]));
 
     return res.json({
       spec: normalized,
       rows: normalized.groupBy.length === 0 && rows.length === 0 ? [totalsRow] : rows,
       totals: totalsRow,
+      truncated,
+      reconciliation,
+      generated_at: new Date().toISOString(),
+      amount_basis: normalized.filters.accountId != null || normalized.groupBy.includes('account') ? 'account_allocations' : 'movements',
     });
   } catch (error) {
+    await client?.query('ROLLBACK').catch(() => {});
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
+  } finally {
+    client?.release();
   }
 });
 

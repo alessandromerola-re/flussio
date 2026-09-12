@@ -1,4 +1,7 @@
 {
+  "reportsIntegrity.reconciled": "Row sums match totals for the selected monetary metrics.",
+  "reportsIntegrity.difference": "Row sums differ from totals. Check the amounts allocated to accounts; differences below are row sums minus totals.",
+  "reportsIntegrity.accountBasis": "Amounts allocated to accounts: a split movement contributes its assigned share to each account. Without an account filter, general totals count each movement once; per-account counts are not additive. Unlinked movements remain in a separate group. Movement details show the full movement amount.",
   "reportsIntegrity.unapplied": "Configuration changed: run the report to apply it. Results and export refer to the last run.",
   "reportsIntegrity.period": "Applied period",
   "reportsIntegrity.received": "Result received (Rome time)",

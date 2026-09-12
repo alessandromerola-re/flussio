@@ -72,3 +72,18 @@ it('downloads one CSV and releases its URL after a successful export', async () 
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:report');
   click.mockRestore();
 });
+
+it('shows confirmed reconciliation and trusts an explicit non-truncated response at the limit', async () => {
+  api.runAdvancedReport.mockImplementation(async (spec) => ({ ...response({ ...spec, limit: 1 }), truncated: false, reconciliation: { net_sum_cents: '0' }, amount_basis: 'account_allocations' }));
+  setup(); fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');
+  expect(screen.getByText('reportsIntegrity.reconciled')).toBeTruthy();
+  expect(screen.getByText('reportsIntegrity.accountBasis')).toBeTruthy();
+  expect(screen.queryByText('reportsIntegrity.limitHint')).toBeNull();
+});
+
+it('shows allocation differences without claiming that totals reconcile', async () => {
+  api.runAdvancedReport.mockImplementation(async (spec) => ({ ...response(spec), reconciliation: { net_sum_cents: '-1000' } }));
+  setup(); fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');
+  expect(screen.getByText('reportsIntegrity.difference')).toBeTruthy();
+  expect(screen.queryByText('reportsIntegrity.reconciled')).toBeNull();
+});
