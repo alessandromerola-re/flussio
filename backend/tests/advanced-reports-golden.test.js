@@ -193,3 +193,28 @@ test('saved comparison specs retain their report kind and export matches calcula
  const lines=exported.data.trim().split('\n');const columns=lines[0].split(';');
  for(const [i,row] of report.data.rows.entries()) assert.deepEqual(lines[i+1].split(';'),columns.map(k=>row[k]==null?'':String(row[k])));
 });
+
+test('snapshot export keeps displayed values after a database change, and rejects unknown snapshots', async () => {
+  const displayed = await request('run',spec({groupBy:['category']}));
+  assert.equal(displayed.status,200);
+  const payload={snapshot_id:displayed.data.export_snapshot.id};
+  const before=await request('export.csv',payload);
+  assert.equal(before.status,200);
+  try {
+    await query('UPDATE categories SET name=$1 WHERE id=$2',['Renamed after report',parent]);
+    const frozen=await request('export.csv',payload);
+    assert.equal(frozen.data,before.data);
+    assert.notEqual((await request('export.csv',spec({groupBy:['category']}))).data,before.data);
+  } finally { await query('UPDATE categories SET name=$1 WHERE id=$2',['Parent',parent]); }
+  assert.equal((await request('export.csv',{snapshot_id:'missing'})).status,410);
+});
+
+test('snapshot export rechecks permissions and never exposes another user result', async () => {
+  const report=await request('run',spec());
+  for (const role of ['viewer','admin']) {
+    const user=(await query('INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,$2,$3,$4) RETURNING id',[company,`snapshot-${role}@example.test`,'unused',role])).rows[0].id;
+    const otherToken=jwt.sign({user_id:user,default_company_id:company},process.env.JWT_SECRET);
+    const response=await fetch(`${baseUrl}/api/reports/advanced/export.csv`,{method:'POST',headers:{Authorization:`Bearer ${otherToken}`,'X-Company-Id':String(company),'Content-Type':'application/json'},body:JSON.stringify({snapshot_id:report.data.export_snapshot.id})});
+    assert.equal(response.status,role==='viewer'?403:410);
+  }
+});
