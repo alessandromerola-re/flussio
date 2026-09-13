@@ -1,3 +1,4 @@
+import ReportChart from '../components/ReportChart.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -72,18 +73,6 @@ const toBooleanFilterValue = (value) => {
 const toBooleanFilterSelect = (value) => (value === true ? '1' : value === false ? '0' : '');
 
 const formatEuro = (cents) => formatCurrencyFromCents(Number(cents || 0)) || formatCurrencyFromCents(0);
-
-const rowLabelFromChartX = (row, chartX, t) => {
-  if (chartX === 'month' || chartX === 'day' || chartX === 'week' || chartX === 'quarter' || chartX === 'year') return row.bucket || '-';
-  if (chartX === 'category') return row.category_name || t('pages.reportsAdvanced.missingCategory');
-  if (chartX === 'job') return row.job_title || t('pages.reportsAdvanced.missingJob');
-  if (chartX === 'property') return row.property_name || t('pages.reportsAdvanced.missingProperty');
-  if (chartX === 'contact') return row.contact_name || t('pages.reportsAdvanced.missingContact');
-  if (chartX === 'account') return row.account_name || t('pages.reportsAdvanced.missingAccount');
-  if (chartX === 'type') return row.type || '-';
-  if (chartX === 'recurring') return row.recurring ? t('pages.reportsAdvanced.recurringYes') : t('pages.reportsAdvanced.recurringNo');
-  return row.bucket || row.category_name || row.job_title || '-';
-};
 
 const AdvancedReportsPage = () => {
   const { t } = useTranslation();
@@ -265,26 +254,6 @@ const AdvancedReportsPage = () => {
     return [...dims, ...(appliedSpec?.metrics || [])];
   }, [rows, appliedSpec, result]);
 
-  const chartRows = useMemo(() => {
-    if (result?.report_note || !rows.length || !chartConfig?.series?.length) return [];
-    const topN = chartConfig.topN || rows.length;
-    return rows
-      .map((row) => ({
-        label: rowLabelFromChartX(row, chartConfig.x, t),
-        row,
-      }))
-      .sort((a, b) => Number(b.row[chartConfig.series[0]] || 0) - Number(a.row[chartConfig.series[0]] || 0))
-      .slice(0, topN);
-  }, [rows, chartConfig, t]);
-
-  const chartMax = useMemo(() => {
-    if (!chartRows.length) return 1;
-    return Math.max(
-      1,
-      ...chartRows.flatMap((entry) => chartConfig.series.map((series) => Math.abs(Number(entry.row[series] || 0))))
-    );
-  }, [chartRows, chartConfig]);
-
   const renderGroupOptionLabel = (value) => t(`pages.reportsAdvanced.groupOptions.${value}`, value);
   const renderMetricLabel = (value) => t(`pages.reportsAdvanced.metrics.${value}`, value);
   const renderColumnLabel = (value) => result?.columns ? t(`reportComparison.${value}`, value) : (value.includes('cents') || value === 'count' ? renderMetricLabel(value) : t(dimensionLabelKey[value] || value, value));
@@ -294,7 +263,7 @@ const AdvancedReportsPage = () => {
   const renderCell = (row, col) => row[col] == null ? '—' : col.includes('cents') ? formatEuro(row[col]) : col.endsWith('_pct') ? `${row[col]}%` : col === 'dimension' ? renderGroupOptionLabel(row[col]) : col.endsWith('_from') || col.endsWith('_to') ? formatDateIT(row[col]) : String(row[col]);
 
   return (
-    <div className="page">
+    <div className="page reports-page">
       <div className="page-header"><h1>{t('pages.reportsAdvanced.title')}</h1></div>
       {error && <div className="error" role="alert">{error}</div>}
       {loading && <p role="status">{t('common.loading')}</p>}
@@ -313,34 +282,8 @@ const AdvancedReportsPage = () => {
         </div>
       </div>
 
-      {!!chartRows.length && (
-        <div className="card report-chart-card">
-          <h2>{t('pages.reportsAdvanced.chartPreview')}</h2>
-          {(chartConfig.type === 'pie' || chartConfig.type === 'stacked_bar') && (
-            <p className="muted">{t('pages.reportsAdvanced.chartFallbackNote')}</p>
-          )}
-          <div className="report-chart-list">
-            {chartRows.map((entry) => (
-              <div key={entry.label} className="report-chart-group">
-                <strong>{entry.label}</strong>
-                {chartConfig.series.map((series) => {
-                  const value = Number(entry.row[series] || 0);
-                  const width = Math.max(2, (Math.abs(value) / chartMax) * 100);
-                  return (
-                    <div key={series} className="report-chart-row">
-                      <span className="report-chart-metric">{renderMetricLabel(series)}</span>
-                      <div className="report-chart-track"><div className="report-chart-fill" style={{ width: `${width}%` }} /></div>
-                      <span className="report-chart-value">{series.includes('cents') ? formatEuro(value) : value}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="report-layout">
+      <div className="report-sidebar">
       <details className="card report-builder" open>
         <summary><strong>{t('pages.movements.filters')}</strong></summary>
         {special && <p>{t(`reportComparison.mode.${spec.reportKind}`)} <button type="button" className="ghost" onClick={() => setSpec({...baseSpec, ...getLast30Range(), reportKind:'standard'})}>{t('reportComparison.custom')}</button></p>}
@@ -376,6 +319,7 @@ const AdvancedReportsPage = () => {
 
       {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><ul className="list" style={{ marginTop: '1rem' }}>{savedReports.map((item) => <li key={item.id}><button type="button" className="list-item" onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
 
+      </div>
       {result && (
         <div className="card report-result">
           <h2>{t('pages.reportsAdvanced.results')}</h2>
@@ -391,7 +335,16 @@ const AdvancedReportsPage = () => {
           )}
           {(result.truncated ?? (rows.length >= appliedSpec.limit)) && <p className="warning">{t('reportsIntegrity.limitHint', { limit: appliedSpec.limit })}</p>}
           {totals && <div className="row-actions" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}><span>{t('pages.dashboard.income')}: {formatEuro(totals.income_sum_cents)}</span><span>{t('pages.dashboard.expense')}: {formatEuro(totals.expense_sum_cents)}</span><span>{t('pages.dashboard.net')}: {formatEuro(totals.net_sum_cents)}</span><span>{t('pages.reportsAdvanced.metrics.count')}: {totals.count}</span></div>}
-          <div className="table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: missingDimensions(row) ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderCell(row,col)}</td>)}<td>{appliedSpec.reportKind !== 'quality' && <button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>{t('reportComparison.openCurrent')}</button>}{['yoy','mom'].includes(appliedSpec.reportKind) && <button type="button" className="ghost" onClick={() => handleDrilldown(row,true)}>{t('reportComparison.openPrevious')}</button>}</td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
+          <ReportChart key={result.receivedAt} result={result} suggestion={chartConfig} />
+          <div className="table-scroll report-desktop-table"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: missingDimensions(row) ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderCell(row,col)}</td>)}<td>{appliedSpec.reportKind !== 'quality' && <button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>{t('reportComparison.openCurrent')}</button>}{['yoy','mom'].includes(appliedSpec.reportKind) && <button type="button" className="ghost" onClick={() => handleDrilldown(row,true)}>{t('reportComparison.openPrevious')}</button>}</td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
+          <div className="report-mobile-results" aria-label={t('reportChart.mobileResults')}>
+            {rows.length === 0 && <p>{t('common.none')}</p>}
+            {rows.map((row,idx)=><details key={idx} className="report-result-card">
+              <summary><strong>{columns[0] ? renderCell(row,columns[0]) : idx+1}</strong><span>{t('reportChart.rowDetails', {number:idx+1})}</span></summary>
+              <dl>{columns.map(col=><div key={col}><dt>{renderColumnLabel(col)}</dt><dd>{renderCell(row,col)}</dd></div>)}</dl>
+              {appliedSpec.reportKind !== 'quality'&&<div className="row-actions"><button type="button" onClick={()=>handleDrilldown(row)}>{t('reportComparison.openCurrent')}</button>{['yoy','mom'].includes(appliedSpec.reportKind)&&<button type="button" className="ghost" onClick={()=>handleDrilldown(row,true)}>{t('reportComparison.openPrevious')}</button>}</div>}
+            </details>)}
+          </div>
         </div>
       )}
       </div>
