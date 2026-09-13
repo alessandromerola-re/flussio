@@ -81,6 +81,7 @@ const AdvancedReportsPage = () => {
   const [spec, setSpec] = useState(baseSpec);
   const [result, setResult] = useState(null);
   const [savedReports, setSavedReports] = useState([]);
+  const [savedSearch, setSavedSearch] = useState('');
   const [selectedSavedId, setSelectedSavedId] = useState('');
   const [savedName, setSavedName] = useState('');
   const [savedShared, setSavedShared] = useState(false);
@@ -115,7 +116,7 @@ const AdvancedReportsPage = () => {
     const init = async () => {
       const [lookupsResult, savedResult] = await Promise.allSettled([loadLookups(), loadSaved()]);
       if (lookupsResult.status === 'rejected') setError(t('errors.SERVER_ERROR'));
-      if (savedResult.status === 'rejected') console.error(savedResult.reason);
+      if (savedResult.status === 'rejected') setError(t('errors.SERVER_ERROR'));
     };
     init();
   }, [t]);
@@ -132,8 +133,8 @@ const AdvancedReportsPage = () => {
       setSpec((draft) => JSON.stringify(draft) === JSON.stringify(submitted) ? response.spec : draft);
       setChartConfig(nextChart);
       setResult({ ...response, receivedAt: new Date().toISOString() });
-    } catch {
-      if (current === requestGeneration.current) setError(t('errors.SERVER_ERROR'));
+    } catch (error) {
+      if (current === requestGeneration.current) setError(t(error.code === 'REPORT_SNAPSHOT_EXPIRED' || error.message === 'snapshot' ? 'reportsSnapshot.expired' : 'errors.SERVER_ERROR'));
     } finally {
       if (current === requestGeneration.current) setLoading(false);
     }
@@ -174,7 +175,8 @@ const AdvancedReportsPage = () => {
     exportLock.current = true;
     setExporting(true); setError('');
     try {
-    const { blob, headers } = await api.exportAdvancedReportCsv(result.spec);
+    if (!result.export_snapshot?.id) throw new Error('snapshot');
+    const { blob, headers } = await api.exportAdvancedReportCsv({ snapshot_id: result.export_snapshot.id });
     if (current !== requestGeneration.current) return;
     const disposition = headers.get('content-disposition') || '';
     const match = disposition.match(/filename="?([^";]+)"?/i);
@@ -187,8 +189,8 @@ const AdvancedReportsPage = () => {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    } catch {
-      if (current === requestGeneration.current) setError(t('errors.SERVER_ERROR'));
+    } catch (error) {
+      if (current === requestGeneration.current) setError(t(error.code === 'REPORT_SNAPSHOT_EXPIRED' || error.message === 'snapshot' ? 'reportsSnapshot.expired' : 'errors.SERVER_ERROR'));
     } finally {
       exportLock.current = false;
       setExporting(false);
@@ -197,6 +199,7 @@ const AdvancedReportsPage = () => {
 
   const saveReport = async () => {
     if (!savedName.trim()) return;
+    try {
     const payload = { name: savedName.trim(), spec_json: spec, is_shared: savedShared };
     if (selectedSavedId) {
       if (!window.confirm('Aggiornare consapevolmente il report selezionato?')) return;
@@ -204,6 +207,7 @@ const AdvancedReportsPage = () => {
     }
     else await api.createSavedReport(payload);
     await loadSaved();
+    } catch { setError(t('errors.SERVER_ERROR')); }
   };
 
   const startNewReport = () => {
@@ -222,11 +226,13 @@ const AdvancedReportsPage = () => {
 
   const deleteSaved = async () => {
     if (!selectedSavedId || !window.confirm(t('modals.confirmDelete'))) return;
+    try {
     await api.deleteSavedReport(selectedSavedId);
     setSelectedSavedId('');
     setSavedName('');
     setSavedShared(false);
     await loadSaved();
+    } catch { setError(t('errors.SERVER_ERROR')); }
   };
 
   const rows = result?.rows || [];
@@ -317,7 +323,7 @@ const AdvancedReportsPage = () => {
         <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv} disabled={!result || loading || exporting}>{t('buttons.exportCsv')}</button>}</div>
       </details>
 
-      {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><ul className="list" style={{ marginTop: '1rem' }}>{savedReports.map((item) => <li key={item.id}><button type="button" className="list-item" onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
+      {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><label>{t('reportsSnapshot.search')}<input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} /></label>{!savedReports.some(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())) && <p className="muted">{t('reportsSnapshot.noSaved')}</p>}<ul className="list" style={{ marginTop: '1rem' }}>{savedReports.filter(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())).map((item) => <li key={item.id}><button type="button" className="list-item" onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
 
       </div>
       {result && (
@@ -335,6 +341,7 @@ const AdvancedReportsPage = () => {
           )}
           {(result.truncated ?? (rows.length >= appliedSpec.limit)) && <p className="warning">{t('reportsIntegrity.limitHint', { limit: appliedSpec.limit })}</p>}
           {totals && <div className="row-actions" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}><span>{t('pages.dashboard.income')}: {formatEuro(totals.income_sum_cents)}</span><span>{t('pages.dashboard.expense')}: {formatEuro(totals.expense_sum_cents)}</span><span>{t('pages.dashboard.net')}: {formatEuro(totals.net_sum_cents)}</span><span>{t('pages.reportsAdvanced.metrics.count')}: {totals.count}</span></div>}
+          <p className="muted">{t('reportsSnapshot.hint')}{result.export_snapshot && ` (${new Date(result.export_snapshot.expires_at).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome' })})`}</p>
           <ReportChart key={result.receivedAt} result={result} suggestion={chartConfig} />
           <div className="table-scroll report-desktop-table"><table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr>{columns.map((col) => <th key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderColumnLabel(col)}</th>)}<th><span className="sr-only">Azioni</span></th></tr></thead><tbody>{rows.map((row, idx) => <tr key={idx} style={{ backgroundColor: missingDimensions(row) ? '#fff7ed' : undefined }}>{columns.map((col) => <td key={col} align={col.includes('cents') || col === 'count' ? 'right' : 'left'}>{renderCell(row,col)}</td>)}<td>{appliedSpec.reportKind !== 'quality' && <button type="button" className="ghost report-drilldown" onClick={() => handleDrilldown(row)} aria-label={`Apri movimenti riga ${idx + 1}`}>{t('reportComparison.openCurrent')}</button>}{['yoy','mom'].includes(appliedSpec.reportKind) && <button type="button" className="ghost" onClick={() => handleDrilldown(row,true)}>{t('reportComparison.openPrevious')}</button>}</td></tr>)}{rows.length === 0 && <tr><td colSpan={columns.length + 1 || 1} className="muted">{t('common.none')}</td></tr>}</tbody></table></div>
           <div className="report-mobile-results" aria-label={t('reportChart.mobileResults')}>

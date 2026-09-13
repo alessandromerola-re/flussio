@@ -1,11 +1,13 @@
+import { reportSnapshots } from '../services/reportSnapshots.js';
 import { runSpecialReport } from '../services/reportComparisons.js';
 import express from 'express';
 import { query, getClient } from '../db/index.js';
-import { requirePermission, getRole } from '../middleware/permissions.js';
+import { requirePermission, getRole, canRole } from '../middleware/permissions.js';
 import { sendError } from '../utils/httpErrors.js';
 import { buildAdvancedReportQuery, buildTotalsQuery, toCsv, validateAndNormalizeSpec } from '../services/advancedReports.js';
 
 const router = express.Router();
+const sendReport = (req, res, result) => res.json({ ...result, export_snapshot: canRole(getRole(req), 'export') ? reportSnapshots.put(req.companyId, req.user.user_id, result) : null });
 
 
 const isSavedReportsTableMissing = (error) => error?.code === '42P01';
@@ -26,7 +28,7 @@ router.post('/run', async (req, res) => {
     if (normalized.reportKind !== 'standard') {
       const result = await runSpecialReport(client, normalized);
       await client.query('COMMIT');
-      return res.json({spec:normalized,...result,generated_at:new Date().toISOString()});
+      return sendReport(req, res, {spec:normalized,...result,generated_at:new Date().toISOString()});
     }
     const rowsResult = await client.query(aggregate.text, aggregate.values);
     const totalsResult = await client.query(totals.text, totals.values);
@@ -39,7 +41,7 @@ router.post('/run', async (req, res) => {
       .filter((metric) => ['income_sum_cents', 'expense_sum_cents', 'net_sum_cents'].includes(metric))
       .map((metric) => [metric, (rows.reduce((sum, row) => sum + BigInt(row[metric] || 0), 0n) - BigInt(totalsRow[metric] || 0)).toString()]));
 
-    return res.json({
+    return sendReport(req, res, {
       spec: normalized,
       rows: normalized.groupBy.length === 0 && rows.length === 0 ? [totalsRow] : rows,
       totals: totalsRow,
@@ -58,6 +60,16 @@ router.post('/run', async (req, res) => {
 });
 
 router.post('/export.csv', requirePermission('export'), async (req, res) => {
+  if (Object.hasOwn(req.body || {}, 'snapshot_id')) {
+    const snapshot = typeof req.body.snapshot_id === 'string' && reportSnapshots.get(req.body.snapshot_id, req.companyId, req.user.user_id);
+    if (!snapshot) return sendError(res, 410, 'REPORT_SNAPSHOT_EXPIRED', 'Risultato non più disponibile. Esegui nuovamente il report.');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="flussio_report_advanced_${snapshot.generatedAt.slice(0, 10)}.csv"`);
+    res.setHeader('X-Report-Generated-At', snapshot.generatedAt);
+    res.setHeader('X-Report-Truncated', String(snapshot.truncated));
+    return res.status(200).send(snapshot.csv);
+  }
+  // Legacy clients may explicitly export a spec; this mode rereads the database.
   let client;
   const normalized = validateAndNormalizeSpec(req.body, req.companyId);
   if (normalized.error) {

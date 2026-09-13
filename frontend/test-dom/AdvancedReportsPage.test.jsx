@@ -8,10 +8,10 @@ import { ADV_REPORT_TEMPLATES } from '../src/utils/advancedReportTemplates.js';
 vi.mock('react-chartjs-2', () => ({Bar: () => <canvas data-testid="bar-chart" />, Line: () => <canvas data-testid="line-chart" />, Pie: () => <canvas data-testid="pie-chart" />}));
 vi.mock('react-i18next', () => { const t = (key) => key; return { useTranslation: () => ({ t }) }; });
 vi.mock('../src/utils/permissions.js', () => ({ canPermission: () => true }));
-vi.mock('../src/services/api.js', () => ({ api: Object.fromEntries(['getAccounts','getCategories','getContacts','getJobs','getProperties','listSavedReports','runAdvancedReport','exportAdvancedReportCsv'].map((key) => [key, vi.fn()])) }));
+vi.mock('../src/services/api.js', () => ({ api: Object.fromEntries(['getAccounts','getCategories','getContacts','getJobs','getProperties','listSavedReports','runAdvancedReport','exportAdvancedReportCsv','createSavedReport','updateSavedReport','deleteSavedReport'].map((key) => [key, vi.fn()])) }));
 const Location = () => <output data-testid="location">{useLocation().search}</output>;
 const setup = () => render(<MemoryRouter><AdvancedReportsPage /><Location /></MemoryRouter>);
-const response = (spec, rows = [{ bucket: '2026-09', income_sum_cents: 10000, expense_sum_cents: 2000, net_sum_cents: 8000, count: 2 }]) => ({ spec, rows, totals: { income_sum_cents: 10000, expense_sum_cents: 2000, net_sum_cents: 8000, count: 2 } });
+const response = (spec, rows = [{ bucket: '2026-09', income_sum_cents: 10000, expense_sum_cents: 2000, net_sum_cents: 8000, count: 2 }]) => ({ spec, rows, export_snapshot: {id:'snapshot-test',expires_at:'2026-09-13T10:00:00Z'}, totals: { income_sum_cents: 10000, expense_sum_cents: 2000, net_sum_cents: 8000, count: 2 } });
 beforeEach(() => {
   vi.clearAllMocks();
   for (const key of ['getAccounts','getCategories','getContacts','getJobs','getProperties','listSavedReports']) api[key].mockResolvedValue([]);
@@ -27,7 +27,7 @@ it('keeps export and result columns bound to the applied configuration after edi
   expect(screen.getByText('reportsIntegrity.unapplied')).toBeTruthy();
   expect(within(screen.getByRole('table')).getByText('pages.reportsAdvanced.metrics.count')).toBeTruthy();
   fireEvent.click(screen.getByText('buttons.exportCsv'));
-  await waitFor(() => expect(api.exportAdvancedReportCsv).toHaveBeenCalledWith(applied));
+  await waitFor(() => expect(api.exportAdvancedReportCsv).toHaveBeenCalledWith({snapshot_id: 'snapshot-test'}));
   await screen.findByRole('alert');
   fireEvent.click(screen.getByLabelText('Apri movimenti riga 1'));
   expect(screen.getByTestId('location').textContent).toContain(`date_from=${applied.dateFrom > '2026-09-01' ? applied.dateFrom : '2026-09-01'}`);
@@ -134,4 +134,24 @@ it('mobile detail cards preserve the applied row drilldown', async () => {
   fireEvent.click(card.querySelector('summary'));
   fireEvent.click(within(card).getByRole('button'));
   expect(screen.getByTestId('location').textContent).toContain('date_to=2026-09-30');
+});
+
+it('does not silently rerun an expired snapshot export', async () => {
+  api.exportAdvancedReportCsv.mockRejectedValue(Object.assign(new Error('expired'), {code:'REPORT_SNAPSHOT_EXPIRED'}));
+  setup(); fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');
+  fireEvent.click(screen.getByText('buttons.exportCsv'));
+  expect(await screen.findByText('reportsSnapshot.expired')).toBeTruthy();
+  expect(api.runAdvancedReport).toHaveBeenCalledTimes(1);
+  expect(api.exportAdvancedReportCsv).toHaveBeenCalledTimes(1);
+});
+it('searches saved reports and keeps the saved spec when opening a match', async () => {
+  const savedSpec = {dateFrom:'2026-01-01',dateTo:'2026-12-31',groupBy:['month'],metrics:['count'],filters:{type:'all'}};
+  api.listSavedReports.mockResolvedValue([{id:1,name:'Affitti',spec_json:savedSpec},{id:2,name:'Costi',spec_json:savedSpec}]);
+  setup(); await screen.findByText('Affitti');
+  fireEvent.change(screen.getByLabelText('reportsSnapshot.search'),{target:{value:'AFFI'}});
+  expect(screen.queryByText('Costi')).toBeNull();
+  fireEvent.click(screen.getByText('Affitti')); await screen.findByRole('table');
+  expect(api.runAdvancedReport).toHaveBeenCalledWith(savedSpec);
+  fireEvent.change(screen.getByLabelText('reportsSnapshot.search'),{target:{value:'nessuno'}});
+  expect(screen.getByText('reportsSnapshot.noSaved')).toBeTruthy();
 });

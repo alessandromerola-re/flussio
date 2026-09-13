@@ -25,7 +25,6 @@
   "reportChart.stackUnsupported": "Stacked bars require two groupings and an additive metric.",
   "reportChart.mobileResults": "Result cards",
   "reportChart.rowDetails": "Row {{number}} details",
-
   "reportComparison.bucket": "Month",
   "reportComparison.current_from": "Current from",
   "reportComparison.current_to": "Current to",
@@ -62,7 +61,6 @@
   "reportComparison.lifetimeBudget": "Current budgets and lifetime actuals, including jobs with no movements. Date filters do not apply. — means an undefined budget. Positive cost variance means over budget; positive revenue and margin variances mean above target. Unassigned movements are excluded.",
   "reportComparison.calendarComparison": "Calendar-month comparison: selected partial months are shifted to the previous month/year, clipping days to the target month length. Full months stay full. Change = current − previous; percentage uses the absolute previous value and truncates to two decimals. — means a zero base. Working-day counts are not equalized. Limit: 120 months.",
   "reportComparison.qualityLinks": "Counts for selected links that are missing or invalid within the company. Contact, job and property are optional: select them only if expected. A movement may lack several links, so counts are not additive. Data is not changed automatically.",
-
   "reportDetail.cashflow_only": "Income and expenses only",
   "reportDetail.description_q": "Text in description",
   "reportDetail.include_category_children": "Includes child categories",
@@ -589,5 +587,9 @@
   "pages.property.previous": "Previous",
   "pages.property.next": "Next",
   "pages.property.page": "Page",
-  "forms.address": "Address"
+  "forms.address": "Address",
+  "reportsSnapshot.expired": "The export result is no longer available. Run the report again and retry.",
+  "reportsSnapshot.hint": "CSV preserves the rows in this result. Export within 15 minutes; if the result is no longer available, run the report again. Expires",
+  "reportsSnapshot.search": "Search saved reports",
+  "reportsSnapshot.noSaved": "No matching saved reports."
 }
