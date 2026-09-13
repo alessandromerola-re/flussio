@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import AdvancedReportsPage from '../src/pages/AdvancedReportsPage.jsx';
 import { api } from '../src/services/api.js';
 import { ADV_REPORT_TEMPLATES } from '../src/utils/advancedReportTemplates.js';
+vi.mock('react-chartjs-2', () => ({Bar: () => <canvas data-testid="bar-chart" />, Line: () => <canvas data-testid="line-chart" />, Pie: () => <canvas data-testid="pie-chart" />}));
 vi.mock('react-i18next', () => { const t = (key) => key; return { useTranslation: () => ({ t }) }; });
 vi.mock('../src/utils/permissions.js', () => ({ canPermission: () => true }));
 vi.mock('../src/services/api.js', () => ({ api: Object.fromEntries(['getAccounts','getCategories','getContacts','getJobs','getProperties','listSavedReports','runAdvancedReport','exportAdvancedReportCsv'].map((key) => [key, vi.fn()])) }));
@@ -93,7 +94,7 @@ it('renders comparison values and opens the previous applied period after editin
  setup();fireEvent.click(screen.getByText('reportsTemplates.yoyMonthlyNet.title'));await screen.findByRole('table');
  expect(within(screen.getByRole('table')).getByText('—')).toBeTruthy();
  fireEvent.change(screen.getByLabelText('pages.movements.dateFrom'),{target:{value:'2020-01-01'}});
- fireEvent.click(screen.getByText('reportComparison.openPrevious'));
+ fireEvent.click(within(screen.getByRole('table')).getByText('reportComparison.openPrevious'));
  expect(screen.getByTestId('location').textContent).toContain('date_from=2025-09-01');
  expect(screen.getByTestId('location').textContent).toContain('date_to=2025-09-12');
 });
@@ -104,4 +105,33 @@ it('budget mode locks incompatible filters and exposes a way back to custom repo
  expect(screen.getByLabelText('pages.movements.job').disabled).toBe(false);
  fireEvent.click(screen.getByText('reportComparison.custom'));
  expect(screen.getByLabelText('pages.movements.dateFrom').disabled).toBe(false);
+});
+
+it('keeps the chart metric tied to the applied result while the draft changes', async () => {
+  setup(); fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByTestId('line-chart');
+  const chartMetric = screen.getByLabelText('reportChart.metric');
+  expect(within(chartMetric).getByText('pages.reportsAdvanced.metrics.count')).toBeTruthy();
+  fireEvent.click(screen.getByLabelText('pages.reportsAdvanced.metrics.count'));
+  expect(within(chartMetric).getByText('pages.reportsAdvanced.metrics.count')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('reportChart.kind'), {target:{value:'bar'}});
+  expect(screen.getByTestId('bar-chart')).toBeTruthy();
+});
+it('explains why signed data cannot be rendered as a pie', async () => {
+  api.runAdvancedReport.mockImplementation(async spec => response(spec, [{bucket:'2026-09', net_sum_cents:-100, count:1}]));
+  setup(); fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');
+  fireEvent.change(screen.getByLabelText('reportChart.metric'), {target:{value:'net_sum_cents'}});
+  fireEvent.change(screen.getByLabelText('reportChart.kind'), {target:{value:'pie'}});
+  expect(screen.getByText('reportChart.pieNegative')).toBeTruthy();
+  expect(screen.queryByTestId('pie-chart')).toBeNull();
+});
+it('mobile detail cards preserve the applied row drilldown', async () => {
+  setup();
+  fireEvent.change(screen.getByLabelText('pages.movements.dateFrom'), {target:{value:'2026-09-01'}});
+  fireEvent.change(screen.getByLabelText('pages.movements.dateTo'), {target:{value:'2026-09-30'}});
+  fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');
+  const card = document.querySelector('.report-result-card');
+  expect(card.querySelector('summary').textContent).toContain('2026-09');
+  fireEvent.click(card.querySelector('summary'));
+  fireEvent.click(within(card).getByRole('button'));
+  expect(screen.getByTestId('location').textContent).toContain('date_to=2026-09-30');
 });
