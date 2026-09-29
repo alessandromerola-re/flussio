@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import companiesRoutes from './routes/companies.js';
+import modulesRoutes from './routes/modules.js';
 import accountsRoutes from './routes/accounts.js';
 import categoriesRoutes from './routes/categories.js';
 import contactsRoutes from './routes/contacts.js';
@@ -54,6 +55,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/public', publicBrandingRoutes);
 app.use('/api/companies', authMiddleware, companiesRoutes);
+app.use('/api/modules', authMiddleware, modulesRoutes);
 
 app.use('/api/accounts', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), accountsRoutes);
 app.use('/api/categories', authMiddleware, companyContextMiddleware, requireMethodPermission({ GET: 'read', POST: 'write', PUT: 'write', DELETE: 'delete_sensitive' }), categoriesRoutes);

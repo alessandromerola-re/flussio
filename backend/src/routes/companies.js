@@ -1,3 +1,5 @@
+import { readCompanyModules } from '../modules/registry.js';
+import { companyContextMiddleware } from '../middleware/companyContext.js';
 import express from 'express';
 import { getClient, query } from '../db/index.js';
 import { sendError } from '../utils/httpErrors.js';
@@ -65,6 +67,21 @@ const requireSuperAdmin = (req, res) => {
   }
   return true;
 };
+
+// Resolve company identity from the URL only; do not authorize one company and read another.
+router.get('/:id/modules', (req, res, next) => {
+  if (!/^[1-9]\d*$/.test(req.params.id) || Number(req.params.id) > 2147483647) {
+    return sendError(res, 400, 'VALIDATION_INVALID_COMPANY_ID', 'Invalid company id.');
+  }
+  req.headers['x-company-id'] = req.params.id;
+  return companyContextMiddleware(req, res, next);
+}, async (req, res) => {
+  try { return res.json(await readCompanyModules(req.companyId)); }
+  catch (error) {
+    console.error(error);
+    return sendError(res, error.status || 500, error.status ? error.code : 'SERVER_ERROR', 'Unable to read company modules.');
+  }
+});
 
 router.get('/', async (req, res) => {
   if (!requireSuperAdmin(req, res)) return;
