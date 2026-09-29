@@ -31,6 +31,9 @@ test('fresh installation executes migrations not declared as folded', async () =
   assert.equal(tableResult.rows[0].table_name, 'saved_reports');
   const authSessionsResult = await query("SELECT to_regclass('public.auth_sessions') AS table_name");
   assert.equal(authSessionsResult.rows[0].table_name, 'auth_sessions');
+  const moduleTables = await query("SELECT to_regclass('public.company_modules') AS registry, to_regclass('public.company_module_events') AS events");
+  assert.equal(moduleTables.rows[0].registry, 'company_modules');
+  assert.equal(moduleTables.rows[0].events, 'company_module_events');
   const addressColumn = await query("SELECT column_name FROM information_schema.columns WHERE table_name='properties' AND column_name='address'");
   assert.equal(addressColumn.rows[0]?.column_name, 'address');
 
