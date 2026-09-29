@@ -2711,3 +2711,16 @@ body {
   .reports-page .report-saved .row-actions > * { max-width: 100%; }
   .reports-page .report-template-grid { grid-template-columns: minmax(0,1fr); }
 }
+.modules-page select { width: 100%; max-width: 100%; min-width: 0; }
+.modules-notice { padding: 1rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; }
+.modules-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,280px),1fr)); gap: 1rem; margin-bottom: 1rem; }
+.module-card { min-width: 0; overflow-wrap: anywhere; }
+.module-card h2 { font-size: 1.2rem; }
+.module-card select { min-height: 44px; }
+.module-preview dl > div { display: flex; justify-content: space-between; gap: 1rem; padding-block: .4rem; }
+.module-preview dd { margin: 0; }
+.module-history { list-style: none; padding: 0; }
+.module-history li { padding: 1rem 0; border-bottom: 1px solid #e2e8f0; overflow-wrap: anywhere; }
+.module-history strong, .module-history span, .module-history time { display: block; margin-bottom: .3rem; }
+.modules-page button { min-height: 44px; }
+@media (max-width: 768px) { .modules-page .page-header { flex-wrap: wrap; } }

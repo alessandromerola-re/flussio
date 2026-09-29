@@ -13,8 +13,8 @@ let company, other, superadmin, admin, viewer, server, base;
 const migration = new URL('../migrations/016_20260929__company_module_registry.sql', import.meta.url);
 const user = async (email, role, owner, elevated = false) => (await query(`INSERT INTO users(company_id,email,password_hash,role,is_super_admin)
   VALUES ($1,$2,'unused',$3,$4) RETURNING id`, [owner,email,role,elevated])).rows[0].id;
-const request = async (path, actor, method='GET', headers={}) => {
-  const response=await fetch(`${base}${path}`,{method,headers:{Authorization:`Bearer ${jwt.sign({user_id:actor,default_company_id:company},process.env.JWT_SECRET)}`,...headers}});
+const request = async (path, actor, method='GET', headers={}, body) => {
+  const response=await fetch(`${base}${path}`,{method,headers:{Authorization:`Bearer ${jwt.sign({user_id:actor,default_company_id:company},process.env.JWT_SECRET)}`,...(body===undefined?{}:{'Content-Type':'application/json'}),...headers},...(body===undefined?{}:{body:JSON.stringify(body)})});
   return {status:response.status,data:await response.json()};
 };
 const change = async (changes, extra={}) => applyCompanyModulePlan({companyId:company,actorUserId:superadmin,
@@ -130,4 +130,43 @@ test('events cannot be updated, deleted or truncated and survive company deletio
   await query('DELETE FROM companies WHERE id=$1',[disposable]);
   assert.equal((await query('SELECT count(*) FROM company_module_events WHERE company_id=$1',[disposable])).rows[0].count,'2');
   assert.equal((await query('SELECT count(*) FROM company_modules WHERE company_id=$1',[disposable])).rows[0].count,'0');
+});
+
+
+test('module history is administrative, paginated and isolated to the URL company',async()=>{
+  const first=await request(`/api/companies/${company}/modules/events?limit=1`,admin);
+  assert.equal(first.status,200);assert.equal(first.data.events.length,1);assert.ok(first.data.next_cursor);
+  const second=await request(`/api/companies/${company}/modules/events?limit=1&before=${first.data.next_cursor}`,admin);
+  assert.equal(second.status,200);assert.equal(second.data.events.length,1);
+  assert.ok(BigInt(second.data.events[0].id)<BigInt(first.data.events[0].id));
+  assert.equal((await request(`/api/companies/${other}/modules/events`,admin,'GET',{'X-Company-Id':String(company)})).status,403);
+  assert.equal((await request(`/api/companies/${other}/modules/events`,viewer)).status,403);
+  assert.equal((await request(`/api/companies/${company}/modules/events?limit=101`,admin)).status,400);
+  assert.equal((await request(`/api/companies/${company}/modules/events?before=1%3BSELECT`,admin)).status,400);
+});
+test('superadmin preview counts only target company data and never writes states or events',async()=>{
+  const target=(await query("INSERT INTO companies(name) VALUES ('Preview company') RETURNING id")).rows[0].id;
+  const job=(await query("INSERT INTO jobs(company_id,name,title) VALUES ($1,'Preview job','Preview job') RETURNING id",[target])).rows[0].id;
+  await query("INSERT INTO transactions(company_id,date,type,amount_total,job_id) VALUES ($1,'2026-09-01','income',10,$2)",[target,job]);
+  const before=await readCompanyModules(target);
+  const events=(await query('SELECT count(*) FROM company_module_events WHERE company_id=$1',[target])).rows[0].count;
+  const plan={expected_version:before.version,changes:[{module:'jobs',state:'read_only'}]};
+  const result=await request(`/api/companies/${target}/modules/preview`,superadmin,'POST',{},plan);
+  assert.equal(result.status,200);assert.equal(result.data.can_apply,false);assert.equal(result.data.enforcement_ready,false);
+  assert.deepEqual(result.data.impact,[{module:'jobs',from:'enabled',to:'read_only',records:'1',linked_movements:'1',active_recurring:'0'}]);
+  assert.deepEqual(await readCompanyModules(target),before);
+  assert.equal((await query('SELECT count(*) FROM company_module_events WHERE company_id=$1',[target])).rows[0].count,events);
+});
+test('preview denies company admin, stale versions, core changes and unavailable modules',async()=>{
+  const version=(await readCompanyModules(company)).version;
+  const path=`/api/companies/${company}/modules/preview`;
+  const plan={expected_version:version,changes:[{module:'jobs',state:'read_only'}]};
+  assert.equal((await request(path,admin,'POST',{},plan)).status,403);
+  const stale=await request(path,superadmin,'POST',{}, {...plan,expected_version:'0'});
+  assert.equal(stale.status,409);assert.equal(stale.data.error_code,'MODULE_VERSION_CONFLICT');
+  const core=await request(path,superadmin,'POST',{}, {...plan,changes:[{module:'core',state:'disabled'}]});
+  assert.equal(core.data.error_code,'MODULE_CORE_IMMUTABLE');
+  const future=await request(path,superadmin,'POST',{}, {...plan,changes:[{module:'wealth',state:'enabled'}]});
+  assert.equal(future.data.error_code,'MODULE_UNAVAILABLE');
+  assert.equal((await request(path,superadmin,'POST',{},[])).status,400);
 });

@@ -196,6 +196,7 @@ const App = () => {
     ];
     const administration = [
       ...(can('manage_users') ? [{ path: '/users', label: t('nav.users'), icon: 'users' }] : []),
+      ...(can('manage_users') ? [{ path: '/modules', label: t('modules.title'), icon: 'settings' }] : []),
       ...(can('manage_users') ? [{ path: '/settings', label: t('nav.settings'), icon: 'settings' }] : []),
     ];
     return [
