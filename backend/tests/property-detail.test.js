@@ -10,7 +10,7 @@ const request = async (suffix) => {
   return { status: response.status, body: await response.json() };
 };
 test.before(async () => {
-  process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex'); await resetDb();
+  process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex'); await resetDb({ modules: true });
   companyId = (await query("INSERT INTO companies(name) VALUES ('Property test') RETURNING id")).rows[0].id;
   const other = (await query("INSERT INTO companies(name) VALUES ('Other') RETURNING id")).rows[0].id;
   const user = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'property@test.local','unused','viewer') RETURNING id", [companyId])).rows[0];

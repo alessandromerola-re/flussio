@@ -644,5 +644,7 @@
   "errors.MODULE_PLAN_INVALID": "La proposta di modifica non è valida.",
   "errors.MODULE_CORE_IMMUTABLE": "Il modulo Base è sempre attivo.",
   "errors.MODULE_HISTORY_QUERY_INVALID": "Impossibile caricare questa pagina dello storico.",
-  "errors.MODULE_UNKNOWN": "Modulo non riconosciuto."
+  "errors.MODULE_UNKNOWN": "Modulo non riconosciuto.",
+  "errors.MODULE_DISABLED": "Il modulo richiesto è disabilitato per questa azienda.",
+  "errors.MODULE_READ_ONLY": "Il modulo è in sola lettura. Puoi conservare i collegamenti esistenti, ma non modificarli."
 }

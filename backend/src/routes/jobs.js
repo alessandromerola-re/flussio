@@ -1,9 +1,11 @@
 import express from 'express';
+import { moduleWriteRoute, requireModuleRead } from '../modules/access.js';
 import { query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
 import { sendError } from '../utils/httpErrors.js';
 
 const router = express.Router();
+router.use((req, res, next) => ['GET', 'HEAD'].includes(req.method) ? requireModuleRead(['jobs'])(req, res, next) : next());
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const parseNullableInteger = (value) => {
@@ -53,7 +55,7 @@ const normalizeJobPayload = (payload = {}) => {
   };
 };
 
-const validateJobPayload = async (payload, companyId, currentId = null) => {
+const validateJobPayload = async (payload, companyId, currentId = null, executor = { query }) => {
   const {
     title,
     code,
@@ -91,7 +93,7 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
   }
 
   if (contactId != null) {
-    const contactResult = await query('SELECT id FROM contacts WHERE id = $1 AND company_id = $2', [
+    const contactResult = await executor.query('SELECT id FROM contacts WHERE id = $1 AND company_id = $2', [
       contactId,
       companyId,
     ]);
@@ -101,7 +103,7 @@ const validateJobPayload = async (payload, companyId, currentId = null) => {
   }
 
   if (code) {
-    const duplicateResult = await query(
+    const duplicateResult = await executor.query(
       `
       SELECT id
       FROM jobs
@@ -235,195 +237,176 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', moduleWriteRoute(['jobs'], async (req, client) => {
+  const query = client.query.bind(client);
   const payload = normalizeJobPayload(req.body);
-  const validation = await validateJobPayload(payload, req.companyId);
+  const validation = await validateJobPayload(payload, req.companyId, null, client);
 
   if (!validation.valid) {
-    const messageByCode = {
-      JOB_CODE_ALREADY_EXISTS: 'Codice commessa già usato.',
-      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
-      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
-    };
-    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Dati commessa non validi.', { field: validation.field });
+    throw Object.assign(new Error(validation.errorCode), { status: validation.status || 400, code: validation.errorCode, field: validation.field });
   }
 
-  try {
-    const result = await query(
-      `
-      INSERT INTO jobs (
-        company_id,
-        name,
-        title,
-        code,
-        notes,
-        contact_id,
-        is_active,
-        is_closed,
-        expected_revenue_cents,
-        expected_cost_cents,
-        start_date,
-        end_date
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      RETURNING
-        id,
-        name,
-        code,
-        title,
-        notes,
-        contact_id,
-        is_active,
-        is_closed,
-        start_date,
-        end_date,
-        expected_revenue_cents AS "expectedRevenueCents",
-        expected_cost_cents AS "expectedCostCents"
-      `,
-      [
-        req.companyId,
-        payload.name,
-        payload.title,
-        payload.code,
-        payload.notes,
-        payload.contact_id,
-        payload.is_active,
-        payload.is_closed,
-        payload.expected_revenue_cents,
-        payload.expected_cost_cents,
-        payload.start_date,
-        payload.end_date,
-      ]
-    );
-    await writeAuditLog({
-      companyId: req.companyId,
-      userId: req.user.user_id,
-      action: 'create',
-      entityType: 'jobs',
-      entityId: result.rows[0].id,
-      meta: { title: result.rows[0].title },
-    });
-    return res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
-  }
-});
+  const result = await query(
+    `
+    INSERT INTO jobs (
+      company_id,
+      name,
+      title,
+      code,
+      notes,
+      contact_id,
+      is_active,
+      is_closed,
+      expected_revenue_cents,
+      expected_cost_cents,
+      start_date,
+      end_date
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    RETURNING
+      id,
+      name,
+      code,
+      title,
+      notes,
+      contact_id,
+      is_active,
+      is_closed,
+      start_date,
+      end_date,
+      expected_revenue_cents AS "expectedRevenueCents",
+      expected_cost_cents AS "expectedCostCents"
+    `,
+    [
+      req.companyId,
+      payload.name,
+      payload.title,
+      payload.code,
+      payload.notes,
+      payload.contact_id,
+      payload.is_active,
+      payload.is_closed,
+      payload.expected_revenue_cents,
+      payload.expected_cost_cents,
+      payload.start_date,
+      payload.end_date,
+    ]
+  );
+  await writeAuditLog({
+    client,
+    companyId: req.companyId,
+    userId: req.user.user_id,
+    action: 'create',
+    entityType: 'jobs',
+    entityId: result.rows[0].id,
+    meta: { title: result.rows[0].title },
+  });
+  return { status: 201, body: result.rows[0] };
+}));
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', moduleWriteRoute(['jobs'], async (req, client) => {
+  const query = client.query.bind(client);
   const { id } = req.params;
   const payload = normalizeJobPayload(req.body);
-  const validation = await validateJobPayload(payload, req.companyId, Number(id));
+  const validation = await validateJobPayload(payload, req.companyId, Number(id), client);
 
   if (!validation.valid) {
-    const messageByCode = {
-      JOB_CODE_ALREADY_EXISTS: 'Codice commessa già usato.',
-      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
-      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
-    };
-    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Dati commessa non validi.', { field: validation.field });
+    throw Object.assign(new Error(validation.errorCode), { status: validation.status || 400, code: validation.errorCode, field: validation.field });
   }
 
-  try {
-    const result = await query(
-      `
-      UPDATE jobs
-      SET
-        name = $1,
-        title = $2,
-        code = $3,
-        notes = $4,
-        contact_id = $5,
-        is_active = $6,
-        is_closed = $7,
-        expected_revenue_cents = $8,
-        expected_cost_cents = $9,
-        start_date = $10,
-        end_date = $11
-      WHERE id = $12
-        AND company_id = $13
-      RETURNING
-        id,
-        name,
-        code,
-        title,
-        notes,
-        contact_id,
-        is_active,
-        is_closed,
-        start_date,
-        end_date,
-        expected_revenue_cents AS "expectedRevenueCents",
-        expected_cost_cents AS "expectedCostCents"
-      `,
-      [
-        payload.name,
-        payload.title,
-        payload.code,
-        payload.notes,
-        payload.contact_id,
-        payload.is_active,
-        payload.is_closed,
-        payload.expected_revenue_cents,
-        payload.expected_cost_cents,
-        payload.start_date,
-        payload.end_date,
-        id,
-        req.companyId,
-      ]
-    );
+  const result = await query(
+    `
+    UPDATE jobs
+    SET
+      name = $1,
+      title = $2,
+      code = $3,
+      notes = $4,
+      contact_id = $5,
+      is_active = $6,
+      is_closed = $7,
+      expected_revenue_cents = $8,
+      expected_cost_cents = $9,
+      start_date = $10,
+      end_date = $11
+    WHERE id = $12
+      AND company_id = $13
+    RETURNING
+      id,
+      name,
+      code,
+      title,
+      notes,
+      contact_id,
+      is_active,
+      is_closed,
+      start_date,
+      end_date,
+      expected_revenue_cents AS "expectedRevenueCents",
+      expected_cost_cents AS "expectedCostCents"
+    `,
+    [
+      payload.name,
+      payload.title,
+      payload.code,
+      payload.notes,
+      payload.contact_id,
+      payload.is_active,
+      payload.is_closed,
+      payload.expected_revenue_cents,
+      payload.expected_cost_cents,
+      payload.start_date,
+      payload.end_date,
+      id,
+      req.companyId,
+    ]
+  );
 
-    if (result.rowCount === 0) {
-      return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
-    }
-
-    await writeAuditLog({
-      companyId: req.companyId,
-      userId: req.user.user_id,
-      action: 'update',
-      entityType: 'jobs',
-      entityId: result.rows[0].id,
-      meta: { title: result.rows[0].title },
-    });
-
-    return res.json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
+  if (result.rowCount === 0) {
+    throw Object.assign(new Error('JOB_NOT_FOUND'), { status: 404, code: 'JOB_NOT_FOUND' });
   }
-});
 
-router.delete('/:id', async (req, res) => {
+  await writeAuditLog({
+    client,
+    companyId: req.companyId,
+    userId: req.user.user_id,
+    action: 'update',
+    entityType: 'jobs',
+    entityId: result.rows[0].id,
+    meta: { title: result.rows[0].title },
+  });
+
+  return { body: result.rows[0] };
+}));
+
+router.delete('/:id', moduleWriteRoute(['jobs'], async (req, client) => {
+  const query = client.query.bind(client);
   const { id } = req.params;
-  try {
-    const result = await query(
-      `
-      UPDATE jobs
-      SET is_active = false
-      WHERE id = $1
-        AND company_id = $2
-      RETURNING id
-      `,
-      [id, req.companyId]
-    );
+  const result = await query(
+    `
+    UPDATE jobs
+    SET is_active = false
+    WHERE id = $1
+      AND company_id = $2
+    RETURNING id
+    `,
+    [id, req.companyId]
+  );
 
-    if (result.rowCount === 0) {
-      return sendError(res, 404, 'JOB_NOT_FOUND', 'Commessa non trovata.');
-    }
-
-    await writeAuditLog({
-      companyId: req.companyId,
-      userId: req.user.user_id,
-      action: 'delete',
-      entityType: 'jobs',
-      entityId: id,
-      meta: {},
-    });
-    return res.status(204).send();
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
+  if (result.rowCount === 0) {
+    throw Object.assign(new Error('JOB_NOT_FOUND'), { status: 404, code: 'JOB_NOT_FOUND' });
   }
-});
+
+  await writeAuditLog({
+    client,
+    companyId: req.companyId,
+    userId: req.user.user_id,
+    action: 'delete',
+    entityType: 'jobs',
+    entityId: id,
+    meta: {},
+  });
+  return { status: 204 };
+}, 'delete'));
 
 export default router;
