@@ -5,9 +5,9 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import RecurringTemplatesPage from '../src/pages/RecurringTemplatesPage.jsx';
 import { api } from '../src/services/api.js';
 import { canPermission } from '../src/utils/permissions.js';
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key) => key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key) => key.startsWith('errors.') ? `${key} translated` : key }) }));
 vi.mock('../src/utils/permissions.js', () => ({ canPermission: vi.fn(() => true) }));
-vi.mock('../src/services/api.js', () => ({ api: Object.fromEntries(['getRecurringTemplates','getRecurringStatus','getRecurringRuns','getAccounts','getCategories','getContacts','getProperties','getJobs','createRecurringTemplate','updateRecurringTemplate','generateRecurringDue','generateRecurringTemplateNow'].map((key) => [key, vi.fn()])) }));
+vi.mock('../src/services/api.js', () => ({ api: Object.fromEntries(['getRecurringTemplates','getRecurringStatus','getRecurringRuns','getAccounts','getCategories','getContacts','getProperties','getJobs','createRecurringTemplate','updateRecurringTemplate','generateRecurringDue','generateRecurringTemplateNow','setRecurringTemplateActive'].map((key) => [key, vi.fn()])) }));
 const template = { id: 4, title: 'Affitto', frequency: 'monthly', interval: 1, start_date: '2026-09-01', amount: 100, movement_type: 'income', account_id: 1, account_name: 'Banca', is_active: true, next_run_at: '2026-10-01' };
 const setup = () => render(<MemoryRouter><RecurringTemplatesPage /></MemoryRouter>);
 beforeEach(() => {
@@ -17,6 +17,36 @@ beforeEach(() => {
   for (const key of ['getCategories','getContacts','getProperties','getJobs']) api[key].mockResolvedValue([]);
   api.createRecurringTemplate.mockResolvedValue({ id: 5 }); api.updateRecurringTemplate.mockResolvedValue(template);
   api.getRecurringRuns.mockResolvedValue({ rows: [{ id: 1, cycle_key: '2026-09', run_at: '2026-09-01', run_type: 'auto', generated_movement_id: 9 }], has_more: true });
+});
+
+it('shows module suspension, prevents generation and reactivation while allowing deactivation', async () => {
+  const suspended = { ...template, module_suspension: { code: 'MODULE_READ_ONLY', module: 'jobs' } };
+  api.getRecurringTemplates.mockResolvedValue([suspended]); api.getRecurringStatus.mockResolvedValue({ generator_enabled: true });
+  api.setRecurringTemplateActive.mockResolvedValue({ ...suspended, is_active: false });
+  setup(); await screen.findByText(/modules.names.jobs.*errors.MODULE_READ_ONLY/);
+  expect(screen.getByText('buttons.generateNow').disabled).toBe(true);
+  expect(screen.getByText('buttons.deactivate').disabled).toBe(false);
+  fireEvent.click(screen.getByText('buttons.deactivate'));
+  await waitFor(() => expect(api.setRecurringTemplateActive).toHaveBeenCalledWith(4, false));
+  expect(screen.getByText('buttons.activate').disabled).toBe(true);
+  expect(api.generateRecurringTemplateNow).not.toHaveBeenCalled();
+});
+
+it('keeps Base templates editable with optional modules disabled and preserves historical links', async () => {
+  api.getRecurringTemplates.mockResolvedValue([{ ...template, job_id: 8, property_id: 9 }]);
+  api.getJobs.mockRejectedValue(Object.assign(new Error('disabled'), { code: 'MODULE_DISABLED' }));
+  api.getProperties.mockRejectedValue(Object.assign(new Error('disabled'), { code: 'MODULE_DISABLED' }));
+  setup(); await screen.findByText('Affitto'); expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.click(screen.getByText('buttons.edit'));
+  const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('forms.name'), { target: { value: 'Base edit' } });
+  fireEvent.submit(dialog.querySelector('form'));
+  await waitFor(() => expect(api.updateRecurringTemplate).toHaveBeenCalledWith(4, expect.objectContaining({ job_id: 8, property_id: 9, title: 'Base edit' })));
+});
+
+it('does not hide authorization failures as an unavailable optional module', async () => {
+  api.getProperties.mockRejectedValue(Object.assign(new Error('forbidden'), { code: 'FORBIDDEN' }));
+  setup(); await screen.findByRole('alert'); expect(screen.getByText('buttons.new').disabled).toBe(true);
 });
 it('keeps generation off and filters templates without executing anything', async () => {
   setup(); await screen.findByText('Affitto');

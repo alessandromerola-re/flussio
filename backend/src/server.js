@@ -1,13 +1,12 @@
 import app from './app.js';
 import { runMigrations } from './db/migrate.js';
-import { generateDueTemplates } from './services/recurring.js';
+import { recurringGeneratorEnabled, generateDueTemplates } from './services/recurring.js';
 import { ensureBootstrapAdmin, ensureDevUser } from './bootstrapAdmin.js';
 
 const port = process.env.PORT || 4000;
 
 const startRecurringScheduler = () => {
-  const enabledRaw = process.env.RECURRING_GENERATOR_ENABLED;
-  const enabled = String(enabledRaw || 'false').toLowerCase() === 'true';
+  const enabled = recurringGeneratorEnabled();
   const intervalMinutes = Number(process.env.RECURRING_GENERATOR_INTERVAL_MIN || 5);
 
   if (!enabled) {

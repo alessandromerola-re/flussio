@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertModuleAccess, assertModuleLinkChanges, parseModuleLinks } from '../src/modules/access.js';
+import { assertModuleAccess, assertModuleLinkChanges, parseModuleLinks, recurringModuleBlock } from '../src/modules/access.js';
 
 test('module access defaults to denied and technical availability precedes module states', () => {
   assert.throws(() => assertModuleAccess({ jobs: 'enabled' }, ['jobs'], 'write'), { code: 'FORBIDDEN' });
   assert.throws(() => assertModuleAccess({ jobs: 'enabled' }, ['jobs'], 'write', { permissionGranted: true, technicalEnabled: false }), { code: 'FEATURE_UNAVAILABLE' });
+});
+
+test('recurring eligibility requires every linked module but preserves Base independence', () => {
+  assert.equal(recurringModuleBlock({ jobs: 'disabled', real_estate: 'read_only' }, {}), null);
+  assert.equal(recurringModuleBlock({ jobs: 'read_only' }, { job_id: 1 }).code, 'MODULE_READ_ONLY');
+  assert.equal(recurringModuleBlock({ jobs: 'enabled', real_estate: 'disabled' }, { job_id: 1, property_id: 2 }).module, 'real_estate');
+  assert.equal(recurringModuleBlock({}, { property_id: 2 }).code, 'MODULE_DISABLED');
+  assert.equal(recurringModuleBlock({ jobs: 'enabled', real_estate: 'enabled' }, { job_id: 1, property_id: 2 }), null);
 });
 test('module links distinguish omission, explicit null and matching aliases', () => {
   assert.deepEqual(parseModuleLinks({ description: 'Changed' }), {});

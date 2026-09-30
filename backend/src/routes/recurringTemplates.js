@@ -1,6 +1,9 @@
 import express from 'express';
+import { moduleWriteRoute, assertModuleLinkChanges, assertRecurringActivation, parseModuleLinks, recurringModuleBlock } from '../modules/access.js';
+import { readCompanyModules } from '../modules/registry.js';
+import { canRole } from '../middleware/permissions.js';
 import { query } from '../db/index.js';
-import { computeNextRunAtForTemplate, generateDueTemplates, generateTemplateNow } from '../services/recurring.js';
+import { recurringGeneratorEnabled, computeNextRunAtForTemplate, generateDueTemplates, generateTemplateNow } from '../services/recurring.js';
 import { writeAuditLog } from '../services/audit.js';
 import { sendError } from '../utils/httpErrors.js';
 
@@ -43,18 +46,18 @@ const normalizeTemplatePayload = (payload = {}) => ({
   yearly_anchor_dd: parseNullableInteger(payload.yearly_anchor_dd),
 });
 
-const validateReference = async (table, id, companyId, { activeOnly = false } = {}) => {
+const validateReference = async (table, id, companyId, { activeOnly = false, executor = { query } } = {}) => {
   if (id == null) {
     return { valid: true };
   }
-  const result = await query(
+  const result = await executor.query(
     `SELECT id FROM ${table} WHERE id = $1 AND company_id = $2${activeOnly ? ' AND is_active = true' : ''}`,
     [id, companyId]
   );
   return result.rowCount > 0;
 };
 
-const validatePayload = async (payload, companyId) => {
+const validatePayload = async (payload, companyId, executor = { query }) => {
   if (!payload.title) {
     return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'title' };
   }
@@ -84,11 +87,11 @@ const validatePayload = async (payload, companyId) => {
   }
 
   const refs = await Promise.all([
-    validateReference('accounts', payload.account_id, companyId, { activeOnly: true }),
-    validateReference('categories', payload.category_id, companyId),
-    validateReference('contacts', payload.contact_id, companyId),
-    validateReference('properties', payload.property_id, companyId),
-    validateReference('jobs', payload.job_id, companyId),
+    validateReference('accounts', payload.account_id, companyId, { activeOnly: true, executor }),
+    validateReference('categories', payload.category_id, companyId, { executor }),
+    validateReference('contacts', payload.contact_id, companyId, { executor }),
+    validateReference('properties', payload.property_id, companyId, { executor }),
+    validateReference('jobs', payload.job_id, companyId, { executor }),
   ]);
 
   if (refs.some((refOk) => !refOk)) {
@@ -113,8 +116,20 @@ const validatePayload = async (payload, companyId) => {
   return { valid: true };
 };
 
+const statesForCompany = async companyId => Object.fromEntries((await readCompanyModules(companyId)).modules.map(module => [module.code, module.state]));
+const withSuspension = (row, states) => ({ ...row, module_suspension: recurringModuleBlock(states, row) });
+const fail = (code, status = 400, field) => Object.assign(new Error(code), { code, status, field });
+const normalizeWithLinks = (body, previous = {}) => {
+  const links = parseModuleLinks(body);
+  return { ...normalizeTemplatePayload(body),
+    job_id: Object.hasOwn(links, 'job_id') ? links.job_id : previous.job_id ?? null,
+    property_id: Object.hasOwn(links, 'property_id') ? links.property_id : previous.property_id ?? null,
+    is_active: Object.hasOwn(body, 'is_active') ? body.is_active : previous.is_active ?? true,
+  };
+};
+
 router.get('/status', (req, res) => res.json({
-  generator_enabled: String(process.env.RECURRING_GENERATOR_ENABLED || 'false').toLowerCase() === 'true',
+  generator_enabled: recurringGeneratorEnabled(),
 }));
 
 router.get('/:id/runs', async (req, res) => {
@@ -139,6 +154,7 @@ router.get('/:id/runs', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
+    const states = await statesForCompany(req.companyId);
     const result = await query(
       `
       SELECT rt.*,
@@ -149,16 +165,16 @@ router.get('/', async (req, res) => {
              j.title AS job_title
       FROM recurring_templates rt
       LEFT JOIN accounts a ON a.id = rt.account_id AND a.company_id = rt.company_id
-      LEFT JOIN categories c ON c.id = rt.category_id
-      LEFT JOIN contacts ct ON ct.id = rt.contact_id
-      LEFT JOIN properties p ON p.id = rt.property_id
-      LEFT JOIN jobs j ON j.id = rt.job_id
+      LEFT JOIN categories c ON c.id = rt.category_id AND c.company_id = rt.company_id
+      LEFT JOIN contacts ct ON ct.id = rt.contact_id AND ct.company_id = rt.company_id
+      LEFT JOIN properties p ON p.id = rt.property_id AND p.company_id = rt.company_id
+      LEFT JOIN jobs j ON j.id = rt.job_id AND j.company_id = rt.company_id
       WHERE rt.company_id = $1
       ORDER BY rt.next_run_at ASC, rt.id DESC
       `,
       [req.companyId]
     );
-    return res.json(result.rows);
+    return res.json(result.rows.map(row => withSuspension(row, states)));
   } catch (error) {
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
@@ -167,6 +183,7 @@ router.get('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
+    const states = await statesForCompany(req.companyId);
     const result = await query(
       'SELECT * FROM recurring_templates WHERE id = $1 AND company_id = $2',
       [req.params.id, req.companyId]
@@ -174,34 +191,24 @@ router.get('/:id', async (req, res) => {
     if (result.rowCount === 0) {
       return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
-    return res.json(result.rows[0]);
+    return res.json(withSuspension(result.rows[0], states));
   } catch (error) {
     console.error(error);
     return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
   }
 });
 
-router.post('/', async (req, res) => {
-  const payload = normalizeTemplatePayload(req.body);
-  const validation = await validatePayload(payload, req.companyId);
+router.post('/', moduleWriteRoute(['recurring'], async (req, client, current) => {
+  const query = client.query.bind(client);
+  const payload = normalizeWithLinks(req.body);
+  assertModuleLinkChanges(current.states, {}, payload, { permissionGranted: canRole(req.companyRole, 'write') });
+  const validation = await validatePayload(payload, req.companyId, client);
   if (!validation.valid) {
-    const messageByCode = {
-      RECURRING_INVALID_FREQUENCY: 'Frequenza ricorrenza non valida.',
-      RECURRING_INVALID_INTERVAL: 'Intervallo ricorrenza non valido.',
-      RECURRING_MISSING_AMOUNT: 'Importo ricorrente mancante o non valido.',
-      RECURRING_INVALID_MOVEMENT_TYPE: 'Tipo movimento ricorrente non valido.',
-      RECURRING_MISSING_ACCOUNT: 'Seleziona il conto della ricorrenza.',
-      RECURRING_INVALID_REFERENCE: 'Riferimenti ricorrenti non validi.',
-      RECURRING_INVALID_ANCHOR: 'Parametri di ancoraggio ricorrenza non validi.',
-      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
-      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
-    };
-    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Template ricorrente non valido.', { field: validation.field });
+    throw fail(validation.errorCode, validation.status || 400, validation.field);
   }
 
   const nextRunAt = computeNextRunAtForTemplate(payload);
 
-  try {
     const result = await query(
       `
       INSERT INTO recurring_templates (
@@ -235,35 +242,24 @@ router.post('/', async (req, res) => {
       ]
     );
 
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
-    return res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
-  }
-});
+    await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
+    return { status: 201, body: withSuspension(result.rows[0], current.states) };
+}));
 
-router.put('/:id', async (req, res) => {
-  const payload = normalizeTemplatePayload(req.body);
-  const validation = await validatePayload(payload, req.companyId);
+router.put('/:id', moduleWriteRoute(['recurring'], async (req, client, current) => {
+  const query = client.query.bind(client);
+  const old = await query('SELECT * FROM recurring_templates WHERE id=$1 AND company_id=$2 FOR UPDATE', [req.params.id, req.companyId]);
+  if (!old.rowCount) throw fail('NOT_FOUND', 404);
+  const payload = normalizeWithLinks(req.body, old.rows[0]);
+  assertModuleLinkChanges(current.states, old.rows[0], payload, { permissionGranted: canRole(req.companyRole, 'write') });
+  if (payload.is_active && !old.rows[0].is_active) assertRecurringActivation(current.states, payload, { permissionGranted: canRole(req.companyRole, 'write') });
+  const validation = await validatePayload(payload, req.companyId, client);
   if (!validation.valid) {
-    const messageByCode = {
-      RECURRING_INVALID_FREQUENCY: 'Frequenza ricorrenza non valida.',
-      RECURRING_INVALID_INTERVAL: 'Intervallo ricorrenza non valido.',
-      RECURRING_MISSING_AMOUNT: 'Importo ricorrente mancante o non valido.',
-      RECURRING_INVALID_MOVEMENT_TYPE: 'Tipo movimento ricorrente non valido.',
-      RECURRING_MISSING_ACCOUNT: 'Seleziona il conto della ricorrenza.',
-      RECURRING_INVALID_REFERENCE: 'Riferimenti ricorrenti non validi.',
-      RECURRING_INVALID_ANCHOR: 'Parametri di ancoraggio ricorrenza non validi.',
-      VALIDATION_INVALID_DATE_RANGE: 'Intervallo date non valido.',
-      VALIDATION_MISSING_FIELDS: 'Compila i campi richiesti.',
-    };
-    return sendError(res, validation.status || 400, validation.errorCode, messageByCode[validation.errorCode] || 'Template ricorrente non valido.', { field: validation.field });
+    throw fail(validation.errorCode, validation.status || 400, validation.field);
   }
 
   const nextRunAt = computeNextRunAtForTemplate(payload);
 
-  try {
     const result = await query(
       `
       UPDATE recurring_templates
@@ -314,82 +310,48 @@ router.put('/:id', async (req, res) => {
     );
 
     if (result.rowCount === 0) {
-      return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
+      throw fail('NOT_FOUND', 404);
     }
 
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'update', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
-    return res.json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
-  }
-});
+    await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'update', entityType: 'recurring_templates', entityId: result.rows[0].id, meta: { frequency: result.rows[0].frequency } });
+    return { body: withSuspension(result.rows[0], current.states) };
+}));
 
-router.patch('/:id/active', async (req, res) => {
-  if (typeof req.body?.is_active !== 'boolean') {
-    return sendError(res, 400, 'VALIDATION_INVALID_ACTIVE_STATE', 'Lo stato della ricorrenza non è valido.');
+router.patch('/:id/active', moduleWriteRoute(['recurring'], async (req, client, current) => {
+  if (typeof req.body?.is_active !== 'boolean') throw fail('VALIDATION_INVALID_ACTIVE_STATE');
+  const old = await client.query('SELECT * FROM recurring_templates WHERE id=$1 AND company_id=$2 FOR UPDATE', [req.params.id, req.companyId]);
+  if (!old.rowCount) throw fail('NOT_FOUND', 404);
+  if (req.body.is_active) {
+    assertRecurringActivation(current.states, old.rows[0], { permissionGranted: canRole(req.companyRole, 'delete_sensitive') });
+    const account = await client.query('SELECT id FROM accounts WHERE id=$1 AND company_id=$2 AND is_active=true', [old.rows[0].account_id, req.companyId]);
+    if (!account.rowCount) throw fail('RECURRING_MISSING_ACCOUNT');
   }
-  try {
-    if (req.body.is_active) {
-      const accountResult = await query(
-        `SELECT 1
-         FROM recurring_templates rt
-         JOIN accounts a ON a.id = rt.account_id
-           AND a.company_id = rt.company_id
-           AND a.is_active = true
-         WHERE rt.id = $1
-           AND rt.company_id = $2`,
-        [req.params.id, req.companyId]
-      );
-      if (accountResult.rowCount === 0) {
-        return sendError(res, 400, 'RECURRING_MISSING_ACCOUNT', 'Seleziona un conto attivo prima di riattivare la ricorrenza.');
-      }
-    }
-    const result = await query(
-      'UPDATE recurring_templates SET is_active = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3 RETURNING *',
-      [req.body.is_active, req.params.id, req.companyId]
-    );
-    if (result.rowCount === 0) return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: req.body.is_active ? 'activate' : 'deactivate', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
-    return res.json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
-  }
-});
+  const result = await client.query('UPDATE recurring_templates SET is_active=$1, updated_at=NOW() WHERE id=$2 AND company_id=$3 RETURNING *', [req.body.is_active, req.params.id, req.companyId]);
+  await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: req.body.is_active ? 'activate' : 'deactivate', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
+  return { body: withSuspension(result.rows[0], current.states) };
+}, 'delete'));
 
-router.delete('/:id', async (req, res) => {
-  try {
-    const result = await query(
-      'UPDATE recurring_templates SET is_active = false, updated_at = NOW() WHERE id = $1 AND company_id = $2 RETURNING id',
-      [req.params.id, req.companyId]
-    );
-    if (result.rowCount === 0) {
-      return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
-    }
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
-    return res.status(204).send();
-  } catch (error) {
-    console.error(error);
-    return sendError(res, 500, 'SERVER_ERROR', 'Errore server.');
-  }
-});
+router.delete('/:id', moduleWriteRoute(['recurring'], async (req, client) => {
+  const result = await client.query('UPDATE recurring_templates SET is_active=false, updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id', [req.params.id, req.companyId]);
+  if (!result.rowCount) throw fail('NOT_FOUND', 404);
+  await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'recurring_templates', entityId: req.params.id, meta: {} });
+  return { status: 204 };
+}, 'delete'));
 
 router.post('/:id/generate-now', async (req, res) => {
   try {
-    const result = await generateTemplateNow(Number(req.params.id), req.companyId);
+    const result = await generateTemplateNow(Number(req.params.id), req.companyId, { actorUserId: req.user.user_id });
     if (result.notFound) {
       return sendError(res, 404, 'NOT_FOUND', 'Template non trovato.');
     }
 
     if (result.status === 'skipped') {
-      const code = ['missing_account', 'account_unavailable'].includes(result.reason)
+      const code = result.code || (['missing_account', 'account_unavailable'].includes(result.reason)
         ? 'RECURRING_MISSING_ACCOUNT'
-        : 'RECURRING_ALREADY_GENERATED';
-      return res.json({ status: 'skipped', code, reason: result.reason });
+        : 'RECURRING_ALREADY_GENERATED');
+      return res.json({ ...result, code });
     }
 
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'generate', entityType: 'recurring_templates', entityId: req.params.id, meta: result });
     return res.json({ status: 'created', ...result });
   } catch (error) {
     console.error(error);
@@ -399,7 +361,7 @@ router.post('/:id/generate-now', async (req, res) => {
 
 router.post('/generate-due', async (req, res) => {
   try {
-    const result = await generateDueTemplates({ companyId: req.companyId, runType: 'manual' });
+    const result = await generateDueTemplates({ companyId: req.companyId, runType: 'manual', actorUserId: req.user.user_id });
     return res.json(result);
   } catch (error) {
     console.error(error);

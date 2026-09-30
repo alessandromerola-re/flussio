@@ -1,4 +1,9 @@
-import { getClient, query } from '../db/index.js';
+import { getClient } from '../db/index.js';
+import { lockCompanyModules } from '../modules/registry.js';
+import { recurringModuleBlock } from '../modules/access.js';
+import { writeAuditLog } from './audit.js';
+
+export const recurringGeneratorEnabled = () => String(process.env.RECURRING_GENERATOR_ENABLED || 'false').toLowerCase() === 'true';
 
 const ROME_TIMEZONE = 'Europe/Rome';
 
@@ -234,7 +239,17 @@ export const computeNextRunAtForTemplate = (template, now = new Date()) => {
   return buildRomeDate(normalized.year, normalized.month, normalized.day, 0, 5);
 };
 
-const generateForTemplate = async (client, template, runType, forcedNow = false) => {
+const generateForTemplate = async (client, template, runType, forcedNow, states, actorUserId) => {
+  if (!recurringGeneratorEnabled()) return { status: 'skipped', reason: 'generator_disabled', code: 'RECURRING_GENERATOR_DISABLED' };
+  const block = recurringModuleBlock(states, template);
+  if (block) return { status: 'skipped', reason: 'module_suspended', ...block };
+  // Historical references must belong to the template's own company. Never generate
+  // a movement with a missing/foreign link or silently remove a requested link.
+  for (const [table, field] of [['jobs', 'job_id'], ['properties', 'property_id'], ['categories', 'category_id'], ['contacts', 'contact_id']]) {
+    if (template[field] == null) continue;
+    const reference = await client.query(`SELECT id FROM ${table} WHERE id=$1 AND company_id=$2`, [template[field], template.company_id]);
+    if (!reference.rowCount) return { status: 'skipped', reason: 'invalid_reference', code: 'RECURRING_INVALID_REFERENCE' };
+  }
   const now = new Date();
   const nowRome = getRomeParts(now);
 
@@ -368,13 +383,17 @@ const generateForTemplate = async (client, template, runType, forcedNow = false)
     [nextRunAt, nextRunAllowed, template.id]
   );
 
-  return { status: 'created', movement_id: movementId, cycle_key: cycleKey, run_at: runAt.toISOString() };
+  const result = { status: 'created', movement_id: movementId, cycle_key: cycleKey, run_at: runAt.toISOString() };
+  await writeAuditLog({ client, companyId: template.company_id, userId: actorUserId, action: 'generate', entityType: 'recurring_templates', entityId: template.id, meta: { ...result, run_type: runType } });
+  return result;
 };
 
-export const generateTemplateNow = async (templateId, companyId) => {
+export const generateTemplateNow = async (templateId, companyId, { actorUserId = null } = {}) => {
+  if (!recurringGeneratorEnabled()) return { status: 'skipped', reason: 'generator_disabled', code: 'RECURRING_GENERATOR_DISABLED' };
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const current = await lockCompanyModules(client, companyId);
     const templateResult = await client.query(
       'SELECT * FROM recurring_templates WHERE id = $1 AND company_id = $2 FOR UPDATE',
       [templateId, companyId]
@@ -390,7 +409,7 @@ export const generateTemplateNow = async (templateId, companyId) => {
       return { status: 'skipped', reason: 'inactive' };
     }
 
-    const result = await generateForTemplate(client, template, 'manual', true);
+    const result = await generateForTemplate(client, template, 'manual', true, current.states, actorUserId);
     await client.query('COMMIT');
     return result;
   } catch (error) {
@@ -401,7 +420,9 @@ export const generateTemplateNow = async (templateId, companyId) => {
   }
 };
 
-export const generateDueTemplates = async ({ companyId = null, runType = 'auto' } = {}) => {
+export const generateDueTemplates = async ({ companyId = null, runType = 'auto', actorUserId = null } = {}) => {
+  if (!['auto', 'manual'].includes(runType)) throw Object.assign(new Error('VALIDATION_MISSING_FIELDS'), { code: 'VALIDATION_MISSING_FIELDS', status: 400 });
+  if (!recurringGeneratorEnabled()) return { created_count: 0, skipped_count: 0, skipped_details: [], generator_enabled: false, code: 'RECURRING_GENERATOR_DISABLED' };
   const client = await getClient();
   const result = {
     created_count: 0,
@@ -430,8 +451,9 @@ export const generateDueTemplates = async ({ companyId = null, runType = 'auto' 
     for (const row of dueResult.rows) {
       const template = toTemplateView(row);
       await client.query('BEGIN');
-      const lockedResult = await client.query('SELECT * FROM recurring_templates WHERE id = $1 FOR UPDATE', [
-        template.id,
+      const current = await lockCompanyModules(client, template.company_id);
+      const lockedResult = await client.query('SELECT * FROM recurring_templates WHERE id = $1 AND company_id = $2 FOR UPDATE', [
+        template.id, template.company_id,
       ]);
       if (lockedResult.rowCount === 0) {
         await client.query('ROLLBACK');
@@ -447,7 +469,7 @@ export const generateDueTemplates = async ({ companyId = null, runType = 'auto' 
         });
         continue;
       }
-      const itemResult = await generateForTemplate(client, locked, runType, false);
+      const itemResult = await generateForTemplate(client, locked, runType, false, current.states, actorUserId);
       await client.query('COMMIT');
 
       if (itemResult.status === 'created') {
@@ -457,6 +479,7 @@ export const generateDueTemplates = async ({ companyId = null, runType = 'auto' 
         result.skipped_details.push({
           template_id: locked.id,
           reason: itemResult.reason,
+          ...(itemResult.code ? { code: itemResult.code, module: itemResult.module, dependency: itemResult.dependency } : {}),
         });
       }
     }

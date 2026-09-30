@@ -646,5 +646,8 @@
   "errors.MODULE_HISTORY_QUERY_INVALID": "Unable to load this history page.",
   "errors.MODULE_UNKNOWN": "Unknown module.",
   "errors.MODULE_DISABLED": "The required module is disabled for this company.",
-  "errors.MODULE_READ_ONLY": "The module is read-only. Existing links can be preserved but cannot be changed."
+  "errors.MODULE_READ_ONLY": "The module is read-only. Existing links can be preserved but cannot be changed.",
+  "pages.recurring.suspended": "Suspended by module",
+  "pages.recurring.moduleSuspensionHint": "Data and links are preserved. Generation can resume when the module is enabled again.",
+  "errors.RECURRING_GENERATOR_DISABLED": "Generation is disabled by the system configuration."
 }
