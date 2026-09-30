@@ -44,7 +44,7 @@ const postMovementSettingsImport = async (role) => fetch(`${baseUrl}/api/setting
 
 test.before(async () => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_secret';
-  await resetDb();
+  await resetDb({ modules: true });
 
   const company = await query('INSERT INTO companies (name) VALUES ($1) RETURNING id', ['Acme SRL']);
   const companyOther = await query('INSERT INTO companies (name) VALUES ($1) RETURNING id', ['Other SRL']);

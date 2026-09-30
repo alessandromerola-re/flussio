@@ -26,7 +26,8 @@ const createTemplate = async ({
 };
 
 test.beforeEach(async () => {
-  await resetDb();
+  process.env.RECURRING_GENERATOR_ENABLED = 'true';
+  await resetDb({ modules: true });
   const company = await query('INSERT INTO companies (name) VALUES ($1) RETURNING id', ['Recurring Co']);
   companyId = company.rows[0].id;
   const account = await query(

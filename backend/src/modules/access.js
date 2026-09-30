@@ -43,7 +43,7 @@ export async function withModuleWrite(companyId, capabilities, work, { action = 
 
 export const moduleWriteRoute = (capabilities, work, action = 'write') => async (req, res) => {
   try {
-    const result = await withModuleWrite(req.companyId, capabilities, client => work(req, client), {
+    const result = await withModuleWrite(req.companyId, capabilities, (client, current) => work(req, client, current), {
       action, permissionGranted: canRole(getRole(req), action === 'delete' ? 'delete_sensitive' : 'write'),
     });
     return result.status === 204 ? res.status(204).send() : res.status(result.status || 200).json(result.body);
@@ -78,6 +78,20 @@ export function assertModuleLinkChanges(states, previous, next, options) {
   for (const [field, , capability] of linkFields) {
     if ((previous[field] ?? null) !== (next[field] ?? null)) assertModuleAccess(states, [capability], 'write', options);
   }
+}
+
+// Eligibility is derived from current server states. It is metadata for Base views,
+// and is checked again under the company lock before any generation/activation.
+export function recurringModuleBlock(states, template) {
+  const capabilities = ['recurring'];
+  if (template.job_id != null) capabilities.push('job_links');
+  if (template.property_id != null) capabilities.push('property_links');
+  const result = modulePolicy.evaluate({ states, capabilities, action: 'run', permissionGranted: true });
+  return result.allowed ? null : { code: result.code, module: result.module, dependency: result.dependency };
+}
+
+export function assertRecurringActivation(states, template, options) {
+  assertModuleLinkChanges(states, {}, template, options);
 }
 
 export const requireTransactionFilterModules = async (req, res, next) => {

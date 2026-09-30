@@ -2,7 +2,9 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import express from 'express';
-import { requirePermission } from '../middleware/permissions.js';
+import { assertModuleAccess, sendModuleError } from '../modules/access.js';
+import { lockCompanyModules } from '../modules/registry.js';
+import { canRole, requirePermission } from '../middleware/permissions.js';
 import { sendError } from '../utils/httpErrors.js';
 import { writeAuditLog } from '../services/audit.js';
 import { getClient, query } from '../db/index.js';
@@ -572,27 +574,6 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Header CSV non valido.');
   }
 
-  const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = await Promise.all([
-    query('SELECT id, name FROM accounts WHERE company_id = $1', [req.companyId]),
-    query('SELECT id, name FROM categories WHERE company_id = $1', [req.companyId]),
-    query('SELECT id, name FROM contacts WHERE company_id = $1', [req.companyId]),
-    query('SELECT id, external_id, name FROM properties WHERE company_id = $1', [req.companyId]),
-    query('SELECT id, name, title FROM jobs WHERE company_id = $1', [req.companyId]),
-  ]);
-
-  const accountByName = new Map(accountsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
-  const categoryByName = new Map(categoriesResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
-  const contactByName = new Map(contactsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
-  const propertyByCode = new Map(propertiesResult.rows.map((r) => [String(r.external_id || '').trim(), r.id]));
-  const propertyIdsByName = new Map();
-  for (const property of propertiesResult.rows) {
-    const normalizedName = String(property.name || '').trim().toLowerCase();
-    const ids = propertyIdsByName.get(normalizedName) || [];
-    ids.push(property.id);
-    propertyIdsByName.set(normalizedName, ids);
-  }
-  const jobByName = new Map(jobsResult.rows.map((r) => [String((r.name || r.title || '')).trim().toLowerCase(), r.id]));
-
   let imported = 0;
   let skipped = 0;
   const errors = [];
@@ -600,6 +581,40 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const current = await lockCompanyModules(client, req.companyId);
+    const capabilities = ['finance'];
+    const contentRows = lines.slice(1).map(line => parseCsvLine(line, delimiter));
+    if (contentRows.some(row => (idx.propertyCode >= 0 && String(row[idx.propertyCode] || '').trim()) || (idx.property >= 0 && String(row[idx.property] || '').trim()))) capabilities.push('property_links');
+    if (contentRows.some(row => idx.job >= 0 && String(row[idx.job] || '').trim())) capabilities.push('job_links');
+    assertModuleAccess(current.states, capabilities, 'write', { permissionGranted: canRole(req.companyRole, 'import_movements') });
+
+    const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = await Promise.all([
+      client.query('SELECT id, name FROM accounts WHERE company_id = $1', [req.companyId]),
+      client.query('SELECT id, name FROM categories WHERE company_id = $1', [req.companyId]),
+      client.query('SELECT id, name FROM contacts WHERE company_id = $1', [req.companyId]),
+      client.query('SELECT id, external_id, name FROM properties WHERE company_id = $1', [req.companyId]),
+      client.query('SELECT id, name, title FROM jobs WHERE company_id = $1', [req.companyId]),
+    ]);
+
+    const accountByName = new Map(accountsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
+    const categoryByName = new Map(categoriesResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
+    const contactByName = new Map(contactsResult.rows.map((r) => [String(r.name || '').trim().toLowerCase(), r.id]));
+    const propertyByCode = new Map(propertiesResult.rows.map((r) => [String(r.external_id || '').trim(), r.id]));
+    const propertyIdsByName = new Map();
+    for (const property of propertiesResult.rows) {
+      const normalizedName = String(property.name || '').trim().toLowerCase();
+      const ids = propertyIdsByName.get(normalizedName) || [];
+      ids.push(property.id);
+      propertyIdsByName.set(normalizedName, ids);
+    }
+    const jobByName = new Map(jobsResult.rows.map((r) => [String((r.name || r.title || '')).trim().toLowerCase(), r.id]));
+
+    // Lock all referenced accounts in one stable order before importing any row.
+    const accountIds = [...new Set(contentRows.flatMap(row => String(row[idx.accountNames] || '').split('→').map(name => accountByName.get(name.trim().toLowerCase())).filter(Boolean)))].sort((a, b) => a - b);
+    if (accountIds.length) {
+      const locked = await client.query('SELECT id FROM accounts WHERE company_id=$1 AND id=ANY($2::int[]) ORDER BY id FOR UPDATE', [req.companyId, accountIds]);
+      if (locked.rowCount !== accountIds.length) throw Object.assign(new Error('VALIDATION_MISSING_FIELDS'), { code: 'VALIDATION_MISSING_FIELDS', status: 400 });
+    }
 
     for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
       const row = parseCsvLine(lines[lineIndex], delimiter);
@@ -684,7 +699,13 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
         }
         [propertyId] = matchingPropertyIds;
       }
-      const jobId = idx.job >= 0 ? (jobByName.get(String(row[idx.job] || '').trim().toLowerCase()) || null) : null;
+      const jobName = idx.job >= 0 ? String(row[idx.job] || '').trim() : '';
+      const jobId = jobName ? jobByName.get(jobName.toLowerCase()) || null : null;
+      if (jobName && !jobId) {
+        skipped += 1;
+        errors.push({ line: lineIndex + 1, message: `Commessa non trovata: ${jobName}` });
+        continue;
+      }
       const description = idx.description >= 0 ? String(row[idx.description] || '').trim() : '';
       const signedAmount = type === 'expense' ? -amountAbs : amountAbs;
 
@@ -709,8 +730,8 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
       imported += 1;
     }
 
-    await client.query('COMMIT');
     await writeAuditLog({
+      client,
       companyId: req.companyId,
       userId: req.user.user_id,
       action: 'import',
@@ -718,10 +739,12 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
       entityId: null,
       meta: { imported, skipped },
     });
+    await client.query('COMMIT');
 
     return res.status(201).json({ imported, skipped, errors: errors.slice(0, 20) });
   } catch (error) {
     await client.query('ROLLBACK');
+    if (error.status) return sendModuleError(res, error);
     console.error(error);
     return sendError(res, 500, 'MOVEMENTS_IMPORT_FAILED', 'Import CSV movimenti non riuscito.', { details: { message: error.message } });
   } finally {

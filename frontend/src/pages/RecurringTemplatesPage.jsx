@@ -56,13 +56,18 @@ const RecurringTemplatesPage = () => {
   const [importPreview, setImportPreview] = useState([]);
   const [pendingTemplateId, setPendingTemplateId] = useState(null);
 
+  const optionalModuleList = promise => promise.catch(failure => {
+    if (failure.code === 'MODULE_DISABLED') return [];
+    throw failure;
+  });
+
   const loadData = async () => {
     const request = ++requestId.current;
     setLoading(true); setLoadError(null);
     try {
       const [templatesData, categoriesData, contactsData, propertiesData, jobsData, accountsData, generator] = await Promise.all([
-        api.getRecurringTemplates(), api.getCategories(), api.getContacts(), api.getProperties(),
-        api.getJobs({ active: 0, include_closed: 1 }), api.getAccounts(), api.getRecurringStatus(),
+        api.getRecurringTemplates(), api.getCategories(), api.getContacts(), optionalModuleList(api.getProperties()),
+        optionalModuleList(api.getJobs({ active: 0, include_closed: 1 })), api.getAccounts(), api.getRecurringStatus(),
       ]);
       if (request !== requestId.current) return;
       setTemplates(templatesData); setCategories(categoriesData); setContacts(contactsData);
@@ -90,7 +95,7 @@ const RecurringTemplatesPage = () => {
   };
   const visibleTemplates = templates.filter((item) => {
     const incomplete = !item.account_id || !item.account_name || item.account_is_active === false;
-    const matchesStatus = status === 'all' || (status === 'active' && item.is_active) || (status === 'inactive' && !item.is_active) || (status === 'incomplete' && incomplete);
+    const matchesStatus = status === 'all' || (status === 'active' && item.is_active) || (status === 'inactive' && !item.is_active) || (status === 'incomplete' && incomplete) || (status === 'suspended' && item.module_suspension);
     return matchesStatus && [item.title, item.account_name, item.contact_name, item.property_name, item.job_title].join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
   });
 
@@ -137,7 +142,7 @@ const RecurringTemplatesPage = () => {
     try {
       const result = await api.generateRecurringTemplateNow(id);
       if (result.status === 'skipped') {
-        setMessage(t('pages.recurring.skipped'));
+        setMessage(result.code && (result.reason === 'module_suspended' || result.reason === 'generator_disabled') ? getErrorMessage(t, { code: result.code }) : t('pages.recurring.skipped'));
       } else {
         setMessage(t('pages.recurring.generated'));
       }
@@ -193,7 +198,7 @@ const RecurringTemplatesPage = () => {
   const handleGenerateDue = async () => {
     try {
       const result = await api.generateRecurringDue();
-      setMessage(`${t('pages.recurring.generatedDue')}: ${result.created_count} / ${result.skipped_count}`);
+      setMessage(result.code ? getErrorMessage(t, { code: result.code }) : `${t('pages.recurring.generatedDue')}: ${result.created_count} / ${result.skipped_count}`);
       await loadData();
     } catch (generateError) {
       setError(getErrorMessage(t, generateError));
@@ -241,7 +246,7 @@ const RecurringTemplatesPage = () => {
       <section className="card recurring-filters" aria-label={t('pages.recurring.filters')}>
         <label>{t('forms.search')}<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
         <label>{t('pages.registry.status')}<select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="all">{t('common.all')}</option><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option><option value="incomplete">{t('pages.recurring.incomplete')}</option>
+          <option value="all">{t('common.all')}</option><option value="active">{t('labels.active')}</option><option value="inactive">{t('labels.inactive')}</option><option value="incomplete">{t('pages.recurring.incomplete')}</option><option value="suspended">{t('pages.recurring.suspended')}</option>
         </select></label><span aria-live="polite">{visibleTemplates.length} / {templates.length}</span>
       </section>
       <Modal isOpen={showForm && canPermission('write')} onClose={() => setShowForm(false)} dismissible={!busy} title={editingId ? t('buttons.edit') : t('buttons.new')}>
@@ -311,6 +316,7 @@ const RecurringTemplatesPage = () => {
                   <div className="muted">{t('pages.movements.account')}: {template.account_name || t('pages.recurring.accountMissing')}</div>
                   <div className="muted">{t('pages.recurring.nextRun')}: {formatTimestampDateIT(template.next_run_at) || t('common.notSet')}</div>
                   <span className="badge">{t(template.is_active ? 'labels.active' : 'labels.inactive')}</span>
+                  {template.module_suspension && <div role="status"><p className="error">{t('pages.recurring.suspended')}: {t(`modules.names.${template.module_suspension.module}`)} — {getErrorMessage(t, template.module_suspension)}</p><p className="muted">{t('pages.recurring.moduleSuspensionHint')}</p></div>}
                   {(!template.account_id || !template.account_name || template.account_is_active === false) && <p className="error">{t('pages.recurring.incompleteHint')}</p>}
                   {template.recurring_template_id && <div className="muted">#{template.recurring_template_id}</div>}
                 </div>
@@ -346,8 +352,8 @@ const RecurringTemplatesPage = () => {
                   >
                     {t('buttons.edit')}
                   </button>}
-                  {canPermission('write') && <button type="button" className="ghost" disabled={busy || !generatorEnabled || !template.is_active || !template.account_id || template.account_is_active === false} onClick={() => { if (window.confirm(t('pages.recurring.confirmGenerate'))) runAction(() => handleGenerateNow(template.id)); }}>{t('buttons.generateNow')}</button>}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" disabled={busy} onClick={() => runAction(() => handleActiveChange(template))}>
+                  {canPermission('write') && <button type="button" className="ghost" disabled={busy || Boolean(template.module_suspension) || !generatorEnabled || !template.is_active || !template.account_id || template.account_is_active === false} onClick={() => { if (window.confirm(t('pages.recurring.confirmGenerate'))) runAction(() => handleGenerateNow(template.id)); }}>{t('buttons.generateNow')}</button>}
+                  {canPermission('delete_sensitive') && <button type="button" className="danger" disabled={busy || (!template.is_active && Boolean(template.module_suspension))} onClick={() => runAction(() => handleActiveChange(template))}>
                     {pendingTemplateId === template.id ? t('common.loading') : template.is_active ? t('buttons.deactivate') : t('buttons.activate')}
                   </button>}
                 </div>

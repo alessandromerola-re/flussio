@@ -646,5 +646,8 @@
   "errors.MODULE_HISTORY_QUERY_INVALID": "Impossibile caricare questa pagina dello storico.",
   "errors.MODULE_UNKNOWN": "Modulo non riconosciuto.",
   "errors.MODULE_DISABLED": "Il modulo richiesto è disabilitato per questa azienda.",
-  "errors.MODULE_READ_ONLY": "Il modulo è in sola lettura. Puoi conservare i collegamenti esistenti, ma non modificarli."
+  "errors.MODULE_READ_ONLY": "Il modulo è in sola lettura. Puoi conservare i collegamenti esistenti, ma non modificarli.",
+  "pages.recurring.suspended": "Sospesa per modulo",
+  "pages.recurring.moduleSuspensionHint": "Dati e collegamenti restano conservati. La generazione potrà riprendere quando il modulo sarà nuovamente attivo.",
+  "errors.RECURRING_GENERATOR_DISABLED": "La generazione è disabilitata dalla configurazione del sistema."
 }
