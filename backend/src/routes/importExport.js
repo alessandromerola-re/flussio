@@ -118,7 +118,7 @@ const exportEntity = async (entity, companyId, executor = { query }) => {
       `SELECT rt.external_id,rt.title,rt.frequency,rt.interval,rt.start_date,rt.end_date,
               rt.is_active,rt.amount,rt.movement_type,rt.notes,
               a.external_id AS account_external_id,a.name AS account_name,
-              p.external_id AS property_external_id,j.code AS job_code
+              p.external_id AS property_external_id,j.code AS job_code,COALESCE(j.title,j.name) AS job_name
        FROM recurring_templates rt
        LEFT JOIN accounts a ON a.id = rt.account_id AND a.company_id = rt.company_id
        LEFT JOIN properties p ON p.id=rt.property_id AND p.company_id=rt.company_id
@@ -128,8 +128,8 @@ const exportEntity = async (entity, companyId, executor = { query }) => {
       [companyId]
     );
     return {
-      headers: ['external_id', 'title', 'frequency', 'interval', 'start_date', 'end_date', 'is_active', 'amount', 'movement_type', 'account_external_id', 'account_name', 'notes', 'property_external_id', 'job_code'],
-      rows: r.rows.map((x) => [x.external_id || slug(x.title), x.title, x.frequency, x.interval, x.start_date || '', x.end_date || '', x.is_active, Number(x.amount).toFixed(2), x.movement_type, x.account_external_id || '', x.account_name || '', x.notes || '', x.property_external_id || '', x.job_code || '']),
+      headers: ['external_id', 'title', 'frequency', 'interval', 'start_date', 'end_date', 'is_active', 'amount', 'movement_type', 'account_external_id', 'account_name', 'notes', 'property_external_id', 'job_code', 'job_name'],
+      rows: r.rows.map((x) => [x.external_id || slug(x.title), x.title, x.frequency, x.interval, x.start_date || '', x.end_date || '', x.is_active, Number(x.amount).toFixed(2), x.movement_type, x.account_external_id || '', x.account_name || '', x.notes || '', x.property_external_id || '', x.job_code || '', x.job_name || '']),
     };
   }
   if (entity === 'transactions') {
@@ -290,11 +290,13 @@ router.post('/:entity', rawUpload, async (req, res) => {
             links.property_id = external ? await resolveByExternal('properties', external, null) : null;
             if (external && !links.property_id) throw Object.assign(new Error('RECURRING_INVALID_REFERENCE'), { code: 'RECURRING_INVALID_REFERENCE' });
           }
-          if (idx('job_code') >= 0) {
-            const code = row[idx('job_code')] || '';
-            const target = code ? await client.query('SELECT id FROM jobs WHERE company_id=$1 AND code=$2', [req.companyId, code]) : { rows: [] };
+          if (idx('job_code') >= 0 || idx('job_name') >= 0) {
+            const code = (row[idx('job_code')] || '').trim();
+            const name = (row[idx('job_name')] || '').trim();
+            const target = code ? await client.query('SELECT id FROM jobs WHERE company_id=$1 AND code=$2', [req.companyId, code])
+              : name ? await client.query('SELECT id FROM jobs WHERE company_id=$1 AND (lower(title)=lower($2) OR lower(name)=lower($2))', [req.companyId, name]) : { rows: [] };
+            if ((code || name) && target.rows.length !== 1) throw Object.assign(new Error('RECURRING_INVALID_REFERENCE'), { code: 'RECURRING_INVALID_REFERENCE' });
             links.job_id = target.rows[0]?.id ?? null;
-            if (code && !links.job_id) throw Object.assign(new Error('RECURRING_INVALID_REFERENCE'), { code: 'RECURRING_INVALID_REFERENCE' });
           }
           assertModuleLinkChanges(current.states, previous, links, { permissionGranted: canRole(req.companyRole, 'import') });
           const nextActive = idx('is_active') >= 0 ? asBool(row[idx('is_active')]) : previous.is_active ?? true;

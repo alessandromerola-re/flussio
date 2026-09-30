@@ -103,6 +103,15 @@ test('recurrence CSV preserves omitted references but a forbidden explicit remov
   assert.equal(remove.status, 403); assert.equal(remove.body.error_code, 'MODULE_READ_ONLY');
   assert.equal((await query("SELECT count(*) FROM recurring_templates WHERE external_id='plain'")).rows[0].count, '0');
   assert.deepEqual(await readTemplate(id), retained);
+  // Jobs created without a code must survive exporting and importing references.
+  await query('UPDATE jobs SET code=NULL WHERE id=$1', [job]);
+  const exported = await request('/api/export/recurring_templates.csv');
+  assert.ok(exported.body.includes('job_name')); assert.ok(exported.body.includes('Job A'));
+  const named = await importCsv('recurring_templates', recurringCsv('rec_a,Named job,monthly,11,income,bank_main,,Job A', ',job_code,job_name'));
+  assert.equal(named.body.updated, 1); assert.equal((await readTemplate(id)).job_id, job);
+  await query("INSERT INTO jobs(company_id,title,name) VALUES ($1,'Job A','Job A')", [company]);
+  const ambiguous = await importCsv('recurring_templates', recurringCsv('rec_a,Ambiguous,monthly,11,income,bank_main,,Job A', ',job_code,job_name'));
+  assert.equal(ambiguous.body.errors, 1); assert.equal(ambiguous.body.updated, 0); assert.equal((await readTemplate(id)).job_id, job);
 });
 
 test('recurrence CSV resolves only same-company links and denies activation of a suspended template', async () => {
