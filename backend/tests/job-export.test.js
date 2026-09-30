@@ -7,7 +7,7 @@ import { close, query, resetDb } from './_db.js';
 let server, baseUrl, token, companyId, jobId, foreignId;
 test.before(async () => {
   process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
-  await resetDb();
+  await resetDb({ modules: true });
   companyId = (await query("INSERT INTO companies(name) VALUES ('Export') RETURNING id")).rows[0].id;
   const other = (await query("INSERT INTO companies(name) VALUES ('Other') RETURNING id")).rows[0].id;
   const user = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'export@test.local','unused','admin') RETURNING id", [companyId])).rows[0];

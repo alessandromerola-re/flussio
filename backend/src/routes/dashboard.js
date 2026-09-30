@@ -1,4 +1,7 @@
 import express from 'express';
+import { withCompanyReport } from '../modules/reportAccess.js';
+import { sendModuleError } from '../modules/access.js';
+import { canRole, getRole } from '../middleware/permissions.js';
 import { query } from '../db/index.js';
 
 const router = express.Router();
@@ -213,17 +216,17 @@ router.post('/pie', async (req, res) => {
     category: {
       id: 't.category_id',
       label: "COALESCE(c.name, 'Non assegnato')",
-      joins: 'LEFT JOIN categories c ON c.id = t.category_id',
+      joins: 'LEFT JOIN categories c ON c.id = t.category_id AND c.company_id = t.company_id',
     },
     contact: {
       id: 't.contact_id',
       label: "COALESCE(ct.name, 'Non assegnato')",
-      joins: 'LEFT JOIN contacts ct ON ct.id = t.contact_id',
+      joins: 'LEFT JOIN contacts ct ON ct.id = t.contact_id AND ct.company_id = t.company_id',
     },
     job: {
       id: 't.job_id',
       label: "COALESCE(j.title, j.name, 'Non assegnato')",
-      joins: 'LEFT JOIN jobs j ON j.id = t.job_id',
+      joins: 'LEFT JOIN jobs j ON j.id = t.job_id AND j.company_id = t.company_id',
     },
     account: {
       id: 'a.id',
@@ -233,7 +236,7 @@ router.post('/pie', async (req, res) => {
           SELECT acc.id, acc.name
           FROM transaction_accounts ta
           JOIN accounts acc ON acc.id = ta.account_id
-          WHERE ta.transaction_id = t.id
+          WHERE ta.transaction_id = t.id AND acc.company_id = t.company_id
           ORDER BY ta.id
           LIMIT 1
         ) a ON true
@@ -242,7 +245,7 @@ router.post('/pie', async (req, res) => {
   }[dimension];
 
   try {
-    const result = await query(
+    const result = await withCompanyReport(req.companyId, dimension === 'job' ? ['general_reports', 'job_reports'] : ['general_reports'], client => client.query(
       `
       SELECT
         ${dimensionSelect.id} AS id,
@@ -258,7 +261,7 @@ router.post('/pie', async (req, res) => {
       ORDER BY value_cents DESC
       `,
       [req.companyId, range.from, range.to, kind]
-    );
+    ), { permissionGranted: canRole(getRole(req), 'read') });
 
     const allRows = result.rows.map((row) => ({
       id: row.id,
@@ -273,8 +276,7 @@ router.post('/pie', async (req, res) => {
 
     return res.json({ kind, dimension, total_cents, slices, others_cents });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+    return sendModuleError(res, error);
   }
 });
 
