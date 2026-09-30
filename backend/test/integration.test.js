@@ -6,6 +6,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import app from '../src/app.js';
+import { runMigrations } from '../src/db/migrate.js';
 
 const { Client } = pg;
 const rootDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
@@ -68,6 +69,7 @@ test.before(async () => {
   testAdminPassword = crypto.randomBytes(32).toString('base64url');
   process.env.JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
   await resetDb();
+  await runMigrations();
 
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
