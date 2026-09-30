@@ -6,6 +6,8 @@ Ultimo blocco di sviluppo dell'attivazione operativa M3, dopo il merge M3D (#157
 
 `POST /api/companies/:id/modules/apply` accetta `{ expected_version, reason, changes }`, dove la versione è una stringa decimale, il motivo è non vuoto dopo trim e lungo al massimo 1000 caratteri, e `changes` contiene gli stati desiderati. L'azienda è esclusivamente quella dell'URL, verificata dal middleware; autore, ruoli, stati e capacità forniti nel body non concedono autorità.
 
+Anteprima e applicazione restituiscono `MODULE_PLAN_INVALID` (400) per un elenco di cambi assente, vuoto, non valido, con stati non validi o moduli duplicati. I conflitti con versione, Base immutabile e disponibilità dei moduli restituiscono 409.
+
 La route richiede un superadmin attivo verificato dal database. Il servizio rilegge questa autorità sotto lock dopo aver acquisito il lock esclusivo aziendale: la revoca dei privilegi mentre una richiesta attende viene rispettata. La policy valida l'intero piano: Base invariabile, moduli futuri non attivabili, dipendenze e stati validi. Admin aziendali e altri ruoli non applicano piani, neppure per l'azienda di appartenenza.
 
 La transazione verifica la versione, aggiorna tutti i cambi reali, incrementa la versione aziendale una sola volta e registra motivo/autore/versione con lo stesso `operation_id` negli eventi. Se uno stato o l'audit fallisce, tutto viene annullato. Due piani concorrenti alla stessa versione producono un commit e un `MODULE_VERSION_CONFLICT` (409). Un piano già corrispondente agli stati correnti è un no-op: stessa versione, nessun evento e `operation_id:null`.

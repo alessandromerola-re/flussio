@@ -29,7 +29,7 @@ export async function previewCompanyModules(companyId, input={}) {
     if (current.version !== expected_version) throw fail('MODULE_VERSION_CONFLICT',409);
     const states=Object.fromEntries(current.modules.map(module=>[module.code,module.state]));
     const result=modulePolicy.preview(states,changes);
-    if (!result.allowed) throw fail(result.code,409,{module:result.module,dependency:result.dependency,cause:result.cause});
+    if (!result.allowed) throw fail(result.code,result.code === 'MODULE_PLAN_INVALID' ? 400 : 409,{module:result.module,dependency:result.dependency,cause:result.cause});
     const impact=[];
     for (const change of result.changes) {
       if (change.from===change.to) continue;

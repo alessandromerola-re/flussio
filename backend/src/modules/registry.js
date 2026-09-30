@@ -55,7 +55,7 @@ export async function applyCompanyModulePlan({ companyId, actorUserId, expectedV
     if (actor.rows[0]?.is_super_admin !== true || actor.rows[0]?.is_active !== true) throw error('FORBIDDEN', 403);
     if (current.version !== expectedVersion) throw error('MODULE_VERSION_CONFLICT', 409);
     const plan = modulePolicy.preview(current.states, changes);
-    if (!plan.allowed) throw error(plan.code, 409);
+    if (!plan.allowed) throw error(plan.code, plan.code === 'MODULE_PLAN_INVALID' ? 400 : 409);
     const changed = plan.changes.filter(change => change.from !== change.to);
     if (!changed.length) {
       await client.query('COMMIT');

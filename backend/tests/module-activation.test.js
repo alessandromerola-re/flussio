@@ -73,8 +73,14 @@ test('a public multi-module plan targets the URL company and atomically audits t
 test('direct HTTP application rejects roles, malformed plans, immutable Base, future modules and stale versions',async()=>{
   for(const actor of [admin,viewer])assert.equal((await request(`/api/companies/${company}/modules/apply`,{actor,claims:{is_super_admin:true},method:'POST',body:{expected_version:'0',reason:'Test',changes:[{module:'jobs',state:'enabled'}]}})).status,403);
   const valid={expected_version:'0',reason:'Test',changes:[{module:'jobs',state:'enabled'}]};
-  for(const body of [[],{...valid,reason:' '},{...valid,reason:'x'.repeat(1001)},{...valid,expected_version:0},{...valid,changes:[]}]){
+  for(const body of [[],{...valid,reason:' '},{...valid,reason:'x'.repeat(1001)},{...valid,expected_version:0}]){
     const result=await request(`/api/companies/${company}/modules/apply`,{actor:elevated,method:'POST',body});assert.equal(result.status,400);assert.equal(result.body.error_code,'MODULE_PLAN_INVALID');
+  }
+  for(const changes of [undefined,null,{},[],[{module:'jobs',state:'invalid'}],[{module:'jobs',state:'enabled'},{module:'jobs',state:'disabled'}]]){
+    for(const action of ['preview','apply']){
+      const result=await request(`/api/companies/${company}/modules/${action}`,{actor:elevated,method:'POST',body:{...valid,changes}});
+      assert.equal(result.status,400,`${action}: ${JSON.stringify(changes)}`);assert.equal(result.body.error_code,'MODULE_PLAN_INVALID');
+    }
   }
   assert.equal((await request(`/api/companies/${company}/modules/apply`,{actor:elevated,method:'POST',body:null})).status,400);
   for(const [changes,code] of [[[{module:'core',state:'disabled'}],'MODULE_CORE_IMMUTABLE'],[[{module:'wealth',state:'enabled'}],'MODULE_UNAVAILABLE'],[[{module:'unknown',state:'enabled'}],'MODULE_UNKNOWN']]){
