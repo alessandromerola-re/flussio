@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { close, query, resetDb } from './_db.js';
+import { close, query, resetDb, seedLegacyModules } from './_db.js';
 import { generateDueTemplates, generateTemplateNow } from '../src/services/recurring.js';
 
 let companyId;
@@ -29,6 +29,7 @@ test.beforeEach(async () => {
   process.env.RECURRING_GENERATOR_ENABLED = 'true';
   await resetDb({ modules: true });
   const company = await query('INSERT INTO companies (name) VALUES ($1) RETURNING id', ['Recurring Co']);
+  await seedLegacyModules(company.rows[0].id);
   companyId = company.rows[0].id;
   const account = await query(
     `INSERT INTO accounts (company_id, name, type, opening_balance, balance)

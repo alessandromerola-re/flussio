@@ -235,6 +235,7 @@ export const api = {
   getCurrentCapabilities: () => request('/modules/current', { cache: 'no-store' }),
   getCompanyModules: (id) => request(`/companies/${id}/modules`),
   getCompanyModuleEvents: (id, before = null) => request(`/companies/${id}/modules/events${before ? `?before=${encodeURIComponent(before)}` : ''}`),
+  applyCompanyModules: (id, payload) => request(`/companies/${id}/modules/apply`, { method: 'POST', body: JSON.stringify(payload) }),
   previewCompanyModules: (id, payload) => request(`/companies/${id}/modules/preview`, { method: 'POST', body: JSON.stringify(payload) }),
   createCompany: (payload) => request('/companies', { method: 'POST', body: JSON.stringify(payload) }),
   deleteCompany: (id) => request(`/companies/${id}`, { method: 'DELETE' }),

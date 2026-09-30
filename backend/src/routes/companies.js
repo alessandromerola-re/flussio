@@ -1,5 +1,5 @@
 import { previewCompanyModules, readModuleEvents } from '../modules/management.js';
-import { readCompanyModules } from '../modules/registry.js';
+import { readCompanyModules, applyCompanyModulePlan } from '../modules/registry.js';
 import { companyContextMiddleware } from '../middleware/companyContext.js';
 import express from 'express';
 import { getClient, query } from '../db/index.js';
@@ -95,6 +95,22 @@ router.post('/:id/modules/preview', async (req,res) => {
   if (!requireSuperAdmin(req,res)) return;
   try { return res.json(await previewCompanyModules(req.companyId,req.body)); }
   catch(error) { return moduleError(res,error); }
+});
+router.post('/:id/modules/apply', async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return sendError(res, 400, 'MODULE_PLAN_INVALID', 'Invalid module plan.');
+  }
+  try {
+    const { expected_version, reason, changes } = req.body;
+    return res.json(await applyCompanyModulePlan({
+      companyId: req.companyId,
+      actorUserId: req.user.user_id,
+      expectedVersion: expected_version,
+      reason,
+      changes,
+    }));
+  } catch (error) { return moduleError(res, error); }
 });
 
 router.get('/', async (req, res) => {

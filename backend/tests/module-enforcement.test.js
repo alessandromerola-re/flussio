@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
-import { resetDb, query, close } from './_db.js';
+import { resetDb, query, close, seedLegacyModules } from './_db.js';
 import { getClient } from '../src/db/index.js';
 import { applyCompanyModulePlan, readCompanyModules } from '../src/modules/registry.js';
 
@@ -39,7 +39,9 @@ test.before(async () => {
   process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
   await resetDb({ modules: true });
   company = (await query("INSERT INTO companies(name) VALUES ('Enforcement A') RETURNING id")).rows[0].id;
+  await seedLegacyModules(company);
   other = (await query("INSERT INTO companies(name) VALUES ('Enforcement B') RETURNING id")).rows[0].id;
+  await seedLegacyModules(other);
   const makeUser = async (email, role, elevated = false) => (await query("INSERT INTO users(company_id,email,password_hash,role,is_super_admin) VALUES ($1,$2,'unused',$3,$4) RETURNING id", [company, email, role, elevated])).rows[0].id;
   admin = await makeUser('admin@enforcement.test', 'admin');
   viewer = await makeUser('viewer@enforcement.test', 'viewer');

@@ -27,7 +27,7 @@ test.before(async()=>{
   company=(await query("INSERT INTO companies(name) VALUES ('Legacy modules') RETURNING id")).rows[0].id;
   await query("INSERT INTO accounts(company_id,name,type,opening_balance,balance) VALUES ($1,'Legacy account','bank',100,100)",[company]);
   await runMigrations();
-  other=(await query("INSERT INTO companies(name) VALUES ('New preparatory company') RETURNING id")).rows[0].id;
+  other=(await query("INSERT INTO companies(name) VALUES ('New Base company') RETURNING id")).rows[0].id;
   superadmin=await user('super@modules.test','admin',company,true);
   admin=await user('admin@modules.test','admin',company);
   viewer=await user('viewer@modules.test','viewer',other);
@@ -36,11 +36,11 @@ test.before(async()=>{
 });
 test.after(async()=>{if(server)await new Promise(resolve=>server.close(resolve));await close();});
 
-test('migration preserves existing balances and provisions only current optional modules for all companies',async()=>{
+test('migration preserves existing companies and starts new companies with Base only',async()=>{
   for(const id of [company,other]){
     const state=await readCompanyModules(id);
-    assert.equal(state.enforcement_ready,false);assert.equal(state.version,'1');
-    assert.deepEqual(state.modules.filter(m=>m.state==='enabled').map(m=>m.code),['core','jobs','real_estate']);
+    assert.equal(state.enforcement_ready,true);assert.equal(state.version,id===company?'1':'0');
+    assert.deepEqual(state.modules.filter(m=>m.state==='enabled').map(m=>m.code),id===company?['core','jobs','real_estate']:['core']);
     assert.ok(state.modules.filter(m=>!m.available).every(m=>m.state==='disabled'));
   }
   assert.equal(Number((await query('SELECT balance FROM accounts WHERE company_id=$1',[company])).rows[0].balance),100);
@@ -49,7 +49,7 @@ test('migration preserves existing balances and provisions only current optional
 });
 test('catalog needs authentication and company reads authorize the URL target rather than a conflicting header',async()=>{
   assert.equal((await fetch(`${base}/api/modules`)).status,401);
-  const catalog=await request('/api/modules',admin);assert.equal(catalog.status,200);assert.equal(catalog.data.enforcement_ready,false);
+  const catalog=await request('/api/modules',admin);assert.equal(catalog.status,200);assert.equal(catalog.data.enforcement_ready,true);
   assert.equal((await request(`/api/companies/${company}/modules`,admin)).status,200);
   assert.equal((await request(`/api/companies/${other}/modules`,admin,'GET',{'X-Company-Id':String(company)})).status,403);
   assert.equal((await request(`/api/companies/${other}/modules`,viewer)).status,200);
@@ -79,7 +79,7 @@ test('successful plan increments company version once and records every actual c
   const events=(await query('SELECT * FROM company_module_events WHERE operation_id=$1',[result.operation_id])).rows;
   assert.equal(events.length,2);assert.ok(events.every(e=>e.actor_user_id===superadmin&&e.previous_state==='enabled'&&e.new_state==='read_only'&&e.company_version===result.version));
   const noop=await change([{module:'jobs',state:'read_only'}]);assert.equal(noop.operation_id,null);assert.equal(noop.version,result.version);
-  assert.equal((await readCompanyModules(other)).version,'1');
+  assert.equal((await readCompanyModules(other)).version,'0');
 });
 test('invalid plans roll back wholly; SQL constrains core and invalid states',async()=>{
   const before=await readCompanyModules(company), events=await countEvents();
@@ -115,9 +115,9 @@ test('shared company lock prevents a transition lock until the writer transactio
     await transition.query('BEGIN');await lockCompanyModules(transition,company,{exclusive:true});await transition.query('COMMIT');
   } finally {await writer.query('ROLLBACK');await transition.query('ROLLBACK');writer.release();transition.release();}
 });
-test('migration replay is idempotent and does not reactivate states or duplicate audit',async()=>{
+test('migration runner is idempotent and does not reactivate states or duplicate audit',async()=>{
   const before=await readCompanyModules(company),events=await countEvents();
-  await query(await fs.readFile(migration,'utf8'));
+  await runMigrations();
   await runMigrations();
   assert.deepEqual(await readCompanyModules(company),before);assert.equal(await countEvents(),events);
   assert.equal(await fs.readFile(migration,'utf8'),await fs.readFile(new URL('../../database/migrations/016_20260929__company_module_registry.sql',import.meta.url),'utf8'));
@@ -127,8 +127,9 @@ test('events cannot be updated, deleted or truncated and survive company deletio
   await assert.rejects(query('DELETE FROM company_module_events WHERE company_id=$1',[company]),{code:'23514'});
   await assert.rejects(query('TRUNCATE company_module_events'),{code:'23514'});
   const disposable=(await query("INSERT INTO companies(name) VALUES ('Audit retention') RETURNING id")).rows[0].id;
+  await applyCompanyModulePlan({companyId:disposable,actorUserId:superadmin,expectedVersion:'0',reason:'Retention test',changes:[{module:'jobs',state:'enabled'}]});
   await query('DELETE FROM companies WHERE id=$1',[disposable]);
-  assert.equal((await query('SELECT count(*) FROM company_module_events WHERE company_id=$1',[disposable])).rows[0].count,'2');
+  assert.equal((await query('SELECT count(*) FROM company_module_events WHERE company_id=$1',[disposable])).rows[0].count,'1');
   assert.equal((await query('SELECT count(*) FROM company_modules WHERE company_id=$1',[disposable])).rows[0].count,'0');
 });
 
@@ -152,8 +153,8 @@ test('superadmin preview counts only target company data and never writes states
   const events=(await query('SELECT count(*) FROM company_module_events WHERE company_id=$1',[target])).rows[0].count;
   const plan={expected_version:before.version,changes:[{module:'jobs',state:'read_only'}]};
   const result=await request(`/api/companies/${target}/modules/preview`,superadmin,'POST',{},plan);
-  assert.equal(result.status,200);assert.equal(result.data.can_apply,false);assert.equal(result.data.enforcement_ready,false);
-  assert.deepEqual(result.data.impact,[{module:'jobs',from:'enabled',to:'read_only',records:'1',linked_movements:'1',active_recurring:'0'}]);
+  assert.equal(result.status,200);assert.equal(result.data.can_apply,true);assert.equal(result.data.enforcement_ready,true);
+  assert.deepEqual(result.data.impact,[{module:'jobs',from:'disabled',to:'read_only',records:'1',linked_movements:'1',active_recurring:'0'}]);
   assert.deepEqual(await readCompanyModules(target),before);
   assert.equal((await query('SELECT count(*) FROM company_module_events WHERE company_id=$1',[target])).rows[0].count,events);
 });

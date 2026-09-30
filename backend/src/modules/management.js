@@ -48,7 +48,7 @@ export async function previewCompanyModules(companyId, input={}) {
     }
     await client.query('COMMIT');
     return {company_id:companyId,version:current.version,enforcement_ready:current.enforcement_ready,
-      can_apply:false,changes:result.changes,impact};
+      can_apply:current.enforcement_ready && impact.length > 0,changes:result.changes,impact};
   } catch(error) {await client.query('ROLLBACK').catch(()=>{});throw error;}
   finally {client.release();}
 }

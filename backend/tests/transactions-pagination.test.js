@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
-import { close, query, resetDb } from './_db.js';
+import { close, query, resetDb, seedLegacyModules } from './_db.js';
 
 let server;
 let baseUrl;
@@ -35,6 +35,7 @@ test.before(async () => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_secret';
   await resetDb({ modules: true });
   const company = await query('INSERT INTO companies (name) VALUES ($1) RETURNING id', ['Pagination Co']);
+  await seedLegacyModules(company.rows[0].id);
   companyId = company.rows[0].id;
   const user = await query(
     'INSERT INTO users (company_id, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id',

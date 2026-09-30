@@ -3,7 +3,7 @@ import { getClient, query } from '../db/index.js';
 import { MODULE_CATALOG, MODULE_CATALOG_VERSION } from './catalog.js';
 import { modulePolicy } from './policy.js';
 
-export const MODULE_ENFORCEMENT_READY = false;
+export const MODULE_ENFORCEMENT_READY = true;
 const error = (code, status = 400) => Object.assign(new Error(code), { code, status });
 const validId = id => /^[1-9]\d*$/.test(String(id)) && Number.isSafeInteger(Number(id)) && Number(id) <= 2147483647;
 const validVersion = version => typeof version === 'string' && /^(0|[1-9]\d*)$/.test(version);
@@ -41,7 +41,8 @@ export async function lockCompanyModules(client, companyId, { exclusive = false 
     states: Object.fromEntries(rows.rows.map(row => [row.module_code, row.state])) };
 }
 
-// INTERNAL service only: no HTTP mutation route until M2/M3 protects every writer.
+// All resource adapters enforce these states. The HTTP route additionally verifies
+// the URL company and current superadmin; actor authority is reread under lock here.
 // Actor authority is reread from the database, never supplied as a client boolean.
 export async function applyCompanyModulePlan({ companyId, actorUserId, expectedVersion, reason, changes }) {
   if (!validId(companyId) || !validId(actorUserId) || !validVersion(expectedVersion)

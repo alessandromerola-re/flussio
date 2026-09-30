@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
-import { close, query, resetDb } from './_db.js';
+import { close, query, resetDb, seedLegacyModules } from './_db.js';
 let server, baseUrl, token, companyId, propertyId, foreignId;
 const request = async (suffix) => {
   const response = await fetch(`${baseUrl}/api/properties/${suffix}`, { headers: { Authorization: `Bearer ${token}`, 'X-Company-Id': String(companyId) } });
@@ -12,7 +12,9 @@ const request = async (suffix) => {
 test.before(async () => {
   process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex'); await resetDb({ modules: true });
   companyId = (await query("INSERT INTO companies(name) VALUES ('Property test') RETURNING id")).rows[0].id;
+  await seedLegacyModules(companyId);
   const other = (await query("INSERT INTO companies(name) VALUES ('Other') RETURNING id")).rows[0].id;
+  await seedLegacyModules(other);
   const user = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'property@test.local','unused','viewer') RETURNING id", [companyId])).rows[0];
   token = jwt.sign({ user_id: user.id, default_company_id: companyId }, process.env.JWT_SECRET);
   propertyId = (await query("INSERT INTO properties(company_id,name,address,is_active) VALUES ($1,'Casa','Via Roma 1',false) RETURNING id", [companyId])).rows[0].id;
