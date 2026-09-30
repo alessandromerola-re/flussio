@@ -1,5 +1,6 @@
+import { render } from './helpers/moduleRender.jsx';
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import AdvancedReportsPage from '../src/pages/AdvancedReportsPage.jsx';
@@ -179,4 +180,27 @@ it('shows module errors from direct runs instead of a generic server error', asy
   api.runAdvancedReport.mockRejectedValueOnce({code:'MODULE_DISABLED'});
   setup();fireEvent.click(screen.getByText('buttons.runReport'));
   expect((await screen.findByRole('alert')).textContent).toContain('errors.MODULE_DISABLED translated');expect(screen.queryByRole('table')).toBeNull();
+});
+
+it('removes revoked dimensions and disables their templates while Base reports still run', async () => {
+  render(<MemoryRouter><AdvancedReportsPage /></MemoryRouter>, {modules:{jobs:'disabled',real_estate:'disabled'}});
+  await waitFor(()=>expect(api.listSavedReports).toHaveBeenCalled());
+  expect(screen.queryByLabelText('pages.movements.job')).toBeNull(); expect(screen.queryByLabelText('pages.movements.property')).toBeNull();
+  const groups=screen.getByLabelText('pages.reportsAdvanced.groupBy1');
+  expect(Array.from(groups.options).some(option=>['job','property'].includes(option.value))).toBe(false);
+  expect(api.getJobs).not.toHaveBeenCalled(); expect(api.getProperties).not.toHaveBeenCalled();
+  const budget=ADV_REPORT_TEMPLATES.find(template=>template.spec.reportKind==='budget');
+  expect(screen.getByText(budget.titleKey).closest('button').disabled).toBe(true);
+  fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table'); expect(api.runAdvancedReport).toHaveBeenCalledTimes(1);
+});
+it('opens and exports a read-only specific report but disables save, replacement and delete', async () => {
+  const spec={dateFrom:'2026-09-01',dateTo:'2026-09-30',reportKind:'standard',groupBy:['job'],metrics:['count'],filters:{type:'all'}};
+  api.listSavedReports.mockResolvedValue([{id:42,name:'Read-only jobs',spec_json:spec,module_access:{allowed:true}}]);
+  render(<MemoryRouter><AdvancedReportsPage /></MemoryRouter>, {modules:{jobs:'read_only'}});
+  fireEvent.click(await screen.findByRole('button',{name:'Apri report Read-only jobs'})); await screen.findByRole('table');
+  expect(screen.getByText('buttons.exportCsv').disabled).toBe(false); expect(screen.getByText('Aggiorna report').disabled).toBe(true);
+  expect(screen.getByText('buttons.delete').disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('pages.reportsAdvanced.groupBy1'),{target:{value:'month'}});
+  expect(screen.getByText('Aggiorna report').disabled).toBe(true); // The old saved spec remains protected.
+  expect(api.updateSavedReport).not.toHaveBeenCalled(); expect(api.deleteSavedReport).not.toHaveBeenCalled();
 });

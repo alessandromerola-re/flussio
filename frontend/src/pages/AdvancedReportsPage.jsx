@@ -1,3 +1,4 @@
+import { useCompanyCapabilities } from '../modules/CompanyCapabilities.jsx';
 import ReportChart from '../components/ReportChart.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -77,6 +78,8 @@ const formatEuro = (cents) => formatCurrencyFromCents(Number(cents || 0)) || for
 
 const AdvancedReportsPage = () => {
   const { t } = useTranslation();
+  const modules = useCompanyCapabilities();
+  const dimensionAllowed = dimension => dimension === 'job' ? modules.can('job_reports') : dimension === 'property' ? modules.can('property_reports') : true;
   const navigate = useNavigate();
 
   const [spec, setSpec] = useState(baseSpec);
@@ -103,8 +106,8 @@ const AdvancedReportsPage = () => {
       api.getAccounts(),
       api.getCategories(),
       api.getContacts(),
-      optionalList(api.getJobs()),
-      optionalList(api.getProperties()),
+      modules.can('jobs') ? optionalList(api.getJobs()) : Promise.resolve([]),
+      modules.can('properties') ? optionalList(api.getProperties()) : Promise.resolve([]),
     ]);
     setLookups({ accounts, categories, contacts, jobs, properties });
   };
@@ -124,6 +127,7 @@ const AdvancedReportsPage = () => {
   }, [t]);
 
   const runReport = async (nextSpec = spec, nextChart = chartConfig) => {
+    if (!modules.reportAllowed(nextSpec)) { setError(t('errors.MODULE_DISABLED')); return; }
     const current = ++requestGeneration.current;
     const submitted = JSON.parse(JSON.stringify(nextSpec));
     setError('');
@@ -219,7 +223,7 @@ const AdvancedReportsPage = () => {
   };
 
   const loadSavedSpec = async (saved) => {
-    if (saved.module_access?.allowed === false) { setError(getErrorMessage(t, saved.module_access)); return; }
+    if (saved.module_access?.allowed === false || !modules.reportAllowed(saved.spec_json)) { setError(getErrorMessage(t, saved.module_access || { code: 'MODULE_DISABLED' })); return; }
     setSelectedSavedId(saved.id);
     setSavedName(saved.name);
     setSavedShared(Boolean(saved.is_shared));
@@ -245,8 +249,8 @@ const AdvancedReportsPage = () => {
   const missingDimensions = (row) => (appliedSpec?.groupBy || []).some((dimension) => ['category', 'account', 'contact', 'job', 'property'].includes(dimension) && row[`${dimension}_id`] == null);
   const groupBy1 = spec.groupBy[0] || '';
   const groupBy2Options = useMemo(
-    () => groupOptions.filter((option) => option !== groupBy1 && !(timeBuckets.has(groupBy1) && timeBuckets.has(option))),
-    [groupBy1]
+    () => groupOptions.filter(dimensionAllowed).filter((option) => option !== groupBy1 && !(timeBuckets.has(groupBy1) && timeBuckets.has(option))),
+    [groupBy1, modules.scope]
   );
 
   const columns = useMemo(() => {
@@ -282,7 +286,7 @@ const AdvancedReportsPage = () => {
         <h2>{t('pages.reportsAdvanced.readyReports')}</h2>
         <div className="list report-template-grid">
           {ADV_REPORT_TEMPLATES.map((template) => (
-            <button key={template.key} type="button" className="list-item" onClick={() => applyReadyTemplate(template)} style={{ textAlign: 'left' }}>
+            <button key={template.key} type="button" disabled={!modules.reportAllowed(template.spec)} title={!modules.reportAllowed(template.spec) ? t('modules.ui.unavailable') : undefined} className="list-item" onClick={() => applyReadyTemplate(template)} style={{ textAlign: 'left' }}>
               <strong>{t(template.titleKey)}</strong>
               <small style={{ display: 'block' }}>{t(template.descriptionKey)}</small>
               {!template.spec.reportKind && <small className="muted">{t('pages.reportsAdvanced.chartType')}: {t(`pages.reportsAdvanced.chartTypes.${template.chart.type}`)}</small>}
@@ -296,7 +300,7 @@ const AdvancedReportsPage = () => {
       <details className="card report-builder" open>
         <summary><strong>{t('pages.movements.filters')}</strong></summary>
         {special && <p>{t(`reportComparison.mode.${spec.reportKind}`)} <button type="button" className="ghost" onClick={() => setSpec({...baseSpec, ...getLast30Range(), reportKind:'standard'})}>{t('reportComparison.custom')}</button></p>}
-        {spec.reportKind === 'quality' && <fieldset><legend>{t('reportComparison.dimensions')}</legend>{['account','category','contact','job','property'].map((dimension) => <label key={dimension}><input type="checkbox" checked={(spec.qualityDimensions || ['account','category']).includes(dimension)} onChange={(e) => setSpec((prev) => ({...prev,qualityDimensions:e.target.checked ? [...(prev.qualityDimensions || ['account','category']),dimension] : (prev.qualityDimensions || ['account','category']).filter((d) => d !== dimension)}))} />{renderGroupOptionLabel(dimension)}</label>)}</fieldset>}
+        {spec.reportKind === 'quality' && <fieldset><legend>{t('reportComparison.dimensions')}</legend>{['account','category','contact','job','property'].filter(dimensionAllowed).map((dimension) => <label key={dimension}><input type="checkbox" checked={(spec.qualityDimensions || ['account','category']).includes(dimension)} onChange={(e) => setSpec((prev) => ({...prev,qualityDimensions:e.target.checked ? [...(prev.qualityDimensions || ['account','category']),dimension] : (prev.qualityDimensions || ['account','category']).filter((d) => d !== dimension)}))} />{renderGroupOptionLabel(dimension)}</label>)}</fieldset>}
         <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>
           <button type="button" disabled={budget} className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getCurrentMonthRange() }))}>{t('pages.reportsAdvanced.datePresets.currentMonth')}</button>
           <button type="button" disabled={budget} className="ghost" onClick={() => setSpec((p) => ({ ...p, ...getLast30Range() }))}>{t('pages.reportsAdvanced.datePresets.last30Days')}</button>
@@ -310,12 +314,12 @@ const AdvancedReportsPage = () => {
           <label>{t('pages.movements.account')}<select disabled={budget} value={spec.filters.accountId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, accountId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.accounts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.category')}<select disabled={budget} value={spec.filters.categoryId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, categoryId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.categories.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.contact')}<select disabled={budget} value={spec.filters.contactId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, contactId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.contacts.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.movements.job')}<select value={spec.filters.jobId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, jobId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.jobs.map((x) => <option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>
-          <label>{t('pages.movements.property')}<select disabled={budget} value={spec.filters.propertyId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, propertyId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.properties.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          {!(!modules.can('job_reports')) && <label>{t('pages.movements.job')}<select value={spec.filters.jobId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, jobId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.jobs.map((x) => <option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>}
+          {!(!modules.can('property_reports')) && <label>{t('pages.movements.property')}<select disabled={budget} value={spec.filters.propertyId || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, propertyId: e.target.value ? Number(e.target.value) : null } }))}><option value="">{t('common.all')}</option>{lookups.properties.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>}
           <label>{t('pages.movements.searchText')}<input disabled={budget} value={spec.filters.text || ''} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, text: e.target.value } }))} /></label>
           <label>{t('pages.reportsAdvanced.recurring')}<select disabled={budget} value={toBooleanFilterSelect(spec.filters.isRecurring)} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, isRecurring: toBooleanFilterValue(e.target.value) } }))}><option value="">{t('common.all')}</option><option value="1">{t('common.yes')}</option><option value="0">{t('common.no')}</option></select></label>
           <label>{t('pages.reportsAdvanced.hasAttachments')}<select disabled={budget} value={toBooleanFilterSelect(spec.filters.hasAttachments)} onChange={(e) => setSpec((p) => ({ ...p, filters: { ...p.filters, hasAttachments: toBooleanFilterValue(e.target.value) } }))}><option value="">{t('common.all')}</option><option value="1">{t('common.yes')}</option><option value="0">{t('common.no')}</option></select></label>
-          <label>{t('pages.reportsAdvanced.groupBy1')}<select disabled={Boolean(special)} value={spec.groupBy[0] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [e.target.value || '', p.groupBy[1]].filter(Boolean) }))}><option value="">{t('common.none')}</option>{groupOptions.map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}</select></label>
+          <label>{t('pages.reportsAdvanced.groupBy1')}<select disabled={Boolean(special)} value={spec.groupBy[0] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [e.target.value || '', p.groupBy[1]].filter(Boolean) }))}><option value="">{t('common.none')}</option>{groupOptions.filter(dimensionAllowed).map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}</select></label>
           <label>{t('pages.reportsAdvanced.groupBy2')}<select disabled={Boolean(special)} value={spec.groupBy[1] || ''} onChange={(e) => setSpec((p) => ({ ...p, groupBy: [p.groupBy[0], e.target.value || ''].filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i) }))}><option value="">{t('common.none')}</option>{groupBy2Options.map((opt) => <option key={opt} value={opt}>{renderGroupOptionLabel(opt)}</option>)}</select></label>
         </div>
 
@@ -323,10 +327,10 @@ const AdvancedReportsPage = () => {
 
         <div className="row-actions" style={{ marginTop: '1rem', flexWrap: 'wrap' }}>{metricOptions.map((metric) => <label key={metric} style={{ margin: 0 }}><input type="checkbox" disabled={Boolean(special)} checked={spec.metrics.includes(metric)} onChange={() => handleMetricToggle(metric)} /> {renderMetricLabel(metric)}</label>)}</div>
 
-        <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv} disabled={!result || loading || exporting}>{t('buttons.exportCsv')}</button>}</div>
+        <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading || !modules.reportAllowed(spec)}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv} disabled={!result || loading || exporting || !modules.reportAllowed(result?.spec, 'export')}>{t('buttons.exportCsv')}</button>}</div>
       </details>
 
-      {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><label>{t('reportsSnapshot.search')}<input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} /></label>{!savedReports.some(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())) && <p className="muted">{t('reportsSnapshot.noSaved')}</p>}<ul className="list" style={{ marginTop: '1rem' }}>{savedReports.filter(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())).map((item) => <li key={item.id}><button type="button" className="list-item" disabled={item.module_access?.allowed === false} onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.module_access?.allowed === false ? getErrorMessage(t, item.module_access) : item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
+      {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport} disabled={!modules.reportAllowed(spec, 'write') || (selectedSavedId && (!savedReports.find(item => String(item.id) === String(selectedSavedId))?.spec_json || !modules.reportAllowed(savedReports.find(item => String(item.id) === String(selectedSavedId))?.spec_json, 'write')))}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId || !modules.reportAllowed(savedReports.find(item => String(item.id) === String(selectedSavedId))?.spec_json, 'delete')}>{t('buttons.delete')}</button></div><label>{t('reportsSnapshot.search')}<input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} /></label>{!savedReports.some(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())) && <p className="muted">{t('reportsSnapshot.noSaved')}</p>}<ul className="list" style={{ marginTop: '1rem' }}>{savedReports.filter(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())).map((item) => <li key={item.id}><button type="button" className="list-item" disabled={item.module_access?.allowed === false || !modules.reportAllowed(item.spec_json)} onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.module_access?.allowed === false ? getErrorMessage(t, item.module_access) : item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
 
       </div>
       {result && (

@@ -1,12 +1,12 @@
 import {useEffect,useRef,useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {api,getActiveCompanyId,getIsSuperAdmin,getRole} from '../services/api.js';
+import {api,getActiveCompanyId,getRole} from '../services/api.js';
 import {getErrorMessage} from '../utils/errorMessages.js';
 
 export default function ModulesPage() {
   const {t}=useTranslation();
   const initialCompany=String(getActiveCompanyId() || '');
-  const superadmin=getIsSuperAdmin() || getRole()==='super_admin';
+  const superadmin=getRole()==='super_admin';
   const [company,setCompany]=useState(initialCompany),[companies,setCompanies]=useState([]);
   const [snapshot,setSnapshot]=useState(null),[events,setEvents]=useState([]),[cursor,setCursor]=useState(null);
   const [draft,setDraft]=useState({}),[preview,setPreview]=useState(null);

@@ -1,3 +1,5 @@
+import ModuleNotice from '../modules/ModuleNotice.jsx';
+import { useCompanyCapabilities } from '../modules/CompanyCapabilities.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +16,7 @@ const varianceClass = (value) => value == null || value === 0 ? '' : value > 0 ?
 
 function JobDetail({ id }) {
   const { t } = useTranslation();
+  const modules = useCompanyCapabilities();
   const [draft, setDraft] = useState(emptyPeriod);
   const [period, setPeriod] = useState(emptyPeriod);
   const [offset, setOffset] = useState(0);
@@ -92,9 +95,10 @@ function JobDetail({ id }) {
   return <div className="page property-detail job-detail">
     <Link to="/registry?tab=jobs">← {t('pages.registry.jobs')}</Link>
     <div className="page-header"><h1>{job?.title || t('pages.jobs.headerTitle')}</h1>
-      {job && canPermission('write') && <Link className="property-action" to={`/movements?job_id=${id}&new=1`}>{t('pages.movements.new')}</Link>}
+      {job && (canPermission('write') && modules.can('job_links', 'write')) && <Link className="property-action" to={`/movements?job_id=${id}&new=1`}>{t('pages.movements.new')}</Link>}
     </div>
     {loading && <p role="status">{t('common.loading')}</p>}
+    <ModuleNotice module="jobs" />
     {error && <div className="card" role="alert"><p>{getErrorMessage(t, error)}</p><button onClick={() => setRetry((value) => value + 1)}>{t('buttons.retry')}</button></div>}
     {exportError && <p role="alert" className="error">{getErrorMessage(t, exportError)}</p>}
     {!loading && job && <>
@@ -124,7 +128,7 @@ function JobDetail({ id }) {
             ['pages.jobs.marginVsTargetPct', job.marginVsTargetPct],
           ].map(([label, value]) => <div key={label}><dt>{t(label)}</dt><dd>{pct(value)}</dd></div>)}
         </dl></details>
-        {canPermission('export') && <button type="button" className="secondary" disabled={exporting} onClick={() => exportCsv('lifetime')}>{t('pages.jobs.exportLifetime')}</button>}
+        {(canPermission('export') && modules.can('job_reports', 'export')) && <button type="button" className="secondary" disabled={exporting} onClick={() => exportCsv('lifetime')}>{t('pages.jobs.exportLifetime')}</button>}
       </section>
     </>}
     <section aria-label={t('pages.jobs.period')}>
@@ -145,7 +149,7 @@ function JobDetail({ id }) {
         </details>
         <section className="card" aria-label={t('pages.jobs.linkedMovements')}>
           <div className="property-movements-heading"><h3>{t('pages.jobs.linkedMovements')} ({result.count})</h3><Link to={movementsUrl}>{t('buttons.goToMovements')}</Link></div>
-          {canPermission('export') && <button type="button" className="secondary" disabled={exporting} onClick={() => exportCsv('period')}>{t('pages.jobs.exportPeriod')}</button>}
+          {(canPermission('export') && modules.can('job_reports', 'export')) && <button type="button" className="secondary" disabled={exporting} onClick={() => exportCsv('period')}>{t('pages.jobs.exportPeriod')}</button>}
           {!result.rows.length ? <p>{t('pages.jobs.emptyPeriod')}</p> : <ul className="property-movements">{result.rows.map((row) => <li key={row.id}><div><strong>{row.description || t(`pages.movements.${row.type}`)}</strong><div className="muted">{formatDateIT(row.date)} · {t(`pages.movements.${row.type}`)}</div>{row.category_name && <div className="muted">{row.category_name}</div>}</div><strong className={row.type === 'income' ? 'positive' : row.type === 'expense' ? 'negative' : ''}>{formatCurrency(row.amount_total)}</strong></li>)}</ul>}
           <nav className="property-pagination" aria-label={t('pages.jobs.pagination')}><button className="secondary" disabled={!offset} onClick={() => setOffset((value) => Math.max(0, value - pageSize))}>{t('pages.property.previous')}</button><span>{t('pages.property.page')} {offset / pageSize + 1}</span><button className="secondary" disabled={!result.hasMore} onClick={() => setOffset((value) => value + pageSize)}>{t('pages.property.next')}</button></nav>
         </section>

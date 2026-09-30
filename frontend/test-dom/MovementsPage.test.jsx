@@ -1,5 +1,6 @@
+import { render } from './helpers/moduleRender.jsx';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MovementsPage from '../src/pages/MovementsPage.jsx';
@@ -159,4 +160,25 @@ it('opens creation from a property with that property already selected', async (
   const dialog = await screen.findByRole('dialog');
   await waitFor(() => expect(within(dialog).getByLabelText('Immobile').value).toBe('1'));
   expect(api.getTransactions).toHaveBeenCalledWith(expect.objectContaining({ property_id: '1' }));
+});
+
+it('blocks revoked module deep links without silently querying unfiltered Base movements', async () => {
+  render(<MemoryRouter initialEntries={['/movements?job_id=7&new=1']}><MovementsPage /></MemoryRouter>, {modules:{jobs:'disabled',real_estate:'disabled'}});
+  await screen.findByText('errors.MODULE_DISABLED');
+  expect(api.getTransactions).not.toHaveBeenCalled(); expect(api.getJobs).not.toHaveBeenCalled(); expect(api.getProperties).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.queryByText('Spese condominiali')).toBeNull();
+});
+it('edits Base fields without sending or deleting a historic read-only property link', async () => {
+  api.updateTransaction=vi.fn().mockResolvedValue({id:10});
+  render(<MemoryRouter><MovementsPage /></MemoryRouter>, {modules:{jobs:'disabled',real_estate:'read_only'}});
+  await screen.findByText('1 movimenti'); fireEvent.click(screen.getAllByRole('button',{name:/Spese condominiali/})[0]);
+  const detail=await screen.findByRole('dialog'); expect(within(detail).queryByRole('button',{name:'Elimina'})).toBeNull();
+  fireEvent.click(within(detail).getByRole('button',{name:'Modifica'}));
+  const edit=await screen.findByRole('dialog'); expect(within(edit).getByLabelText('Immobile').disabled).toBe(true);
+  expect(within(edit).getByLabelText('Immobile').value).toBe('1');
+  fireEvent.change(within(edit).getByLabelText('Descrizione'),{target:{value:'Updated Base description'}});
+  fireEvent.submit(edit.querySelector('form'));
+  await waitFor(()=>expect(api.updateTransaction).toHaveBeenCalledTimes(1));
+  const [id,payload]=api.updateTransaction.mock.calls[0]; expect(id).toBe(10); expect(payload.description).toBe('Updated Base description');
+  expect(payload).not.toHaveProperty('property_id'); expect(payload).not.toHaveProperty('job_id'); expect(api.getJobs).not.toHaveBeenCalled();
 });

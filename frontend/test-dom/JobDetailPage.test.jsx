@@ -1,5 +1,6 @@
+import { render } from './helpers/moduleRender.jsx';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import JobDetailPage from '../src/pages/JobDetailPage.jsx';
@@ -69,4 +70,11 @@ it('exports the applied period rather than draft dates and leaves lifetime expor
   await screen.findByRole('alert');
   fireEvent.click(screen.getByText('pages.jobs.exportLifetime'));
   await waitFor(() => expect(api.exportJobReportCsv).toHaveBeenCalledWith('5', {}));
+});
+
+it('shows read-only job details and exports without linked movement creation', async () => {
+  render(<MemoryRouter initialEntries={['/jobs/5']}><Routes><Route path="/jobs/:id" element={<JobDetailPage />} /></Routes></MemoryRouter>,{modules:{jobs:'read_only'}});
+  await screen.findByText('Infissi Centro'); expect(screen.getByRole('status').textContent).toBe('modules.ui.readOnly');
+  expect(screen.queryByRole('link',{name:'pages.movements.new'})).toBeNull();
+  expect(screen.getByText('pages.jobs.exportLifetime')).toBeTruthy();
 });

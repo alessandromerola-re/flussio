@@ -1,3 +1,4 @@
+import { useCompanyCapabilities } from '../modules/CompanyCapabilities.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -57,9 +58,14 @@ const defaultFilters = {
 
 const MovementsPage = () => {
   const { t } = useTranslation();
+  const modules = useCompanyCapabilities();
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const filtersAllowed = value => (!(value.job_id || String(value.missing_job) === '1') || modules.can('job_links')) && (!(value.property_id || String(value.missing_property) === '1') || modules.can('property_links'));
+  const canDeleteMovement = value => (!value?.job_id || modules.can('job_links', 'delete')) && (!value?.property_id || modules.can('property_links', 'delete'));
   const [searchParams] = useSearchParams();
-  const newPropertyId = searchParams.get('new') === '1' && canPermission('write') ? searchParams.get('property_id') || '' : '';
-  const newJobId = searchParams.get('new') === '1' && canPermission('write') ? searchParams.get('job_id') || '' : '';
+  const newPropertyId = searchParams.get('new') === '1' && canPermission('write') && modules.can('property_links', 'write') ? searchParams.get('property_id') || '' : '';
+  const newJobId = searchParams.get('new') === '1' && canPermission('write') && modules.can('job_links', 'write') ? searchParams.get('job_id') || '' : '';
   const [form, setForm] = useState(() => ({ ...emptyForm, date: formatDateInTimeZone(new Date()), property_id: newPropertyId, job_id: newJobId }));
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -113,8 +119,8 @@ const MovementsPage = () => {
       api.getAccounts(),
       api.getCategories(),
       api.getContacts(),
-      api.getProperties(),
-      api.getJobs({ active: 0, include_closed: 1 }),
+      modules.can('properties') ? api.getProperties() : Promise.resolve([]),
+      modules.can('jobs') ? api.getJobs({ active: 0, include_closed: 1 }) : Promise.resolve([]),
     ]);
 
     const [accountsResult, categoriesResult, contactsResult, propertiesResult, jobsResult] = results;
@@ -132,6 +138,7 @@ const MovementsPage = () => {
 
   const loadMovements = async (activeFilters = defaultFilters) => {
     const requestId = ++movementRequestId.current;
+    if (!filtersAllowed(activeFilters)) { setMovements([]); setMovementLoadError(t('errors.MODULE_DISABLED')); setMovementsLoading(false); return { rows: [], hasNext: false }; }
     setMovementLoadError('');
     setMovementsLoading(true);
     try {
@@ -573,7 +580,7 @@ const MovementsPage = () => {
   const openNewMovementModal = async () => {
     await loadLookupData();
     setEditingMovementId(null);
-    setForm({ ...emptyForm, date: formatDateInTimeZone(new Date()), property_id: filters.property_id, job_id: filters.job_id });
+    setForm({ ...emptyForm, date: formatDateInTimeZone(new Date()), property_id: modules.can('property_links', 'write') ? filters.property_id : '', job_id: modules.can('job_links', 'write') ? filters.job_id : '' });
     setContactSearch('');
     setNewAttachmentFile(null);
     setError('');
@@ -582,19 +589,24 @@ const MovementsPage = () => {
   };
 
   const handleExportCsv = async () => {
-    const { blob, headers } = await api.exportTransactions(filters);
-    const disposition = headers.get('content-disposition') || '';
-    const match = disposition.match(/filename="?([^";]+)"?/i);
-    const filename = match?.[1] || `flussio_movimenti_${new Date().toISOString().slice(0, 10)}.csv`;
+    try {
+      const { blob, headers } = await api.exportTransactions(filters);
+      if (!mounted.current) return;
+      const disposition = headers.get('content-disposition') || '';
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match?.[1] || `flussio_movimenti_${new Date().toISOString().slice(0, 10)}.csv`;
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (failure) {
+      if (mounted.current) setError(getErrorMessage(t, failure));
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -641,6 +653,8 @@ const MovementsPage = () => {
         accounts: accountsPayload,
       };
 
+      if (!modules.can('property_links', 'write')) delete payload.property_id;
+      if (!modules.can('job_links', 'write')) delete payload.job_id;
       const movementId = await saveMovementWithAttachment({
         existingId: createdMovementId,
         saveMovement: async () => editingMovementId
@@ -737,17 +751,21 @@ const MovementsPage = () => {
   };
 
   const handleDownloadAttachment = async (attachment) => {
-    const blob = await api.downloadAttachment(attachment.id);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = attachment.file_name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = await api.downloadAttachment(attachment.id);
+      if (!mounted.current) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.file_name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (failure) {
+      if (mounted.current) setError(getErrorMessage(t, failure));
+    }
   };
-
 
   const handleImportFile = async (event) => {
     const file = event.target.files?.[0] || null;
@@ -873,7 +891,7 @@ const MovementsPage = () => {
           aria-controls="movement-filters"
           onClick={() => setFiltersOpen((v) => !v)}
         >{t('pages.movements.filters')} {hasActiveFilters ? '(attivi)' : ''}</button>
-        {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>Esporta CSV</button>}
+        {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv} disabled={!filtersAllowed(filters)}>Esporta CSV</button>}
         {canPermission('import_movements') && (
           <details className="movements-import-tools">
             <summary>Importa CSV</summary>
@@ -995,24 +1013,26 @@ const MovementsPage = () => {
                 </select>
               </label>
             )}
-            <label>
+            {!(!modules.can('property_links') && !form.property_id) && <label>
               {t('pages.movements.property')}
-              <select value={form.property_id} onChange={(event) => handleChange('property_id', event.target.value)}>
+              <select disabled={!modules.can('property_links', 'write')} value={form.property_id} onChange={(event) => handleChange('property_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
+                {form.property_id && !properties.some(item => String(item.id) === String(form.property_id)) && <option value={form.property_id}>{selected?.property_name || form.property_id}</option>}
                 {properties.map((property) => (
                   <option key={property.id} value={property.id}>{property.name}</option>
                 ))}
               </select>
-            </label>
-            <label>
+            </label>}
+            {!(!modules.can('job_links') && !form.job_id) && <label>
               {t('pages.movements.job')}
-              <select value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
+              <select disabled={!modules.can('job_links', 'write')} value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
+                {form.job_id && !jobs.some(item => String(item.id) === String(form.job_id)) && <option value={form.job_id}>{selected?.job_name || form.job_id}</option>}
                 {jobs.map((job) => (
                   <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
-            </label>
+            </label>}
             <label className="full">
               {t('pages.movements.description')}
               <input
@@ -1132,7 +1152,7 @@ const MovementsPage = () => {
                 </div>
               )}
             </label>
-            <label>
+            {!(!modules.can('property_links')) && <label>
               {t('pages.movements.property')}
               <select
                 value={draftFilters.property_id}
@@ -1143,8 +1163,8 @@ const MovementsPage = () => {
                   <option key={property.id} value={property.id}>{property.name}</option>
                 ))}
               </select>
-            </label>
-            <label>
+            </label>}
+            {!(!modules.can('job_links')) && <label>
               {t('pages.movements.job')}
               <select
                 value={draftFilters.job_id}
@@ -1155,7 +1175,7 @@ const MovementsPage = () => {
                   <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
-            </label>
+            </label>}
             <label>
               {t('pages.movements.recurrence')}
               <select
@@ -1213,7 +1233,7 @@ const MovementsPage = () => {
               <div className="row-actions">
                 <button type="button" onClick={applyFilters}>{t('buttons.apply')}</button>
                 <button type="button" className="ghost" onClick={resetFilters}>{t('buttons.reset')}</button>
-                {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv}>{t('buttons.exportCsv')}</button>}
+                {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv} disabled={!filtersAllowed(filters)}>{t('buttons.exportCsv')}</button>}
               </div>
 
               {hasActiveFilters && (
@@ -1403,7 +1423,7 @@ const MovementsPage = () => {
               >
                 {t('buttons.close')}
               </button>
-              {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>}
+              {canPermission('delete_sensitive') && canDeleteMovement(selected) && <button type="button" className="danger" onClick={() => handleDelete(selected.id)}>{t('buttons.delete')}</button>}
             </div>
           </div>
         </Modal>

@@ -1,3 +1,4 @@
+import { moduleProfile } from './helpers/moduleRender.jsx';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -7,7 +8,7 @@ import { api } from '../src/services/api.js';
 
 vi.mock('../src/routes.jsx', () => ({
   default: ({ token }) => [
-    { path: '/dashboard', element: token ? <div>Dashboard content</div> : <div>Login content</div> },
+    { path: '/dashboard', element: token ? <div>Dashboard content<input aria-label="Page draft" defaultValue="" /></div> : <div>Login content</div> },
     { path: '*', element: <div>Fallback content</div> },
   ],
 }));
@@ -66,6 +67,7 @@ beforeEach(() => {
     { id: 1, name: 'Windome', role: 'admin' },
     { id: 2, name: 'Famiglia', role: 'editor' },
   ]));
+  vi.spyOn(api, 'getCurrentCapabilities').mockImplementation(async () => moduleProfile({company:Number(localStorage.getItem('flussio_company_id'))}));
   vi.spyOn(api, 'getBranding').mockResolvedValue({ has_logo: false, icons: { variants: {} } });
   vi.spyOn(api, 'logout').mockResolvedValue(null);
 });
@@ -77,7 +79,7 @@ describe('App mobile-first shell', () => {
     expect(screen.getByRole('navigation', { name: 'Navigazione rapida' }).querySelectorAll('a,button')).toHaveLength(5);
     expect(screen.getByText('Prima nota')).toBeTruthy();
     expect(screen.getByText('Amministrazione')).toBeTruthy();
-    expect(screen.getByText('Dashboard content')).toBeTruthy();
+    expect(await screen.findByText('Dashboard content')).toBeTruthy();
   });
 
   it('opens and closes a focusable mobile drawer', async () => {
@@ -128,4 +130,23 @@ describe('App mobile-first shell', () => {
     expect(manifest?.getAttribute('href')).toContain('company_id=2');
     expect(manifest?.getAttribute('href')).not.toContain('old-brand');
   });
+});
+
+it('preserves a draft on an unchanged refresh and clears it on a changed module version', async () => {
+  renderApp(); const input=await screen.findByLabelText('Page draft');
+  fireEvent.change(input,{target:{value:'Company-specific draft'}});
+  fireEvent.focus(window); await waitFor(()=>expect(api.getCurrentCapabilities).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText('Page draft').value).toBe('Company-specific draft');
+  api.getCurrentCapabilities.mockResolvedValueOnce(moduleProfile({version:'1',jobs:'read_only'}));
+  fireEvent.focus(window); await waitFor(()=>expect(screen.getByLabelText('Page draft').value).toBe(''));
+});
+it('unmounts previous company content while awaiting the new profile and offers retry on failure', async () => {
+  renderApp(); await screen.findByText('Dashboard content');
+  api.getCurrentCapabilities.mockRejectedValueOnce(new Error('offline'));
+  fireEvent.change(screen.getAllByLabelText('Azienda')[0],{target:{value:'2'}});
+  expect(screen.queryByText('Dashboard content')).toBeNull();
+  const error=await screen.findByRole('alert'); expect(error.textContent).toContain('modules.ui.loadError');
+  api.getCurrentCapabilities.mockResolvedValueOnce(moduleProfile({company:2,role:'editor'}));
+  fireEvent.click(screen.getByText('buttons.retry')); await screen.findByText('Dashboard content');
+  expect(localStorage.getItem('flussio_role')).toBe('editor');
 });

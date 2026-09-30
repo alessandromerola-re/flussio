@@ -1,3 +1,4 @@
+import { CompanyCapabilitiesProvider, useCompanyCapabilities } from './modules/CompanyCapabilities.jsx';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -47,6 +48,7 @@ const App = () => {
   const [companies, setCompanies] = useState(readCompanies);
   const [activeCompanyId, setActiveCompanyIdState] = useState(() => getActiveCompanyId() || '');
   const currentUser = getCurrentUser();
+  const modules = useCompanyCapabilities();
 
   const loadBrandingAssets = async () => {
     const requestId = ++brandingRequestIdRef.current;
@@ -105,6 +107,12 @@ const App = () => {
       setManifestUrl('');
     }
   };
+
+  useEffect(() => {
+    const changed = () => { setTokenState(getToken()); setCompanies(readCompanies()); setActiveCompanyIdState(getActiveCompanyId() || ''); };
+    window.addEventListener('flussio-context-change', changed);
+    return () => window.removeEventListener('flussio-context-change', changed);
+  }, []);
 
   useEffect(() => {
     loadBrandingAssets();
@@ -203,7 +211,7 @@ const App = () => {
       { id: 'core', label: t('nav.firstNote'), items: core },
       ...(administration.length ? [{ id: 'admin', label: t('nav.administration'), items: administration }] : []),
     ];
-  }, [t, activeCompanyId]);
+  }, [t, activeCompanyId, modules.scope]);
 
   const allNavItems = navGroups.flatMap((group) => group.items);
   const bottomNavItems = allNavItems.filter((item) => ['/dashboard', '/movements', '/registry', '/reports/advanced'].includes(item.path));
@@ -268,9 +276,9 @@ const App = () => {
   );
 
   const brandNode = <BrandMark logoUrl={brandLogoUrl} alt="Logo azienda" />;
-  const appRoutes = (
+  const appRoutes = token && !modules.ready ? (modules.error ? <div className="card" role="alert">{t('modules.ui.loadError')} <button type="button" onClick={modules.refresh}>{t('buttons.retry')}</button></div> : <PageLoader />) : (
     <Suspense fallback={<PageLoader />}>
-      <Routes key={activeCompanyId || 'public'}>
+      <Routes key={token ? modules.scope : 'public'}>
         {routes({ setTokenState, token, onBrandingChanged: loadBrandingAssets, brandLogoUrl }).map((route) => (
           <Route key={route.path} path={route.path} element={route.element} />
         ))}
@@ -347,4 +355,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default function AppRoot() { return <CompanyCapabilitiesProvider><App /></CompanyCapabilitiesProvider>; }

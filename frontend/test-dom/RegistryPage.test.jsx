@@ -1,5 +1,6 @@
+import { render } from './helpers/moduleRender.jsx';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RegistryPage from '../src/pages/RegistryPage.jsx';
@@ -130,4 +131,30 @@ describe('RegistryPage scalable responsive UX', () => {
     await waitFor(() => expect(api.getJobs).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Nessun elemento in Commesse')).toBeTruthy();
   });
+});
+
+it('uses Base registries when modules are disabled, including direct links', async () => {
+  render(<MemoryRouter initialEntries={['/registry?tab=jobs']}><RegistryPage /></MemoryRouter>, {modules:{jobs:'disabled',real_estate:'disabled'}});
+  await screen.findByText('Banca aziendale');
+  expect(api.getJobs).not.toHaveBeenCalled(); expect(api.getProperties).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button',{name:'Commesse'})).toBeNull(); expect(screen.queryByRole('button',{name:'Immobili'})).toBeNull();
+  const selector=screen.getByRole('combobox',{name:'Seleziona anagrafica'});
+  expect(Array.from(selector.options).map(option=>option.value)).toEqual(['accounts','categories','contacts']);
+});
+it('keeps read-only registry details and export while removing mutations and import', async () => {
+  api.getJobs.mockResolvedValue([{id:7,title:'Historic job',name:'Historic job'}]);
+  render(<MemoryRouter><RegistryPage /></MemoryRouter>, {modules:{jobs:'read_only'}});
+  await screen.findByText('Historic job'); expect(screen.getByRole('status').textContent).toBe('modules.ui.readOnly');
+  expect(screen.queryByRole('button',{name:'Nuovo'})).toBeNull(); expect(screen.queryByRole('button',{name:'Modifica'})).toBeNull();
+  expect(screen.queryByRole('button',{name:'Elimina'})).toBeNull(); expect(screen.queryByText('Importa CSV')).toBeNull();
+  expect(screen.getByText('Esporta CSV')).toBeTruthy(); expect(screen.getByRole('button',{name:'Dettagli'})).toBeTruthy();
+});
+
+it('does not download a pending module export after its page is unmounted', async () => {
+  let resolve; api.exportEntityCsv=vi.fn(()=>new Promise(r=>{resolve=r;}));
+  URL.createObjectURL=vi.fn();
+  const page=renderPage(); await waitFor(()=>expect(api.getJobs).toHaveBeenCalled());
+  fireEvent.click(screen.getByText('Esporta CSV')); expect(api.exportEntityCsv).toHaveBeenCalledTimes(1);
+  page.unmount(); await act(async()=>resolve({blob:new Blob(['Old job export']),headers:new Headers()}));
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
 });

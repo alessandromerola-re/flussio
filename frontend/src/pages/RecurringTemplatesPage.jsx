@@ -1,3 +1,4 @@
+import { useCompanyCapabilities } from '../modules/CompanyCapabilities.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -32,6 +33,9 @@ const initialForm = {
 
 const RecurringTemplatesPage = () => {
   const { t } = useTranslation();
+  const modules = useCompanyCapabilities();
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [showForm, setShowForm] = useState(false);
   const [history, setHistory] = useState(null);
   const [search, setSearch] = useState('');
@@ -66,8 +70,8 @@ const RecurringTemplatesPage = () => {
     setLoading(true); setLoadError(null);
     try {
       const [templatesData, categoriesData, contactsData, propertiesData, jobsData, accountsData, generator] = await Promise.all([
-        api.getRecurringTemplates(), api.getCategories(), api.getContacts(), optionalModuleList(api.getProperties()),
-        optionalModuleList(api.getJobs({ active: 0, include_closed: 1 })), api.getAccounts(), api.getRecurringStatus(),
+        api.getRecurringTemplates(), api.getCategories(), api.getContacts(), modules.can('properties') ? optionalModuleList(api.getProperties()) : Promise.resolve([]),
+        modules.can('jobs') ? optionalModuleList(api.getJobs({ active: 0, include_closed: 1 })) : Promise.resolve([]), api.getAccounts(), api.getRecurringStatus(),
       ]);
       if (request !== requestId.current) return;
       setTemplates(templatesData); setCategories(categoriesData); setContacts(contactsData);
@@ -125,6 +129,8 @@ const RecurringTemplatesPage = () => {
     };
 
     try {
+      if (!modules.can('property_links', 'write')) delete payload.property_id;
+      if (!modules.can('job_links', 'write')) delete payload.job_id;
       if (editingId) {
         await api.updateRecurringTemplate(editingId, payload);
       } else {
@@ -154,6 +160,7 @@ const RecurringTemplatesPage = () => {
 
 
   const downloadBlob = (blob, filename) => {
+    if (!mounted.current) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -296,8 +303,8 @@ const RecurringTemplatesPage = () => {
           <label>{t('pages.movements.dateTo')}<input min={form.start_date || undefined} type="date" value={form.end_date} onChange={(event) => setForm((prev) => ({ ...prev, end_date: event.target.value }))} /></label>
           <label>{t('pages.movements.category')}<select value={form.category_id} onChange={(event) => setForm((prev) => ({ ...prev, category_id: event.target.value }))}><option value="">{t('common.none')}</option>{categories.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label>{t('pages.movements.contact')}<select value={form.contact_id} onChange={(event) => setForm((prev) => ({ ...prev, contact_id: event.target.value }))}><option value="">{t('common.none')}</option>{contacts.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.registry.properties')}<select value={form.property_id} onChange={(event) => setForm((prev) => ({ ...prev, property_id: event.target.value }))}><option value="">{t('common.none')}</option>{properties.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label>{t('pages.movements.job')}<select value={form.job_id} onChange={(event) => setForm((prev) => ({ ...prev, job_id: event.target.value }))}><option value="">{t('common.none')}</option>{jobs.map((x)=><option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>
+          {!(!modules.can('property_links') && !form.property_id) && <label>{t('pages.registry.properties')}<select disabled={!modules.can('property_links', 'write')} value={form.property_id} onChange={(event) => setForm((prev) => ({ ...prev, property_id: event.target.value }))}><option value="">{t('common.none')}</option>{form.property_id && !properties.some(item => String(item.id) === String(form.property_id)) && <option value={form.property_id}>{form.property_id}</option>}{properties.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>}
+          {!(!modules.can('job_links') && !form.job_id) && <label>{t('pages.movements.job')}<select disabled={!modules.can('job_links', 'write')} value={form.job_id} onChange={(event) => setForm((prev) => ({ ...prev, job_id: event.target.value }))}><option value="">{t('common.none')}</option>{form.job_id && !jobs.some(item => String(item.id) === String(form.job_id)) && <option value={form.job_id}>{form.job_id}</option>}{jobs.map((x)=><option key={x.id} value={x.id}>{x.title || x.name}</option>)}</select></label>}
           <label>{t('forms.notes')}<input value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} /></label>
           <button type="submit">{busy ? t('common.loading') : t('buttons.save')}</button>
           </fieldset>

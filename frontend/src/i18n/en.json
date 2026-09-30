@@ -649,5 +649,8 @@
   "errors.MODULE_READ_ONLY": "The module is read-only. Existing links can be preserved but cannot be changed.",
   "pages.recurring.suspended": "Suspended by module",
   "pages.recurring.moduleSuspensionHint": "Data and links are preserved. Generation can resume when the module is enabled again.",
-  "errors.RECURRING_GENERATOR_DISABLED": "Generation is disabled by the system configuration."
+  "errors.RECURRING_GENERATOR_DISABLED": "Generation is disabled by the system configuration.",
+  "modules.ui.readOnly": "Read-only module: viewing and export remain available.",
+  "modules.ui.loadError": "Available features for this company could not be verified.",
+  "modules.ui.unavailable": "Module unavailable for this company."
 }
