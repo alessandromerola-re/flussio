@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createReportSnapshotStore } from '../src/services/reportSnapshots.js';
-const result = () => ({rows:[{name:'A;B',net_sum_cents:'-12345',budget:null}],generated_at:'2026-09-13T10:00:00.000Z',truncated:true});
+const result = () => ({spec:{reportKind:'standard',groupBy:[],filters:{}},rows:[{name:'A;B',net_sum_cents:'-12345',budget:null}],generated_at:'2026-09-13T10:00:00.000Z',truncated:true});
 test('snapshot freezes exact CSV and is isolated by company and user', () => {
   const store=createReportSnapshotStore(), original=result();
   const {id}=store.put(1,2,original);
@@ -24,4 +24,15 @@ test('memory cap rejects oversized CSV and evicts oldest snapshots', () => {
   const a=store.put(1,1,result());assert.ok(a);
   const b=store.put(1,2,result());assert.ok(b);assert.equal(store.get(a.id,1,1),null);
   assert.equal(store.put(1,1,{...result(),rows:[{name:'x'.repeat(100)}]}),null);
+});
+test('snapshot freezes its server-derived requirements independently of input and getter mutations', () => {
+  const store=createReportSnapshotStore(), original=result(); original.spec.groupBy=['job','property'];
+  const {id}=store.put(1,2,original); original.spec.groupBy=[];
+  const first=store.get(id,1,2); assert.deepEqual(first.capabilities,['general_reports','job_reports','property_reports']);
+  first.capabilities.splice(0); assert.deepEqual(store.get(id,1,2).capabilities,['general_reports','job_reports','property_reports']);
+});
+test('snapshot without valid requirement metadata fails closed', () => {
+  const store=createReportSnapshotStore();
+  assert.equal(store.put(1,2,{...result(),spec:null}),null);
+  assert.equal(store.put(1,2,{...result(),spec:{error:{}}}),null);
 });

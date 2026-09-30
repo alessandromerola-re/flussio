@@ -8,6 +8,7 @@ import { api } from '../src/services/api.js';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key) => ({
+    'errors.MODULE_DISABLED': 'Modulo disattivato',
     'pages.dashboard.title': 'Dashboard',
     'pages.dashboard.period': 'Periodo',
     'pages.dashboard.income': 'Entrate',
@@ -203,4 +204,13 @@ it('shows only signed percentages while preserving favorable expense semantics',
   expect(screen.getByText('+20.0%')).toBeTruthy();
   expect(screen.queryByText(/Andamento favorevole/)).toBeNull();
   expect(screen.queryByText(/Andamento sfavorevole/)).toBeNull();
+});
+
+it('explains a disabled job dimension while preserving Base totals and other charts', async () => {
+  api.getDashboardPie.mockImplementation(({dimension,kind}) => dimension === 'job'
+    ? Promise.reject({code:'MODULE_DISABLED'}) : Promise.resolve(pie(`${kind}-Base`)));
+  renderDashboard(); await screen.findByText('+20.0%');
+  fireEvent.click(screen.getAllByRole('button',{name:'pages.dashboard.dim.job'})[0]);
+  expect((await screen.findByRole('alert')).textContent).toContain('Modulo disattivato');
+  expect(screen.getByText('+20.0%')).toBeTruthy();expect(screen.getAllByText('expense-Base').length).toBeGreaterThan(0);
 });

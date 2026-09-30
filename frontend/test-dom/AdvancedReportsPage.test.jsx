@@ -6,7 +6,7 @@ import AdvancedReportsPage from '../src/pages/AdvancedReportsPage.jsx';
 import { api } from '../src/services/api.js';
 import { ADV_REPORT_TEMPLATES } from '../src/utils/advancedReportTemplates.js';
 vi.mock('react-chartjs-2', () => ({Bar: () => <canvas data-testid="bar-chart" />, Line: () => <canvas data-testid="line-chart" />, Pie: () => <canvas data-testid="pie-chart" />}));
-vi.mock('react-i18next', () => { const t = (key) => key; return { useTranslation: () => ({ t }) }; });
+vi.mock('react-i18next', () => { const t = (key) => key.startsWith('errors.MODULE_') ? `${key} translated` : key; return { useTranslation: () => ({ t }) }; });
 vi.mock('../src/utils/permissions.js', () => ({ canPermission: () => true }));
 vi.mock('../src/services/api.js', () => ({ api: Object.fromEntries(['getAccounts','getCategories','getContacts','getJobs','getProperties','listSavedReports','runAdvancedReport','exportAdvancedReportCsv','createSavedReport','updateSavedReport','deleteSavedReport'].map((key) => [key, vi.fn()])) }));
 const Location = () => <output data-testid="location">{useLocation().search}</output>;
@@ -154,4 +154,29 @@ it('searches saved reports and keeps the saved spec when opening a match', async
   expect(api.runAdvancedReport).toHaveBeenCalledWith(savedSpec);
   fireEvent.change(screen.getByLabelText('reportsSnapshot.search'),{target:{value:'nessuno'}});
   expect(screen.getByText('reportsSnapshot.noSaved')).toBeTruthy();
+});
+
+it('keeps Base reports usable when optional lookup modules are disabled', async () => {
+  api.getJobs.mockRejectedValueOnce({code:'MODULE_DISABLED'}); api.getProperties.mockRejectedValueOnce({code:'MODULE_DISABLED'});
+  setup(); await waitFor(() => expect(api.getProperties).toHaveBeenCalled());
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');
+});
+it('shows a blocked saved report without replacing the current draft or running it', async () => {
+  api.listSavedReports.mockResolvedValueOnce([{id:14,name:'Blocked budget',spec_json:null,module_access:{allowed:false,code:'MODULE_DISABLED'}}]);
+  setup(); const blocked=await screen.findByRole('button',{name:'Apri report Blocked budget'});
+  expect(blocked.disabled).toBe(true); expect(screen.getByText('errors.MODULE_DISABLED translated')).toBeTruthy();
+  fireEvent.click(blocked); expect(api.runAdvancedReport).not.toHaveBeenCalled();
+});
+it('shows a module revocation reason for frozen downloads and never creates a download URL', async () => {
+  const create=URL.createObjectURL=vi.fn();
+  api.exportAdvancedReportCsv.mockRejectedValueOnce({code:'MODULE_DISABLED'});
+  setup(); fireEvent.click(screen.getByText('buttons.runReport')); await screen.findByRole('table');
+  fireEvent.click(screen.getByText('buttons.exportCsv')); expect((await screen.findByRole('alert')).textContent).toContain('errors.MODULE_DISABLED translated');
+  expect(create).not.toHaveBeenCalled();
+});
+it('shows module errors from direct runs instead of a generic server error', async () => {
+  api.runAdvancedReport.mockRejectedValueOnce({code:'MODULE_DISABLED'});
+  setup();fireEvent.click(screen.getByText('buttons.runReport'));
+  expect((await screen.findByRole('alert')).textContent).toContain('errors.MODULE_DISABLED translated');expect(screen.queryByRole('table')).toBeNull();
 });

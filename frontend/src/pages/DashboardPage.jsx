@@ -1,3 +1,4 @@
+import { getErrorMessage } from '../utils/errorMessages.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { buildDashboardRange } from '../utils/dashboardRange.js';
@@ -89,6 +90,7 @@ const DashboardPage = () => {
     top: () => api.getDashboardPie({ ...activeRange, kind: 'expense', dimension: 'category', topN: 10 }),
   };
 
+  const sectionError = error => error?.code?.startsWith('MODULE_') ? getErrorMessage(t, error) : t('pages.dashboard.sectionError');
   const sectionSetters = { income: setIncomePie, expense: setExpensePie, top: setTopExpenses };
 
   const retrySection = async (key) => {
@@ -98,10 +100,10 @@ const DashboardPage = () => {
       const value = await sectionRequests[key]();
       if (!mountedRef.current || sectionRequestId !== sectionRequestIdsRef.current[key]) return;
       sectionSetters[key](value);
-    } catch {
+    } catch (error) {
       if (!mountedRef.current || sectionRequestId !== sectionRequestIdsRef.current[key]) return;
       sectionSetters[key](null);
-      setSectionErrors((previous) => ({ ...previous, [key]: t('pages.dashboard.sectionError') }));
+      setSectionErrors((previous) => ({ ...previous, [key]: sectionError(error) }));
     }
   };
 
@@ -130,7 +132,7 @@ const DashboardPage = () => {
     const errors = {};
     const applySection = (result, key, setter) => {
       if (result.status === 'fulfilled') setter(result.value);
-      else { setter(null); errors[key] = t('pages.dashboard.sectionError'); }
+      else { setter(null); errors[key] = sectionError(result.reason); }
     };
     applySection(incomeResult, 'income', setIncomePie);
     applySection(expenseResult, 'expense', setExpensePie);

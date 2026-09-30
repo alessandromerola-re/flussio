@@ -2,6 +2,7 @@ import ReportChart from '../components/ReportChart.jsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getErrorMessage } from '../utils/errorMessages.js';
 import { api } from '../services/api.js';
 import { canPermission } from '../utils/permissions.js';
 import { ADV_REPORT_TEMPLATES } from '../utils/advancedReportTemplates.js';
@@ -96,13 +97,14 @@ const AdvancedReportsPage = () => {
 
   const canExport = canPermission('export');
 
+  const optionalList = promise => promise.catch(error => { if (error.code === 'MODULE_DISABLED') return []; throw error; });
   const loadLookups = async () => {
     const [accounts, categories, contacts, jobs, properties] = await Promise.all([
       api.getAccounts(),
       api.getCategories(),
       api.getContacts(),
-      api.getJobs(),
-      api.getProperties(),
+      optionalList(api.getJobs()),
+      optionalList(api.getProperties()),
     ]);
     setLookups({ accounts, categories, contacts, jobs, properties });
   };
@@ -134,7 +136,7 @@ const AdvancedReportsPage = () => {
       setChartConfig(nextChart);
       setResult({ ...response, receivedAt: new Date().toISOString() });
     } catch (error) {
-      if (current === requestGeneration.current) setError(t(error.code === 'REPORT_SNAPSHOT_EXPIRED' || error.message === 'snapshot' ? 'reportsSnapshot.expired' : 'errors.SERVER_ERROR'));
+      if (current === requestGeneration.current) setError(error.code === 'REPORT_SNAPSHOT_EXPIRED' || error.message === 'snapshot' ? t('reportsSnapshot.expired') : getErrorMessage(t, error));
     } finally {
       if (current === requestGeneration.current) setLoading(false);
     }
@@ -190,7 +192,7 @@ const AdvancedReportsPage = () => {
     link.remove();
     URL.revokeObjectURL(url);
     } catch (error) {
-      if (current === requestGeneration.current) setError(t(error.code === 'REPORT_SNAPSHOT_EXPIRED' || error.message === 'snapshot' ? 'reportsSnapshot.expired' : 'errors.SERVER_ERROR'));
+      if (current === requestGeneration.current) setError(error.code === 'REPORT_SNAPSHOT_EXPIRED' || error.message === 'snapshot' ? t('reportsSnapshot.expired') : getErrorMessage(t, error));
     } finally {
       exportLock.current = false;
       setExporting(false);
@@ -207,7 +209,7 @@ const AdvancedReportsPage = () => {
     }
     else await api.createSavedReport(payload);
     await loadSaved();
-    } catch { setError(t('errors.SERVER_ERROR')); }
+    } catch (error) { setError(getErrorMessage(t, error)); }
   };
 
   const startNewReport = () => {
@@ -217,6 +219,7 @@ const AdvancedReportsPage = () => {
   };
 
   const loadSavedSpec = async (saved) => {
+    if (saved.module_access?.allowed === false) { setError(getErrorMessage(t, saved.module_access)); return; }
     setSelectedSavedId(saved.id);
     setSavedName(saved.name);
     setSavedShared(Boolean(saved.is_shared));
@@ -232,7 +235,7 @@ const AdvancedReportsPage = () => {
     setSavedName('');
     setSavedShared(false);
     await loadSaved();
-    } catch { setError(t('errors.SERVER_ERROR')); }
+    } catch (error) { setError(getErrorMessage(t, error)); }
   };
 
   const rows = result?.rows || [];
@@ -323,7 +326,7 @@ const AdvancedReportsPage = () => {
         <div className="row-actions" style={{ marginTop: '1rem' }}><button type="button" onClick={() => runReport()} disabled={loading}>{t('buttons.runReport')}</button>{canExport && <button type="button" className="ghost" onClick={exportCsv} disabled={!result || loading || exporting}>{t('buttons.exportCsv')}</button>}</div>
       </details>
 
-      {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><label>{t('reportsSnapshot.search')}<input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} /></label>{!savedReports.some(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())) && <p className="muted">{t('reportsSnapshot.noSaved')}</p>}<ul className="list" style={{ marginTop: '1rem' }}>{savedReports.filter(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())).map((item) => <li key={item.id}><button type="button" className="list-item" onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
+      {canExport && <div className="card report-saved"><h2>{t('pages.reportsAdvanced.savedReports')}</h2><div className="row-actions" style={{ flexWrap: 'wrap' }}><input aria-label="Nome report" placeholder={t('pages.reportsAdvanced.savedName')} value={savedName} onChange={(e) => setSavedName(e.target.value)} /><label style={{ margin: 0 }}><input type="checkbox" checked={savedShared} onChange={(e) => setSavedShared(e.target.checked)} /> {t('pages.reportsAdvanced.shared')}</label><button type="button" onClick={saveReport}>{selectedSavedId ? 'Aggiorna report' : 'Crea report'}</button><button type="button" className="ghost" onClick={startNewReport}>Nuovo report</button><button type="button" className="danger" onClick={deleteSaved} disabled={!selectedSavedId}>{t('buttons.delete')}</button></div><label>{t('reportsSnapshot.search')}<input value={savedSearch} onChange={e => setSavedSearch(e.target.value)} /></label>{!savedReports.some(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())) && <p className="muted">{t('reportsSnapshot.noSaved')}</p>}<ul className="list" style={{ marginTop: '1rem' }}>{savedReports.filter(item => item.name.toLocaleLowerCase().includes(savedSearch.trim().toLocaleLowerCase())).map((item) => <li key={item.id}><button type="button" className="list-item" disabled={item.module_access?.allowed === false} onClick={() => loadSavedSpec(item)} aria-label={`Apri report ${item.name}`}><span>{item.name}</span><small>{item.module_access?.allowed === false ? getErrorMessage(t, item.module_access) : item.is_shared ? t('common.yes') : t('common.no')}</small></button></li>)}</ul></div>}
 
       </div>
       {result && (
