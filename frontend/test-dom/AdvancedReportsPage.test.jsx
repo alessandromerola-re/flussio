@@ -185,6 +185,7 @@ it('shows module errors from direct runs instead of a generic server error', asy
 it('removes revoked dimensions and disables their templates while Base reports still run', async () => {
   render(<MemoryRouter><AdvancedReportsPage /></MemoryRouter>, {modules:{jobs:'disabled',real_estate:'disabled'}});
   await waitFor(()=>expect(api.listSavedReports).toHaveBeenCalled());
+  expect(screen.queryByLabelText('pages.movements.job')).toBeNull(); expect(screen.queryByLabelText('pages.movements.property')).toBeNull();
   const groups=screen.getByLabelText('pages.reportsAdvanced.groupBy1');
   expect(Array.from(groups.options).some(option=>['job','property'].includes(option.value))).toBe(false);
   expect(api.getJobs).not.toHaveBeenCalled(); expect(api.getProperties).not.toHaveBeenCalled();

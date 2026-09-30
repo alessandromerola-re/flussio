@@ -1013,7 +1013,7 @@ const MovementsPage = () => {
                 </select>
               </label>
             )}
-            <label hidden={!modules.can('property_links') && !form.property_id}>
+            {!(!modules.can('property_links') && !form.property_id) && <label>
               {t('pages.movements.property')}
               <select disabled={!modules.can('property_links', 'write')} value={form.property_id} onChange={(event) => handleChange('property_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
@@ -1022,8 +1022,8 @@ const MovementsPage = () => {
                   <option key={property.id} value={property.id}>{property.name}</option>
                 ))}
               </select>
-            </label>
-            <label hidden={!modules.can('job_links') && !form.job_id}>
+            </label>}
+            {!(!modules.can('job_links') && !form.job_id) && <label>
               {t('pages.movements.job')}
               <select disabled={!modules.can('job_links', 'write')} value={form.job_id} onChange={(event) => handleChange('job_id', event.target.value)}>
                 <option value="">{t('common.none')}</option>
@@ -1032,7 +1032,7 @@ const MovementsPage = () => {
                   <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
-            </label>
+            </label>}
             <label className="full">
               {t('pages.movements.description')}
               <input
@@ -1152,7 +1152,7 @@ const MovementsPage = () => {
                 </div>
               )}
             </label>
-            <label hidden={!modules.can('property_links')}>
+            {!(!modules.can('property_links')) && <label>
               {t('pages.movements.property')}
               <select
                 value={draftFilters.property_id}
@@ -1163,8 +1163,8 @@ const MovementsPage = () => {
                   <option key={property.id} value={property.id}>{property.name}</option>
                 ))}
               </select>
-            </label>
-            <label hidden={!modules.can('job_links')}>
+            </label>}
+            {!(!modules.can('job_links')) && <label>
               {t('pages.movements.job')}
               <select
                 value={draftFilters.job_id}
@@ -1175,7 +1175,7 @@ const MovementsPage = () => {
                   <option key={job.id} value={job.id}>{job.name || job.title}</option>
                 ))}
               </select>
-            </label>
+            </label>}
             <label>
               {t('pages.movements.recurrence')}
               <select
