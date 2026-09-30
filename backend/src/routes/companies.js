@@ -1,3 +1,4 @@
+import { previewCompanyModules, readModuleEvents } from '../modules/management.js';
 import { readCompanyModules } from '../modules/registry.js';
 import { companyContextMiddleware } from '../middleware/companyContext.js';
 import express from 'express';
@@ -68,19 +69,32 @@ const requireSuperAdmin = (req, res) => {
   return true;
 };
 
-// Resolve company identity from the URL only; do not authorize one company and read another.
-router.get('/:id/modules', (req, res, next) => {
+// Resolve the URL target once for all module routes, ignoring conflicting headers.
+router.use('/:id/modules', (req, res, next) => {
   if (!/^[1-9]\d*$/.test(req.params.id) || Number(req.params.id) > 2147483647) {
     return sendError(res, 400, 'VALIDATION_INVALID_COMPANY_ID', 'Invalid company id.');
   }
   req.headers['x-company-id'] = req.params.id;
   return companyContextMiddleware(req, res, next);
-}, async (req, res) => {
+});
+const moduleError = (res,error) => {
+  if (!error.status) console.error(error);
+  return sendError(res,error.status || 500,error.status ? error.code : 'SERVER_ERROR','Unable to process company modules.',{details:error.details});
+};
+router.get('/:id/modules', async (req,res) => {
   try { return res.json(await readCompanyModules(req.companyId)); }
-  catch (error) {
-    console.error(error);
-    return sendError(res, error.status || 500, error.status ? error.code : 'SERVER_ERROR', 'Unable to read company modules.');
-  }
+  catch(error) { return moduleError(res,error); }
+});
+router.get('/:id/modules/events', async (req,res) => {
+  if (req.user?.is_super_admin !== true && req.companyRole !== 'admin') return sendError(res,403,'FORBIDDEN','Operation not allowed.');
+  try {
+    return res.json(await readModuleEvents(req.companyId,{before:req.query.before ?? null,limit:req.query.limit === undefined ? 20 : Number(req.query.limit)}));
+  } catch(error) { return moduleError(res,error); }
+});
+router.post('/:id/modules/preview', async (req,res) => {
+  if (!requireSuperAdmin(req,res)) return;
+  try { return res.json(await previewCompanyModules(req.companyId,req.body)); }
+  catch(error) { return moduleError(res,error); }
 });
 
 router.get('/', async (req, res) => {

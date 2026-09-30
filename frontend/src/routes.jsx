@@ -10,6 +10,7 @@ const PropertyDetailPage = lazy(() => import('./pages/PropertyDetailPage.jsx'));
 const JobDetailPage = lazy(() => import('./pages/JobDetailPage.jsx'));
 const RecurringTemplatesPage = lazy(() => import('./pages/RecurringTemplatesPage.jsx'));
 const UsersAdminPage = lazy(() => import('./pages/UsersAdminPage.jsx'));
+const ModulesPage = lazy(() => import('./pages/ModulesPage.jsx'));
 const SettingsAdminPage = lazy(() => import('./pages/SettingsAdminPage.jsx'));
 const AdvancedReportsPage = lazy(() => import('./pages/AdvancedReportsPage.jsx'));
 
@@ -60,6 +61,10 @@ const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
     element: <Navigate to={token ? '/dashboard' : '/login'} replace />,
   },
 
+  {
+    path: '/modules',
+    element: token ? (can('manage_users') ? <ModulesPage /> : <Navigate to="/dashboard" replace />) : <Navigate to="/login" replace />,
+  },
   {
     path: '/settings',
     element: token ? (can('manage_users') ? <SettingsAdminPage onBrandingChanged={onBrandingChanged} /> : <Navigate to="/dashboard" replace />) : <Navigate to="/login" replace />,

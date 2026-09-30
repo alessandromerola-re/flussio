@@ -19,9 +19,9 @@ const snapshot = (companyId, version, rows) => ({
 });
 
 // One statement guarantees a coherent read of states and company version.
-export async function readCompanyModules(companyId) {
+export async function readCompanyModules(companyId, {executor = { query }} = {}) {
   if (!validId(companyId)) throw error('VALIDATION_INVALID_COMPANY_ID');
-  const result = await query(`SELECT c.modules_version,
+  const result = await executor.query(`SELECT c.modules_version,
     COALESCE(jsonb_agg(jsonb_build_object('module_code', m.module_code, 'state', m.state,
       'version', m.version::text, 'updated_at', m.updated_at)) FILTER (WHERE m.module_code IS NOT NULL), '[]'::jsonb) AS modules
     FROM companies c LEFT JOIN company_modules m ON m.company_id=c.id
