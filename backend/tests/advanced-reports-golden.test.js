@@ -14,7 +14,7 @@ const spec = (extra = {}) => ({ dateFrom: '2026-09-01', dateTo: '2026-09-30', me
 const values = (row) => [Number(row.income_sum_cents), Number(row.expense_sum_cents), Number(row.net_sum_cents), Number(row.count)];
 test.before(async () => {
   process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
-  await resetDb();
+  await resetDb({ modules: true });
   company = (await query("INSERT INTO companies(name) VALUES ('Golden') RETURNING id")).rows[0].id;
   const other = (await query("INSERT INTO companies(name) VALUES ('Foreign') RETURNING id")).rows[0].id;
   const user = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'golden@example.test','unused','admin') RETURNING id", [company])).rows[0].id;

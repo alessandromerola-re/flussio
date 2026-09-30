@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import pg from 'pg';
+import { runMigrations } from '../src/db/migrate.js';
 
 const { Pool } = pg;
 
@@ -12,7 +13,7 @@ const schemaPath = path.resolve(process.cwd(), '../database/init/001_schema.sql'
 
 export const query = async (text, params = []) => pool.query(text, params);
 
-export const resetDb = async () => {
+export const resetDb = async ({ modules = false } = {}) => {
   const schemaSql = await fs.readFile(schemaPath, 'utf8');
   const client = await pool.connect();
 
@@ -23,6 +24,7 @@ export const resetDb = async () => {
   } finally {
     client.release();
   }
+  if (modules) await runMigrations();
 };
 
 export const close = async () => {

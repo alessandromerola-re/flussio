@@ -34,7 +34,7 @@ const getToken = async (email, password) => {
 
 test.before(async () => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_secret';
-  await resetDb();
+  await resetDb({ modules: true });
 
   const passwordHash = await bcrypt.hash('flussio123', 10);
   const company = await query('INSERT INTO companies (name) VALUES ($1) RETURNING id', ['Balance Co']);

@@ -644,5 +644,7 @@
   "errors.MODULE_PLAN_INVALID": "The change proposal is invalid.",
   "errors.MODULE_CORE_IMMUTABLE": "The Base module is always active.",
   "errors.MODULE_HISTORY_QUERY_INVALID": "Unable to load this history page.",
-  "errors.MODULE_UNKNOWN": "Unknown module."
+  "errors.MODULE_UNKNOWN": "Unknown module.",
+  "errors.MODULE_DISABLED": "The required module is disabled for this company.",
+  "errors.MODULE_READ_ONLY": "The module is read-only. Existing links can be preserved but cannot be changed."
 }

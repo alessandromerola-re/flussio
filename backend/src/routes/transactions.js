@@ -1,4 +1,7 @@
 import express from 'express';
+import { assertModuleLinkChanges, parseModuleLinks, requireTransactionFilterModules } from '../modules/access.js';
+import { lockCompanyModules } from '../modules/registry.js';
+import { canRole, getRole } from '../middleware/permissions.js';
 import { getClient, query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
 import { formatDateISO } from '../utils/dateParse.js';
@@ -163,10 +166,10 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
         COALESCE(t.description, '') ILIKE ${searchParam}
         OR EXISTS (SELECT 1 FROM categories c2 WHERE c2.id = t.category_id AND c2.name ILIKE ${searchParam})
         OR EXISTS (SELECT 1 FROM contacts ct2 WHERE ct2.id = t.contact_id AND ct2.name ILIKE ${searchParam})
-        OR EXISTS (SELECT 1 FROM properties p2 WHERE p2.id = t.property_id AND p2.name ILIKE ${searchParam})
+        OR EXISTS (SELECT 1 FROM properties p2 WHERE p2.id = t.property_id AND p2.company_id = t.company_id AND p2.name ILIKE ${searchParam})
         OR EXISTS (
           SELECT 1 FROM jobs j2
-          WHERE j2.id = t.job_id
+          WHERE j2.id = t.job_id AND j2.company_id = t.company_id
             AND (COALESCE(j2.title, '') ILIKE ${searchParam} OR COALESCE(j2.name, '') ILIKE ${searchParam})
         )
         OR EXISTS (
@@ -274,8 +277,8 @@ const getTransactionsQuery = ({ whereSql, orderBySql, includePagination = true, 
   FROM transactions t
   LEFT JOIN categories c ON t.category_id = c.id
   LEFT JOIN contacts ct ON t.contact_id = ct.id
-  LEFT JOIN properties p ON t.property_id = p.id
-  LEFT JOIN jobs j ON t.job_id = j.id
+  LEFT JOIN properties p ON t.property_id = p.id AND p.company_id = t.company_id
+  LEFT JOIN jobs j ON t.job_id = j.id AND j.company_id = t.company_id
   LEFT JOIN recurring_templates rt ON t.recurring_template_id = rt.id
   LEFT JOIN transaction_accounts ta ON t.id = ta.transaction_id
   LEFT JOIN accounts a ON ta.account_id = a.id
@@ -342,7 +345,7 @@ const validateTransactionRefs = async (client, companyId, { category_id, contact
   }
 };
 
-router.get('/export', async (req, res) => {
+router.get('/export', requireTransactionFilterModules, async (req, res) => {
   const filters = buildTransactionsFilters(req.query, req.companyId, {
     defaultLimit: 5000,
     maxLimit: 5000,
@@ -399,7 +402,7 @@ router.get('/export', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', requireTransactionFilterModules, async (req, res) => {
   const filters = buildTransactionsFilters(req.query, req.companyId);
   if (filters.error) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
@@ -443,26 +446,23 @@ router.post('/', async (req, res) => {
     categoryId = null,
     contact_id: contactIdInput = null,
     contactId = null,
-    property_id: propertyIdInput = null,
-    propertyId = null,
-    job_id: jobIdInput = null,
-    jobId = null,
     accounts = [],
   } = req.body;
 
   const categoryParse = parseOptionalForeignKey(categoryIdInput ?? categoryId);
   const contactParse = parseOptionalForeignKey(contactIdInput ?? contactId);
-  const propertyParse = parseOptionalForeignKey(propertyIdInput ?? propertyId);
-  const jobParse = parseOptionalForeignKey(jobIdInput ?? jobId);
+  let links;
+  try { links = parseModuleLinks(req.body); }
+  catch (error) { return res.status(error.status || 400).json({ error_code: error.code || 'VALIDATION_MISSING_FIELDS', field: error.field }); }
 
-  if (!categoryParse.valid || !contactParse.valid || !propertyParse.valid || !jobParse.valid) {
+  if (!categoryParse.valid || !contactParse.valid) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
   const category_id = categoryParse.value;
   const contact_id = contactParse.value;
-  const property_id = propertyParse.value;
-  const job_id = jobParse.value;
+  let property_id = links.property_id ?? null;
+  let job_id = links.job_id ?? null;
 
   if (!date || !type || amount_total == null || accounts.length === 0) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
@@ -504,6 +504,8 @@ router.post('/', async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const moduleState = await lockCompanyModules(client, req.companyId);
+    assertModuleLinkChanges(moduleState.states, {}, { property_id, job_id }, { permissionGranted: canRole(getRole(req), 'write') });
     await validateTransactionRefs(client, req.companyId, {
       category_id,
       contact_id,
@@ -552,14 +554,14 @@ router.post('/', async (req, res) => {
       );
     }
 
+    await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'movements', entityId: transaction.id, meta: { type: transaction.type } });
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'movements', entityId: transaction.id, meta: { type: transaction.type } });
     return res.status(201).json(transaction);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(error);
     if (error.status) {
-      return res.status(error.status).json({ error_code: error.error_code });
+      return res.status(error.status).json({ error_code: error.error_code || error.code });
     }
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
   } finally {
@@ -579,26 +581,23 @@ router.put('/:id', async (req, res) => {
     categoryId = null,
     contact_id: contactIdInput = null,
     contactId = null,
-    property_id: propertyIdInput = null,
-    propertyId = null,
-    job_id: jobIdInput = null,
-    jobId = null,
     accounts = [],
   } = req.body;
 
   const categoryParse = parseOptionalForeignKey(categoryIdInput ?? categoryId);
   const contactParse = parseOptionalForeignKey(contactIdInput ?? contactId);
-  const propertyParse = parseOptionalForeignKey(propertyIdInput ?? propertyId);
-  const jobParse = parseOptionalForeignKey(jobIdInput ?? jobId);
+  let links;
+  try { links = parseModuleLinks(req.body); }
+  catch (error) { return res.status(error.status || 400).json({ error_code: error.code || 'VALIDATION_MISSING_FIELDS', field: error.field }); }
 
-  if (!categoryParse.valid || !contactParse.valid || !propertyParse.valid || !jobParse.valid) {
+  if (!categoryParse.valid || !contactParse.valid) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
   const category_id = categoryParse.value;
   const contact_id = contactParse.value;
-  const property_id = propertyParse.value;
-  const job_id = jobParse.value;
+  let property_id = links.property_id ?? null;
+  let job_id = links.job_id ?? null;
 
   if (!date || !type || amount_total == null || accounts.length === 0) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
@@ -636,15 +635,21 @@ router.put('/:id', async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const moduleState = await lockCompanyModules(client, req.companyId);
 
     const transactionResult = await client.query(
-      'SELECT id FROM transactions WHERE id = $1 AND company_id = $2 FOR UPDATE',
+      'SELECT id, job_id, property_id FROM transactions WHERE id = $1 AND company_id = $2 FOR UPDATE',
       [id, req.companyId]
     );
     if (transactionResult.rowCount === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
+
+    const current = transactionResult.rows[0];
+    property_id = Object.hasOwn(links, 'property_id') ? links.property_id : current.property_id;
+    job_id = Object.hasOwn(links, 'job_id') ? links.job_id : current.job_id;
+    assertModuleLinkChanges(moduleState.states, current, { property_id, job_id }, { permissionGranted: canRole(getRole(req), 'write') });
 
     const currentEntriesResult = await client.query(
       `
@@ -729,14 +734,14 @@ router.put('/:id', async (req, res) => {
       );
     }
 
+    await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'update', entityType: 'movements', entityId: id, meta: { type } });
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'update', entityType: 'movements', entityId: id, meta: { type } });
     return res.json(updatedResult.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(error);
     if (error.status) {
-      return res.status(error.status).json({ error_code: error.error_code });
+      return res.status(error.status).json({ error_code: error.error_code || error.code });
     }
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
   } finally {
@@ -749,15 +754,18 @@ router.delete('/:id', async (req, res) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    const moduleState = await lockCompanyModules(client, req.companyId);
 
     const transactionResult = await client.query(
-      'SELECT id FROM transactions WHERE id = $1 AND company_id = $2 FOR UPDATE',
+      'SELECT id, job_id, property_id FROM transactions WHERE id = $1 AND company_id = $2 FOR UPDATE',
       [id, req.companyId]
     );
     if (transactionResult.rowCount === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error_code: 'NOT_FOUND' });
     }
+
+    assertModuleLinkChanges(moduleState.states, transactionResult.rows[0], {}, { permissionGranted: canRole(getRole(req), 'delete_sensitive') });
 
     const entriesResult = await client.query(
       `
@@ -789,11 +797,12 @@ router.delete('/:id', async (req, res) => {
       );
     }
 
+    await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'movements', entityId: id, meta: {} });
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'movements', entityId: id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     await client.query('ROLLBACK');
+    if (error.status) return res.status(error.status).json({ error_code: error.error_code || error.code });
     console.error(error);
     return res.status(500).json({ error_code: 'SERVER_ERROR' });
   } finally {

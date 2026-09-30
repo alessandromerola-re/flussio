@@ -1,7 +1,9 @@
 import express from 'express';
+import { moduleWriteRoute, requireModuleRead } from '../modules/access.js';
 import { query } from '../db/index.js';
 
 const router = express.Router();
+router.use((req, res, next) => ['GET', 'HEAD'].includes(req.method) ? requireModuleRead(['properties'])(req, res, next) : next());
 
 const normalizePropertyPayload = (payload) => ({
   name: payload.name?.trim(),
@@ -11,7 +13,7 @@ const normalizePropertyPayload = (payload) => ({
   is_active: payload.is_active ?? true,
 });
 
-const validatePropertyPayload = async ({ name, address, contact_id, is_active }, companyId) => {
+const validatePropertyPayload = async ({ name, address, contact_id, is_active }, companyId, executor = { query }) => {
   if (!name || typeof is_active !== 'boolean' || (address != null && typeof address !== 'string')) {
     return false;
   }
@@ -21,7 +23,7 @@ const validatePropertyPayload = async ({ name, address, contact_id, is_active },
       return false;
     }
 
-    const contactResult = await query('SELECT id FROM contacts WHERE id = $1 AND company_id = $2', [
+    const contactResult = await executor.query('SELECT id FROM contacts WHERE id = $1 AND company_id = $2', [
       contact_id,
       companyId,
     ]);
@@ -89,70 +91,58 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', moduleWriteRoute(['properties'], async (req, client) => {
+  const query = client.query.bind(client);
   const payload = normalizePropertyPayload(req.body);
-  if (!(await validatePropertyPayload(payload, req.companyId))) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  if (!(await validatePropertyPayload(payload, req.companyId, client))) {
+    throw Object.assign(new Error('VALIDATION_MISSING_FIELDS'), { status: 400, code: 'VALIDATION_MISSING_FIELDS' });
   }
-  try {
-    const result = await query(
-      `
-      INSERT INTO properties (company_id, name, notes, contact_id, is_active, address)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-      `,
-      [req.companyId, payload.name, payload.notes, payload.contact_id, payload.is_active, payload.address]
-    );
-    return res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
-  }
-});
+  const result = await query(
+    `
+    INSERT INTO properties (company_id, name, notes, contact_id, is_active, address)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+    `,
+    [req.companyId, payload.name, payload.notes, payload.contact_id, payload.is_active, payload.address]
+  );
+  return { status: 201, body: result.rows[0] };
+}));
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', moduleWriteRoute(['properties'], async (req, client) => {
+  const query = client.query.bind(client);
   const { id } = req.params;
   const payload = normalizePropertyPayload(req.body);
 
-  if (!(await validatePropertyPayload(payload, req.companyId))) {
-    return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
+  if (!(await validatePropertyPayload(payload, req.companyId, client))) {
+    throw Object.assign(new Error('VALIDATION_MISSING_FIELDS'), { status: 400, code: 'VALIDATION_MISSING_FIELDS' });
   }
 
-  try {
-    const result = await query(
-      `
-      UPDATE properties
-      SET name = $1, notes = $2, contact_id = $3, is_active = $4, address = $7
-      WHERE id = $5 AND company_id = $6
-      RETURNING *
-      `,
-      [payload.name, payload.notes, payload.contact_id, payload.is_active, id, req.companyId, payload.address]
-    );
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
-    }
-    return res.json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  const result = await query(
+    `
+    UPDATE properties
+    SET name = $1, notes = $2, contact_id = $3, is_active = $4, address = $7
+    WHERE id = $5 AND company_id = $6
+    RETURNING *
+    `,
+    [payload.name, payload.notes, payload.contact_id, payload.is_active, id, req.companyId, payload.address]
+  );
+  if (result.rowCount === 0) {
+    throw Object.assign(new Error('NOT_FOUND'), { status: 404, code: 'NOT_FOUND' });
   }
-});
+  return { body: result.rows[0] };
+}));
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', moduleWriteRoute(['properties'], async (req, client) => {
+  const query = client.query.bind(client);
   const { id } = req.params;
-  try {
-    const result = await query('DELETE FROM properties WHERE id = $1 AND company_id = $2', [
-      id,
-      req.companyId,
-    ]);
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error_code: 'NOT_FOUND' });
-    }
-    return res.status(204).send();
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error_code: 'SERVER_ERROR' });
+  const result = await query('DELETE FROM properties WHERE id = $1 AND company_id = $2', [
+    id,
+    req.companyId,
+  ]);
+  if (result.rowCount === 0) {
+    throw Object.assign(new Error('NOT_FOUND'), { status: 404, code: 'NOT_FOUND' });
   }
-});
+  return { status: 204 };
+}, 'delete'));
 
 export default router;

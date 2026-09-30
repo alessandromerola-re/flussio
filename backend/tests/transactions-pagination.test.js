@@ -33,7 +33,7 @@ const seedTransactions = async (count, { type = 'income', prefix = 'movement' } 
 
 test.before(async () => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_secret';
-  await resetDb();
+  await resetDb({ modules: true });
   const company = await query('INSERT INTO companies (name) VALUES ($1) RETURNING id', ['Pagination Co']);
   companyId = company.rows[0].id;
   const user = await query(
