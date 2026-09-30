@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
-import { close, query, resetDb } from './_db.js';
+import { close, query, resetDb, seedLegacyModules } from './_db.js';
 let server, baseUrl, token, companyId, jobId, foreignId;
 test.before(async () => {
   process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
   await resetDb({ modules: true });
   companyId = (await query("INSERT INTO companies(name) VALUES ('Export') RETURNING id")).rows[0].id;
+  await seedLegacyModules(companyId);
   const other = (await query("INSERT INTO companies(name) VALUES ('Other') RETURNING id")).rows[0].id;
+  await seedLegacyModules(other);
   const user = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'export@test.local','unused','admin') RETURNING id", [companyId])).rows[0];
   token = jwt.sign({ user_id: user.id, default_company_id: companyId }, process.env.JWT_SECRET);
   jobId = (await query("INSERT INTO jobs(company_id,name,title) VALUES ($1,'Job','Job') RETURNING id", [companyId])).rows[0].id;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
-import { query, resetDb, close } from './_db.js';
+import { query, resetDb, close, seedLegacyModules } from './_db.js';
 import { getClient } from '../src/db/index.js';
 import { applyCompanyModulePlan, readCompanyModules } from '../src/modules/registry.js';
 import { generateDueTemplates, generateTemplateNow } from '../src/services/recurring.js';
@@ -48,7 +48,9 @@ test.beforeEach(async () => {
   process.env.RECURRING_GENERATOR_ENABLED = 'true';
   await resetDb({ modules: true });
   company = (await query("INSERT INTO companies(name) VALUES ('M3B A') RETURNING id")).rows[0].id;
+  await seedLegacyModules(company);
   other = (await query("INSERT INTO companies(name) VALUES ('M3B B') RETURNING id")).rows[0].id;
+  await seedLegacyModules(other);
   const user = async (role, elevated = false) => (await query("INSERT INTO users(company_id,email,password_hash,role,is_super_admin) VALUES ($1,$2,'unused',$3,$4) RETURNING id", [company, `${role}${elevated}@m3b.test`, role, elevated])).rows[0].id;
   admin = await user('admin'); editor = await user('editor'); viewer = await user('viewer'); superadmin = await user('admin', true);
   await query("INSERT INTO user_companies(user_id,company_id,role,is_active) VALUES ($1,$4,'admin',true),($2,$4,'editor',true),($3,$4,'viewer',true)", [admin, editor, viewer, company]);

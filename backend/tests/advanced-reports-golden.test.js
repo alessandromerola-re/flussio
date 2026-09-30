@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
-import { query, resetDb, close } from './_db.js';
+import { query, resetDb, close, seedLegacyModules } from './_db.js';
 import { reportDrilldownParams } from '../../frontend/src/utils/reportDrilldown.js';
 let server, baseUrl, token, company, bank, cash, foreignAccount, parent, child, foreignCategory, split;
 const request = async (path, spec) => {
@@ -16,7 +16,9 @@ test.before(async () => {
   process.env.JWT_SECRET ||= crypto.randomBytes(32).toString('hex');
   await resetDb({ modules: true });
   company = (await query("INSERT INTO companies(name) VALUES ('Golden') RETURNING id")).rows[0].id;
+  await seedLegacyModules(company);
   const other = (await query("INSERT INTO companies(name) VALUES ('Foreign') RETURNING id")).rows[0].id;
+  await seedLegacyModules(other);
   const user = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'golden@example.test','unused','admin') RETURNING id", [company])).rows[0].id;
   token = jwt.sign({ user_id: user, default_company_id: company }, process.env.JWT_SECRET);
   const account = async (name, owner = company) => (await query("INSERT INTO accounts(company_id,name,type) VALUES ($1,$2,'bank') RETURNING id", [owner, name])).rows[0].id;

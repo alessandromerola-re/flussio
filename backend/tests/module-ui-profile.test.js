@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import app from '../src/app.js';
-import { query, resetDb, close } from './_db.js';
+import { query, resetDb, close, seedLegacyModules } from './_db.js';
 import { applyCompanyModulePlan, readCompanyModules } from '../src/modules/registry.js';
 let server, base, company, other, admin, elevated;
 const request = async ({ actor=admin, target=company, claims={}, header=true }={}) => {
@@ -21,7 +21,9 @@ test.before(async () => {
 test.beforeEach(async () => {
   await resetDb({ modules: true });
   company = (await query("INSERT INTO companies(name) VALUES ('Profile A') RETURNING id")).rows[0].id;
+  await seedLegacyModules(company);
   other = (await query("INSERT INTO companies(name) VALUES ('Profile B') RETURNING id")).rows[0].id;
+  await seedLegacyModules(other);
   admin = (await query("INSERT INTO users(company_id,email,password_hash,role) VALUES ($1,'profile@test.it','unused','admin') RETURNING id", [company])).rows[0].id;
   elevated = (await query("INSERT INTO users(company_id,email,password_hash,role,is_super_admin) VALUES ($1,'super@test.it','unused','admin',true) RETURNING id", [company])).rows[0].id;
   await query("INSERT INTO user_companies(user_id,company_id,role) VALUES ($1,$2,'admin')", [admin, company]);
@@ -31,7 +33,7 @@ test.after(async () => { await new Promise(resolve => server.close(resolve)); aw
 test('current profile is coherent with registry version and legacy enabled modules', async () => {
   const result = await request({ header: false }); assert.equal(result.status, 200);
   assert.equal(result.body.company_id, company); assert.equal(result.body.version, '1');
-  assert.equal(result.body.enforcement_ready, false); assert.equal(result.body.role, 'admin');
+  assert.equal(result.body.enforcement_ready, true); assert.equal(result.body.role, 'admin');
   for (const cap of ['finance', 'general_reports', 'recurring', 'jobs', 'job_links', 'properties', 'property_reports']) {
     assert.equal(result.body.capabilities[cap].read, true); assert.equal(result.body.capabilities[cap].write, true);
   }

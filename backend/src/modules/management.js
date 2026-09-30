@@ -29,7 +29,7 @@ export async function previewCompanyModules(companyId, input={}) {
     if (current.version !== expected_version) throw fail('MODULE_VERSION_CONFLICT',409);
     const states=Object.fromEntries(current.modules.map(module=>[module.code,module.state]));
     const result=modulePolicy.preview(states,changes);
-    if (!result.allowed) throw fail(result.code,409,{module:result.module,dependency:result.dependency,cause:result.cause});
+    if (!result.allowed) throw fail(result.code,result.code === 'MODULE_PLAN_INVALID' ? 400 : 409,{module:result.module,dependency:result.dependency,cause:result.cause});
     const impact=[];
     for (const change of result.changes) {
       if (change.from===change.to) continue;
@@ -48,7 +48,7 @@ export async function previewCompanyModules(companyId, input={}) {
     }
     await client.query('COMMIT');
     return {company_id:companyId,version:current.version,enforcement_ready:current.enforcement_ready,
-      can_apply:false,changes:result.changes,impact};
+      can_apply:current.enforcement_ready && impact.length > 0,changes:result.changes,impact};
   } catch(error) {await client.query('ROLLBACK').catch(()=>{});throw error;}
   finally {client.release();}
 }
