@@ -1,5 +1,6 @@
+import { render } from './helpers/moduleRender.jsx';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import PropertyDetailPage from '../src/pages/PropertyDetailPage.jsx';
@@ -52,4 +53,10 @@ it('shows empty periods and hides creation from viewers', async () => {
   api.getProperty.mockResolvedValue({ ...property, income: '0', expense: '0', net: '0', movement_count: 0 });
   setup(); await screen.findByText('pages.property.empty');
   expect(screen.queryByRole('link', { name: 'pages.movements.new' })).toBeNull();
+});
+
+it('shows read-only property totals without linked movement creation', async () => {
+  render(<MemoryRouter initialEntries={['/registry/properties/5']}><Routes><Route path="/registry/properties/:id" element={<PropertyDetailPage />} /></Routes></MemoryRouter>,{modules:{real_estate:'read_only'}});
+  await screen.findByText('Via Roma 1'); expect(screen.getByRole('status').textContent).toBe('modules.ui.readOnly');
+  expect(screen.queryByRole('link',{name:'pages.movements.new'})).toBeNull(); expect(screen.getByText(/2\.?100,10/)).toBeTruthy();
 });

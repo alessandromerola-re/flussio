@@ -1,3 +1,4 @@
+import { useCompanyCapabilities } from '../modules/CompanyCapabilities.jsx';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -40,6 +41,7 @@ const dimensionOptions = ['category', 'contact', 'account', 'job'];
 
 const DashboardPage = () => {
   const { t } = useTranslation();
+  const modules = useCompanyCapabilities();
 
   const [period, setPeriod] = useState('last6months');
   const [customRange, setCustomRange] = useState(() => buildDashboardRange('last6months'));
@@ -388,6 +390,8 @@ const DashboardPage = () => {
       {dimensionOptions.map((dimension) => (
         <button
           key={dimension}
+          disabled={dimension === 'job' && !modules.can('job_reports')}
+          title={dimension === 'job' && !modules.can('job_reports') ? t('modules.ui.unavailable') : undefined}
           type="button"
           className={`dashboard-tab ${selected === dimension ? 'active' : ''}`.trim()}
           onClick={() => onChange(dimension)}

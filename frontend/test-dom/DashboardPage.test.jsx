@@ -1,6 +1,7 @@
+import { render } from './helpers/moduleRender.jsx';
 import { MemoryRouter } from 'react-router-dom';
 import React, { StrictMode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DashboardPage from '../src/pages/DashboardPage.jsx';
@@ -213,4 +214,17 @@ it('explains a disabled job dimension while preserving Base totals and other cha
   fireEvent.click(screen.getAllByRole('button',{name:'pages.dashboard.dim.job'})[0]);
   expect((await screen.findByRole('alert')).textContent).toContain('Modulo disattivato');
   expect(screen.getByText('+20.0%')).toBeTruthy();expect(screen.getAllByText('expense-Base').length).toBeGreaterThan(0);
+});
+
+it('disables job selectors for a Base-only profile without making optional requests', async () => {
+  render(<MemoryRouter><DashboardPage /></MemoryRouter>,{modules:{jobs:'disabled',real_estate:'disabled'}});
+  await screen.findByText('+20.0%');
+  for(const button of screen.getAllByRole('button',{name:'pages.dashboard.dim.job'})) expect(button.disabled).toBe(true);
+  expect(api.getDashboardPie.mock.calls.some(([params])=>params.dimension==='job')).toBe(false);
+});
+it('allows read-only job widgets to query their dimension', async () => {
+  render(<MemoryRouter><DashboardPage /></MemoryRouter>,{modules:{jobs:'read_only'}});
+  await screen.findByText('+20.0%'); const job=screen.getAllByRole('button',{name:'pages.dashboard.dim.job'})[0];
+  expect(job.disabled).toBe(false); fireEvent.click(job);
+  await waitFor(()=>expect(api.getDashboardPie.mock.calls.some(([params])=>params.dimension==='job')).toBe(true));
 });

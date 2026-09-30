@@ -2,17 +2,39 @@ import { clearSession, isPersistentSession, readSession, writeSession, writeSess
 
 const API_BASE = import.meta.env?.VITE_API_BASE || '/api';
 let refreshPromise = null;
+let contextRevision = 0;
+export const getContextRevision = () => contextRevision;
+const contextChanged = () => {
+  contextRevision += 1;
+  if (typeof window !== 'undefined') window.dispatchEvent?.(new Event('flussio-context-change'));
+};
+const notifyModuleDenial = code => {
+  if (['MODULE_DISABLED', 'MODULE_READ_ONLY', 'MODULE_UNAVAILABLE', 'MODULE_DEPENDENCY_MISSING'].includes(code) && typeof window !== 'undefined') {
+    window.dispatchEvent?.(new Event('flussio-module-access-denied'));
+  }
+};
+const assertContext = context => {
+  if (context.revision !== contextRevision || context.company !== getActiveCompanyId()) {
+    throw Object.assign(new Error('Company or session changed'), { code: 'CONTEXT_CHANGED' });
+  }
+};
+if (typeof window !== 'undefined') window.addEventListener?.('storage', event => {
+  if (!event.key || ['flussio_company_id', 'flussio_token', 'flussio_role'].includes(event.key)) contextChanged();
+});
 
 export const getToken = () => readSession().token;
 export const getRole = () => readSession().role;
 export const getActiveCompanyId = () => localStorage.getItem('flussio_company_id');
 
 export const setActiveCompanyId = (id) => {
+  const previous = getActiveCompanyId();
   if (id == null || id === '') {
     localStorage.removeItem('flussio_company_id');
+    if (previous != null) contextChanged();
     return;
   }
   localStorage.setItem('flussio_company_id', String(id));
+  if (String(previous) !== String(id)) contextChanged();
 };
 
 
@@ -43,7 +65,7 @@ export const getCurrentUser = () => {
   };
 };
 
-export const setToken = (token, role = 'viewer', remember = true) => writeSession(token, role, remember);
+export const setToken = (token, role = 'viewer', remember = true) => { writeSession(token, role, remember); contextChanged(); };
 export const setRole = (role = 'viewer') => writeSessionRole(role);
 
 export const clearToken = () => {
@@ -52,6 +74,7 @@ export const clearToken = () => {
   localStorage.removeItem('flussio_companies');
   sessionStorage.removeItem('flussio_company_id');
   sessionStorage.removeItem('flussio_companies');
+  contextChanged();
 };
 
 const toQueryString = (params = {}) => {
@@ -68,6 +91,7 @@ const toQueryString = (params = {}) => {
 const refreshAccessToken = async () => {
   if (!refreshPromise) {
     refreshPromise = (async () => {
+      const refreshContext = { revision: contextRevision, company: getActiveCompanyId() };
       const remember = isPersistentSession();
       const response = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
@@ -75,11 +99,13 @@ const refreshAccessToken = async () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
+      assertContext(refreshContext);
       if (!response.ok) {
         throw new Error('Session refresh failed');
       }
 
       const data = await response.json();
+      assertContext(refreshContext);
       writeSession(data.token, data.role, remember);
       localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
 
@@ -91,7 +117,10 @@ const refreshAccessToken = async () => {
         setActiveCompanyId(data.default_company_id);
       }
 
-      return data.token;
+      return {
+        previous: refreshContext,
+        current: { revision: contextRevision, company: getActiveCompanyId() },
+      };
     })().finally(() => {
       refreshPromise = null;
     });
@@ -100,7 +129,8 @@ const refreshAccessToken = async () => {
   return refreshPromise;
 };
 
-const request = async (path, options = {}, retriedAfterRefresh = false) => {
+const request = async (path, options = {}, retriedAfterRefresh = false, context = { revision: contextRevision, company: getActiveCompanyId() }) => {
+  assertContext(context);
   const { responseType, includeHeaders, ...fetchOptions } = options;
   const headers = { ...(fetchOptions.headers || {}) };
   const hasBody = fetchOptions.body !== undefined;
@@ -126,11 +156,21 @@ const request = async (path, options = {}, retriedAfterRefresh = false) => {
     headers,
   });
 
+  assertContext(context);
   if (response.status === 401 && !retriedAfterRefresh && !path.startsWith('/auth/')) {
     try {
-      await refreshAccessToken();
-      return request(path, options, true);
-    } catch {
+      const refreshed = await refreshAccessToken();
+      // With no selected company, refresh may choose the session's default.
+      // Only adopt that exact transition; a user/company/session change aborts.
+      if (context.company == null && refreshed.previous.company == null &&
+          refreshed.previous.revision === context.revision) {
+        context = refreshed.current;
+      }
+      assertContext(context);
+      return request(path, options, true, context);
+    } catch (failure) {
+      if (failure.code === 'CONTEXT_CHANGED') throw failure;
+      assertContext(context);
       clearToken();
       window.location.href = '/login';
       const error = new Error('Unauthorized');
@@ -153,12 +193,17 @@ const request = async (path, options = {}, retriedAfterRefresh = false) => {
 
   if (responseType === 'blob') {
     if (!response.ok) {
-      const error = new Error(response.statusText || 'Request failed');
-      error.code = response.status === 413 ? 'FILE_TOO_LARGE' : 'SERVER_ERROR';
+      const data = await response.json().catch(() => null);
+      assertContext(context);
+      const error = new Error(data?.error?.message || data?.message || response.statusText || 'Request failed');
+      error.code = data?.error?.code || data?.error_code || (response.status === 413 ? 'FILE_TOO_LARGE' : 'SERVER_ERROR');
+      error.details = data?.error?.details || data?.details;
+      notifyModuleDenial(error.code);
       throw error;
     }
 
     const blob = await response.blob();
+    assertContext(context);
     return includeHeaders ? { blob, headers: response.headers } : blob;
   }
 
@@ -169,12 +214,14 @@ const request = async (path, options = {}, retriedAfterRefresh = false) => {
     data = null;
   }
 
+  assertContext(context);
   if (!response.ok) {
     const errorBody = data?.error || null;
     const error = new Error(errorBody?.message || data?.message || response.statusText || 'Request failed');
     error.code = errorBody?.code || data?.error_code || (response.status === 413 ? 'FILE_TOO_LARGE' : 'SERVER_ERROR');
     error.field = errorBody?.field;
     error.details = errorBody?.details || data?.details;
+    notifyModuleDenial(error.code);
     throw error;
   }
 
@@ -185,6 +232,7 @@ export const api = {
   login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   logout: () => request('/auth/logout', { method: 'POST' }),
   getCompanies: () => request('/companies'),
+  getCurrentCapabilities: () => request('/modules/current', { cache: 'no-store' }),
   getCompanyModules: (id) => request(`/companies/${id}/modules`),
   getCompanyModuleEvents: (id, before = null) => request(`/companies/${id}/modules/events${before ? `?before=${encodeURIComponent(before)}` : ''}`),
   previewCompanyModules: (id, payload) => request(`/companies/${id}/modules/preview`, { method: 'POST', body: JSON.stringify(payload) }),

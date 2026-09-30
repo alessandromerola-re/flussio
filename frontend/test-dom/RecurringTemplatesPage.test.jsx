@@ -1,5 +1,6 @@
+import { render } from './helpers/moduleRender.jsx';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import RecurringTemplatesPage from '../src/pages/RecurringTemplatesPage.jsx';
@@ -98,4 +99,20 @@ it('renders UTC due dates and history near midnight on the Rome calendar day', a
   fireEvent.click(screen.getByText('pages.recurring.history'));
   expect(await within(screen.getByRole('dialog')).findByText('01/09/2026')).toBeTruthy();
   expect(screen.queryByText(/31\/08\/2026/)).toBeNull();
+});
+
+it('preserves suspended historic links while editing Base fields with disabled modules', async () => {
+  api.getRecurringTemplates.mockResolvedValue([{...template,job_id:7,property_id:8,module_suspension:{code:'MODULE_DISABLED',module:'jobs'}}]);
+  render(<MemoryRouter><RecurringTemplatesPage /></MemoryRouter>, {modules:{jobs:'disabled',real_estate:'disabled'}});
+  await screen.findByText('Affitto'); fireEvent.click(screen.getByRole('button',{name:'buttons.edit'}));
+  const modal=await screen.findByRole('dialog');
+  expect(within(modal).getByLabelText('pages.movements.job').value).toBe('7');
+  expect(within(modal).getByLabelText('pages.movements.job').disabled).toBe(true);
+  expect(within(modal).getByLabelText('pages.registry.properties').disabled).toBe(true);
+  fireEvent.change(within(modal).getByLabelText('forms.name'),{target:{value:'Updated Base template'}});
+  fireEvent.click(within(modal).getByText('buttons.save'));
+  await waitFor(()=>expect(api.updateRecurringTemplate).toHaveBeenCalledTimes(1));
+  const payload=api.updateRecurringTemplate.mock.calls[0][1]; expect(payload.title).toBe('Updated Base template');
+  expect(payload).not.toHaveProperty('job_id'); expect(payload).not.toHaveProperty('property_id');
+  expect(api.getJobs).not.toHaveBeenCalled(); expect(api.getProperties).not.toHaveBeenCalled();
 });

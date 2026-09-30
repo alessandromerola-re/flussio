@@ -1,3 +1,5 @@
+import ModuleNotice from '../modules/ModuleNotice.jsx';
+import { useCompanyCapabilities } from '../modules/CompanyCapabilities.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -29,8 +31,13 @@ const initialJob = {
 const RegistryPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const modules = useCompanyCapabilities();
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const tabCapability = key => key === 'jobs' ? 'jobs' : key === 'properties' ? 'properties' : 'finance';
+  const tabAllowed = (key, action = 'read') => modules.can(tabCapability(key), action);
   const [searchParams] = useSearchParams();
-  const [tab, setTab] = useState(() => ['jobs', 'properties', 'contacts', 'accounts', 'categories'].includes(searchParams.get('tab')) ? searchParams.get('tab') : 'jobs');
+  const [tab, setTab] = useState(() => { const requested = searchParams.get('tab') || 'jobs'; return ['jobs', 'properties', 'contacts', 'accounts', 'categories'].includes(requested) && tabAllowed(requested) ? requested : 'accounts'; });
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -61,6 +68,7 @@ const RegistryPage = () => {
   translationRef.current = t;
 
   const loadTabData = useCallback(async (targetTab, { force = false } = {}) => {
+    if (!tabAllowed(targetTab)) return;
     if (loadingTabsRef.current[targetTab] || (!force && loadedTabsRef.current[targetTab])) return;
     loadingTabsRef.current[targetTab] = true;
     setTabErrors((current) => ({ ...current, [targetTab]: '' }));
@@ -162,6 +170,7 @@ const RegistryPage = () => {
   };
 
   const openCreateModal = (targetTab) => {
+    if (!tabAllowed(targetTab, 'write')) return;
     resetForms();
     setTab(targetTab);
     setCreateModalTab(targetTab);
@@ -169,6 +178,7 @@ const RegistryPage = () => {
   };
 
   const openEditModal = (targetTab, id) => {
+    if (!tabAllowed(targetTab, 'write')) return;
     setTab(targetTab);
     setEditingId(id);
     setCreateModalTab(targetTab);
@@ -278,6 +288,7 @@ const RegistryPage = () => {
   };
 
   const downloadBlob = (blob, filename) => {
+    if (!mounted.current) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -383,7 +394,7 @@ const RegistryPage = () => {
           <p className="muted">{hasActiveFilters ? t('pages.registry.emptyFiltered') : t('pages.registry.emptyDescription', { entity: tabLabels[tab].toLocaleLowerCase() })}</p>
           {hasActiveFilters ? (
             <button type="button" className="ghost" onClick={() => updateCurrentView({ search: '', status: 'all' })}>{t('buttons.reset')}</button>
-          ) : canPermission('write') ? (
+          ) : (canPermission('write') && tabAllowed(tab, 'write')) ? (
             <button type="button" onClick={() => openCreateModal(tab)}>{t('pages.registry.createFirst', { entity: tabLabels[tab] })}</button>
           ) : null}
         </div>
@@ -397,11 +408,11 @@ const RegistryPage = () => {
       <div className="page-header">
         <h1>{t('pages.registry.title')}</h1>
         <div className="registry-header-actions">
-          {canPermission('export') && <button type="button" className="ghost" onClick={handleExportCsv} disabled={exportLoading}>
+          {(canPermission('export') && tabAllowed(tab, 'export')) && <button type="button" className="ghost" onClick={handleExportCsv} disabled={exportLoading}>
             {exportLoading ? 'Export in corso...' : 'Esporta CSV'}
           </button>}
-          {canPermission('import') && <button type="button" className="ghost" onClick={() => setImportModalOpen(true)}>Importa CSV</button>}
-          {canPermission('write') && (
+          {(canPermission('import') && tabAllowed(tab, 'import')) && <button type="button" className="ghost" onClick={() => setImportModalOpen(true)}>Importa CSV</button>}
+          {(canPermission('write') && tabAllowed(tab, 'write')) && (
             <button type="button" className="desktop-only registry-new-button" onClick={() => openCreateModal(tab)}>
               {t('buttons.new')}
             </button>
@@ -409,10 +420,12 @@ const RegistryPage = () => {
         </div>
       </div>
 
+      {tab === 'jobs' && <ModuleNotice module="jobs" />}
+      {tab === 'properties' && <ModuleNotice module="real_estate" />}
       {loadError && <div className="error">{loadError}</div>}
 
       <nav className="tabs registry-tabs desktop-only" aria-label={t('pages.registry.selectRegistry')}>
-        {Object.entries(tabLabels).map(([tabId, label]) => (
+        {Object.entries(tabLabels).filter(([key]) => tabAllowed(key)).map(([tabId, label]) => (
           <button key={tabId} type="button" aria-pressed={tab === tabId} className={tab === tabId ? 'active' : ''} onClick={() => setTab(tabId)}>{label}</button>
         ))}
       </nav>
@@ -420,7 +433,7 @@ const RegistryPage = () => {
       <label className="registry-mobile-selector mobile-only">
         <span>{t('pages.registry.selectRegistry')}</span>
         <select value={tab} onChange={(event) => setTab(event.target.value)}>
-          {Object.entries(tabLabels).map(([tabId, label]) => <option key={tabId} value={tabId}>{label}</option>)}
+          {Object.entries(tabLabels).filter(([key]) => tabAllowed(key)).map(([tabId, label]) => <option key={tabId} value={tabId}>{label}</option>)}
         </select>
       </label>
 
@@ -468,7 +481,7 @@ const RegistryPage = () => {
                   <div className="muted">{t('forms.currentBalance')}: {formatCurrency(account.balance)}</div>
                 </div>
                 <div className="row-actions">
-                  {canPermission('write') && (
+                  {(canPermission('write') && tabAllowed(tab, 'write')) && (
                     <button
                       type="button"
                       className="ghost"
@@ -485,7 +498,7 @@ const RegistryPage = () => {
                       {t('buttons.edit')}
                     </button>
                   )}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('accounts', account.id)}>{t('buttons.delete')}</button>}
+                  {(canPermission('delete_sensitive') && tabAllowed(tab, 'delete')) && <button type="button" className="danger" onClick={() => handleDelete('accounts', account.id)}>{t('buttons.delete')}</button>}
                 </div>
               </li>
             ))}
@@ -507,7 +520,7 @@ const RegistryPage = () => {
                   <div className="muted">{category.depth > 0 ? category.path : t(`pages.movements.${category.direction}`)}</div>
                 </div>
                 <div className="row-actions">
-                  {canPermission('write') && (
+                  {(canPermission('write') && tabAllowed(tab, 'write')) && (
                     <button
                       type="button"
                       className="ghost"
@@ -525,7 +538,7 @@ const RegistryPage = () => {
                       {t('buttons.edit')}
                     </button>
                   )}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('categories', category.id)}>{t('buttons.delete')}</button>}
+                  {(canPermission('delete_sensitive') && tabAllowed(tab, 'delete')) && <button type="button" className="danger" onClick={() => handleDelete('categories', category.id)}>{t('buttons.delete')}</button>}
                 </div>
               </li>
             ))}
@@ -545,7 +558,7 @@ const RegistryPage = () => {
                   {contact.default_category_name && <div className="muted">{t('forms.defaultCategory')}: {contact.default_category_name}</div>}
                 </div>
                 <div className="row-actions">
-                  {canPermission('write') && (
+                  {(canPermission('write') && tabAllowed(tab, 'write')) && (
                     <button
                       type="button"
                       className="ghost"
@@ -563,7 +576,7 @@ const RegistryPage = () => {
                       {t('buttons.edit')}
                     </button>
                   )}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('contacts', contact.id)}>{t('buttons.delete')}</button>}
+                  {(canPermission('delete_sensitive') && tabAllowed(tab, 'delete')) && <button type="button" className="danger" onClick={() => handleDelete('contacts', contact.id)}>{t('buttons.delete')}</button>}
                 </div>
               </li>
             ))}
@@ -593,7 +606,7 @@ const RegistryPage = () => {
                 </div>
                 <div className="row-actions">
                   <button type="button" className="ghost" onClick={() => navigate(`/jobs/${job.id}`)}>{t('buttons.details')}</button>
-                  {canPermission('write') && (
+                  {(canPermission('write') && tabAllowed(tab, 'write')) && (
                     <button
                       type="button"
                       className="ghost"
@@ -616,7 +629,7 @@ const RegistryPage = () => {
                       {t('buttons.edit')}
                     </button>
                   )}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('jobs', job.id)}>{t('buttons.delete')}</button>}
+                  {(canPermission('delete_sensitive') && tabAllowed(tab, 'delete')) && <button type="button" className="danger" onClick={() => handleDelete('jobs', job.id)}>{t('buttons.delete')}</button>}
                 </div>
               </li>
             ))}
@@ -636,7 +649,7 @@ const RegistryPage = () => {
                   <div className="muted">{property.notes || t('common.none')}</div>
                 </div>
                 <div className="row-actions">
-                  {canPermission('write') && (
+                  {(canPermission('write') && tabAllowed(tab, 'write')) && (
                     <button
                       type="button"
                       className="ghost"
@@ -655,7 +668,7 @@ const RegistryPage = () => {
                       {t('buttons.edit')}
                     </button>
                   )}
-                  {canPermission('delete_sensitive') && <button type="button" className="danger" onClick={() => handleDelete('properties', property.id)}>{t('buttons.delete')}</button>}
+                  {(canPermission('delete_sensitive') && tabAllowed(tab, 'delete')) && <button type="button" className="danger" onClick={() => handleDelete('properties', property.id)}>{t('buttons.delete')}</button>}
                 </div>
               </li>
             ))}
@@ -681,7 +694,7 @@ const RegistryPage = () => {
         </div>
       </Modal>
 
-      {canPermission('write') && !createModalTab && <FloatingAddButton onClick={() => openCreateModal(tab)} label={t('buttons.new')} />}
+      {(canPermission('write') && tabAllowed(tab, 'write')) && !createModalTab && <FloatingAddButton onClick={() => openCreateModal(tab)} label={t('buttons.new')} />}
 
       <Modal isOpen={Boolean(createModalTab)} onClose={closeCreateModal}>
         <div>

@@ -1,3 +1,4 @@
+import { CapabilityRoute } from './modules/ModuleNotice.jsx';
 import { lazy } from 'react';
 import { Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
@@ -37,11 +38,11 @@ const routes = ({ setTokenState, token, onBrandingChanged, brandLogoUrl }) => [
   },
   {
     path: '/registry/properties/:id',
-    element: token ? <PropertyDetailPage /> : <Navigate to="/login" replace />,
+    element: token ? <CapabilityRoute capability="properties"><PropertyDetailPage /></CapabilityRoute> : <Navigate to="/login" replace />,
   },
   {
     path: '/jobs/:id',
-    element: token ? <JobDetailPage /> : <Navigate to="/login" replace />,
+    element: token ? <CapabilityRoute capability="jobs"><JobDetailPage /></CapabilityRoute> : <Navigate to="/login" replace />,
   },
   {
     path: '/recurring',

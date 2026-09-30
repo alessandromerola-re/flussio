@@ -1,3 +1,5 @@
+import ModuleNotice from '../modules/ModuleNotice.jsx';
+import { useCompanyCapabilities } from '../modules/CompanyCapabilities.jsx';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +15,7 @@ const emptyPeriod = { date_from: '', date_to: '' };
 export default function PropertyDetailPage() {
   const { id } = useParams();
   const { t } = useTranslation();
+  const modules = useCompanyCapabilities();
   const [draft, setDraft] = useState(emptyPeriod);
   const [period, setPeriod] = useState(emptyPeriod);
   const [offset, setOffset] = useState(0);
@@ -50,9 +53,10 @@ export default function PropertyDetailPage() {
   return (
     <div className="page property-detail">
       <Link to="/registry?tab=properties">← {t('pages.registry.properties')}</Link>
+      <ModuleNotice module="real_estate" />
       <div className="page-header">
         <h1>{property?.name || t('pages.property.title')}</h1>
-        {canPermission('write') && property && (
+        {(canPermission('write') && modules.can('property_links', 'write')) && property && (
           <Link className="property-action" to={`/movements?property_id=${id}&new=1`}>{t('pages.movements.new')}</Link>
         )}
       </div>
