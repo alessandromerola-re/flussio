@@ -52,3 +52,10 @@ it('shows errors and rejects an API response for the wrong company',async()=>{
  api.getCompanyModules.mockResolvedValue(snapshot(2));render(<ModulesPage/>);
  expect(await screen.findByRole('alert')).toBeTruthy();expect(screen.queryByText('modules.names.jobs')).toBeNull();
 });
+
+it('uses the verified current role for preview after superadmin privileges were revoked',async()=>{
+ getIsSuperAdmin.mockReturnValue(true);getRole.mockReturnValue('admin');render(<ModulesPage/>);
+ await screen.findByText('modules.names.jobs');
+ expect(screen.queryByText('modules.preview')).toBeNull();expect(screen.queryByRole('combobox')).toBeNull();
+ expect(api.getCompanies).not.toHaveBeenCalled();expect(api.previewCompanyModules).not.toHaveBeenCalled();
+});
