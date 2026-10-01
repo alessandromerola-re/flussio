@@ -111,4 +111,3 @@ export const validatePayload = async (payload, companyId, executor = { query }) 
 
   return { valid: true };
 };
-

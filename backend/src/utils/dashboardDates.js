@@ -80,4 +80,3 @@ export const buildBuckets = (range, period) => {
   }
   return { granularity: 'month', buckets };
 };
-

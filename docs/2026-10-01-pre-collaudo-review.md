@@ -24,17 +24,18 @@ Nessuna migrazione nuova, modifica ai checksum precedenti o dipendenza applicati
 
 ## Verifiche
 
+- CI nativa della PR #159, esecuzione 238: **190 test backend su PostgreSQL 18 superati**, nessuno escluso, inclusi concorrenza e lock; **47 test frontend di logica e 127 DOM superati**, build frontend e di entrambe le immagini Docker riuscite. Superati anche i controlli delle configurazioni Compose e del bundle di produzione. L'ultimo controllo whitespace ha rilevato due righe vuote finali: rimosse nel commit successivo; esito della nuova esecuzione consultabile nella PR.
 - Frontend: **47 test di logica e 127 test DOM superati**, build Vite di produzione riuscita. Inclusa la regressione sulla modifica descrittiva dei movimenti ripartiti.
 - Backend: **167 test della suite generale superati** e **25 prove mirate superate** su import, ricorrenze e correzioni di questa revisione. Le due esecuzioni si sovrappongono per 12 casi: non sono 192 casi distinti.
-- I test backend con database sono stati eseguiti con un adattatore temporaneo verso **PGlite**, isolato dal repository e dalle dipendenze dell'applicazione, con fuso UTC. I casi di concorrenza, attesa su lock e accodamento sono stati esclusi: l'adattatore serializza le connessioni e non può verificarli. PostgreSQL nativo e Docker non erano disponibili nell'ambiente locale. La suite completa `npm test` del backend resta da eseguire nella CI con PostgreSQL 18.
+- I test backend locali con database sono stati eseguiti con un adattatore temporaneo verso **PGlite**, isolato dal repository e dalle dipendenze dell'applicazione, con fuso UTC. I casi di concorrenza, attesa su lock e accodamento sono stati esclusi localmente: l'adattatore serializza le connessioni e non può verificarli. PostgreSQL nativo e Docker non erano disponibili nell'ambiente locale; la successiva CI ha eseguito la suite completa `npm test` del backend con PostgreSQL 18.
 - **7 test mirati senza database superati** su validazione importi, parser CSV, calendario/ora legale e gestione degli errori di backup/restore. Sono compresi anche nella suite generale sopra indicata.
 - Controlli di sintassi JavaScript/shell, duplicati dello schema e della dashboard, e `git diff --check` superati.
 - Diagnostica `pre-collaudo-data-check.sql`: sei istruzioni eseguite correttamente sullo schema migrato vuoto in PGlite; verifica di compatibilità SQL, non verifica dei dati reali.
-- Nessuna prova effettuata sui dati reali; nessuna verifica visiva su browser/dispositivo o ripristino reale eseguito. Le garanzie di lock, concorrenza e interoperabilità del driver PostgreSQL richiedono la CI nativa, oltre al successivo collaudo operativo.
+- Nessuna prova effettuata sui dati reali; nessuna verifica visiva su browser/dispositivo o ripristino reale eseguito. La CI nativa copre le regressioni previste su lock, concorrenza e driver PostgreSQL; resta necessario il successivo collaudo operativo.
 
 ## Prima del collaudo operativo
 
-1. Pubblicare il ramo e aprire la PR; richiedere esito positivo della CI PostgreSQL 18 e delle build Docker prima del merge.
+1. PR #159 aperta: richiedere esito positivo dell'intera CI sull'ultimo commit prima del merge.
 2. Eseguire `docs/pre-collaudo-data-check.sql` sulla copia isolata dei dati reali: queste correzioni prevengono nuovi errori ma non ricostruiscono automaticamente eventuali ripartizioni già alterate. Ogni anomalia storica richiede confronto con i documenti originali.
 3. Nel NAS di collaudo provare un movimento ripartito: modifica descrizione, export/reimport su dati di prova, saldi e report per conto devono restare coerenti. Verificare categorie, note CSV multilinea e allegati.
 4. Eseguire il percorso F5A-M3E già documentato: aziende esistenti, nuova azienda Base-only, enabled → read_only → disabled → enabled, ruoli differenti, sessioni/cambio azienda, saldi/report Base invariati.
@@ -43,7 +44,7 @@ Nessuna migrazione nuova, modifica ai checksum precedenti o dipendenza applicati
 
 ## Limiti e passi successivi
 
-- Verifica visiva desktop/telefono reale, Docker e restore effettivo sul NAS ancora da eseguire.
+- Verifica visiva desktop/telefono reale, avvio dei container e restore effettivo sul NAS ancora da eseguire; le immagini Docker sono state compilate in CI.
 - I campi temporali storici TIMESTAMP senza fuso mantengono lo schema esistente; questa revisione non migra gli orari archiviati. L'ambiente di produzione deve mantenere un fuso coerente fra backend e database; in CI le fixture usano UTC.
 - L'editor di movimenti ripartiti preserva le quote; una UI dedicata alla modifica delle singole quote resta un miglioramento futuro.
 - Gli snapshot dei report restano in memoria con i limiti documentati in F4.6; riavvio o replica richiedono nuova esecuzione. Nessun cambio architetturale introdotto.
