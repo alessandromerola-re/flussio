@@ -68,6 +68,7 @@ const parseDateString = (value) => {
   if (!value) {
     return null;
   }
+  if (value instanceof Date) return { year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate() };
   const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) {
     return null;
@@ -239,6 +240,16 @@ export const computeNextRunAtForTemplate = (template, now = new Date()) => {
   return buildRomeDate(normalized.year, normalized.month, normalized.day, 0, 5);
 };
 
+// Changing title, amount, links, end date or activation must not rewind the schedule.
+export function nextRunAtAfterEdit(payload, previous) {
+  const dateKey = value => { const p = parseDateString(value); return p ? formatDateString(p.year, p.month, p.day) : null; };
+  const fields = ['frequency', 'interval'];
+  if (payload.frequency === 'weekly') fields.push('weekly_anchor_dow');
+  if (payload.frequency === 'yearly') fields.push('yearly_anchor_mm', 'yearly_anchor_dd');
+  const unchanged = fields.every(key => (payload[key] ?? null) === (previous[key] ?? null)) && dateKey(payload.start_date) === dateKey(previous.start_date);
+  return unchanged && previous.next_run_at ? previous.next_run_at : computeNextRunAtForTemplate(payload);
+}
+
 const generateForTemplate = async (client, template, runType, forcedNow, states, actorUserId) => {
   if (!recurringGeneratorEnabled()) return { status: 'skipped', reason: 'generator_disabled', code: 'RECURRING_GENERATOR_DISABLED' };
   const block = recurringModuleBlock(states, template);
@@ -307,6 +318,13 @@ const generateForTemplate = async (client, template, runType, forcedNow, states,
   );
 
   if (runInsertResult.rowCount === 0) {
+    // A rescheduled historical cycle may already exist. Advance automatic/due
+    // processing without creating another movement or changing its balance.
+    if (!forcedNow) {
+      const next = computeNextRunDateFromCurrent(template, runDate);
+      await client.query('UPDATE recurring_templates SET next_run_at=$1, is_active=CASE WHEN $2::boolean THEN is_active ELSE false END, updated_at=NOW() WHERE id=$3',
+        [buildRomeDate(next.year, next.month, next.day, 0, 5), isRunAllowedByEndDate(template, next), template.id]);
+    }
     return { status: 'skipped', reason: 'already_generated' };
   }
 

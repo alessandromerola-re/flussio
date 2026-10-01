@@ -26,11 +26,11 @@ export const requireModuleRead = capabilities => async (req, res, next) => {
 
 // Lock order: company, then entities. Work and its audit must use the supplied client.
 // A response is sent only after COMMIT; any work/commit error rolls everything back.
-export async function withModuleWrite(companyId, capabilities, work, { action = 'write', permissionGranted = false } = {}) {
+export async function withModuleWrite(companyId, capabilities, work, { action = 'write', permissionGranted = false, exclusive = false } = {}) {
   const client = await getClient();
   try {
     await client.query('BEGIN');
-    const current = await lockCompanyModules(client, companyId);
+    const current = await lockCompanyModules(client, companyId, { exclusive });
     assertModuleAccess(current.states, capabilities, action, { permissionGranted });
     const result = await work(client, current);
     await client.query('COMMIT');
@@ -41,10 +41,10 @@ export async function withModuleWrite(companyId, capabilities, work, { action = 
   } finally { client.release(); }
 }
 
-export const moduleWriteRoute = (capabilities, work, action = 'write') => async (req, res) => {
+export const moduleWriteRoute = (capabilities, work, action = 'write', exclusive = false) => async (req, res) => {
   try {
     const result = await withModuleWrite(req.companyId, capabilities, (client, current) => work(req, client, current), {
-      action, permissionGranted: canRole(getRole(req), action === 'delete' ? 'delete_sensitive' : 'write'),
+      action, exclusive, permissionGranted: canRole(getRole(req), action === 'delete' ? 'delete_sensitive' : 'write'),
     });
     return result.status === 204 ? res.status(204).send() : res.status(result.status || 200).json(result.body);
   } catch (error) { return sendModuleError(res, error); }

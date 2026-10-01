@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const dashboardPath = resolve(__dirname, '../src/pages/DashboardPage.jsx');
-const backendDashboardPath = resolve(__dirname, '../../backend/src/routes/dashboard.js');
+const backendDashboardPath = resolve(__dirname, '../../backend/src/utils/dashboardDates.js');
 
 const checks = [
   {

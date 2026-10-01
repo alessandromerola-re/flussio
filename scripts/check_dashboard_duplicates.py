@@ -13,7 +13,7 @@ CHECKS = [
         },
     ),
     (
-        "backend/src/routes/dashboard.js",
+        "backend/src/utils/dashboardDates.js",
         {
             "const monthLabel =": 0,
             "const formatMonthLabel =": 1,

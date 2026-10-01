@@ -90,6 +90,8 @@ const MovementsPage = () => {
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [newAttachmentFile, setNewAttachmentFile] = useState(null);
   const [editingMovementId, setEditingMovementId] = useState(null);
+  const [editingAllocations, setEditingAllocations] = useState(null);
+  const preserveAllocations = Boolean(editingMovementId && editingAllocations);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadError, setUploadError] = useState('');
@@ -650,7 +652,7 @@ const MovementsPage = () => {
         contact_id: form.contact_id ? Number(form.contact_id) : null,
         property_id: form.property_id ? Number(form.property_id) : null,
         job_id: form.job_id ? Number(form.job_id) : null,
-        accounts: accountsPayload,
+        accounts: preserveAllocations ? editingAllocations.map(({ account_id, direction, amount }) => ({ account_id, direction, amount })) : accountsPayload,
       };
 
       if (!modules.can('property_links', 'write')) delete payload.property_id;
@@ -691,6 +693,7 @@ const MovementsPage = () => {
     }
 
     const selectedAccounts = selected.accounts || [];
+    setEditingAllocations(selectedAccounts.length > (selected.type === 'transfer' ? 2 : 1) ? selectedAccounts : null);
     const outEntry = selectedAccounts.find((entry) => entry.direction === 'out');
     const inEntry = selectedAccounts.find((entry) => entry.direction === 'in');
     const singleEntry = selectedAccounts[0];
@@ -922,6 +925,7 @@ const MovementsPage = () => {
         <div>
           <form onSubmit={handleSubmit}>
             <h2>{editingMovementId ? `${t('buttons.edit')} #${editingMovementId}` : t('pages.movements.new')}</h2>
+            {preserveAllocations && <p role="status">{t('pages.movements.preserveAllocations')} {editingAllocations.map(leg => `${leg.account_name}: ${formatCurrency(leg.amount)}`).join(' · ')}</p>}
             <div className="form-grid">
             <label>
               {t('pages.movements.date')}
@@ -929,7 +933,7 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.type')}
-              <select value={form.type} onChange={(event) => handleTypeChange(event.target.value)} required>
+              <select disabled={preserveAllocations} value={form.type} onChange={(event) => handleTypeChange(event.target.value)} required>
                 <option value="" disabled>{t('forms.select')}</option>
                 <option value="income">{t('pages.movements.income')}</option>
                 <option value="expense">{t('pages.movements.expense')}</option>
@@ -938,13 +942,13 @@ const MovementsPage = () => {
             </label>
             <label>
               {t('pages.movements.amount')}
-              <input type="number" step="0.01" value={form.amount_total} onChange={(event) => handleChange('amount_total', event.target.value)} required />
+              <input type="number" step="0.01" disabled={preserveAllocations} value={form.amount_total} onChange={(event) => handleChange('amount_total', event.target.value)} required />
             </label>
             {form.type === 'transfer' ? (
               <>
                 <label>
                   {t('pages.movements.accountFrom')}
-                  <select value={form.account_out} onChange={(event) => handleChange('account_out', event.target.value)} required>
+                  <select disabled={preserveAllocations} value={form.account_out} onChange={(event) => handleChange('account_out', event.target.value)} required>
                     <option value="">{t('common.none')}</option>
                     {accounts.map((account) => (
                       <option key={account.id} value={account.id}>{account.name}</option>
@@ -953,7 +957,7 @@ const MovementsPage = () => {
                 </label>
                 <label>
                   {t('pages.movements.accountTo')}
-                  <select value={form.account_in} onChange={(event) => handleChange('account_in', event.target.value)} required>
+                  <select disabled={preserveAllocations} value={form.account_in} onChange={(event) => handleChange('account_in', event.target.value)} required>
                     <option value="">{t('common.none')}</option>
                     {accounts.map((account) => (
                       <option key={account.id} value={account.id}>{account.name}</option>
@@ -964,7 +968,7 @@ const MovementsPage = () => {
             ) : (
               <label>
                 {t('pages.movements.account')}
-                <select value={form.account_in || form.account_out} onChange={(event) => handleChange('account_in', event.target.value)} required>
+                <select disabled={preserveAllocations} value={form.account_in || form.account_out} onChange={(event) => handleChange('account_in', event.target.value)} required>
                   <option value="">{t('common.none')}</option>
                   {accounts.map((account) => (
                     <option key={account.id} value={account.id}>{account.name}</option>
@@ -1069,7 +1073,8 @@ const MovementsPage = () => {
             <div id="movement-filters" className="filters-drawer">
               <h2>{t('pages.movements.filters')}</h2>
               {hasActiveFilters && <div className="muted">{t('pages.movements.activeFilters')}</div>}
-<div className="form-grid">
+{preserveAllocations && <p role="status">{t('pages.movements.preserveAllocations')} {editingAllocations.map(leg => `${leg.account_name}: ${formatCurrency(leg.amount)}`).join(' · ')}</p>}
+            <div className="form-grid">
             <label>
               {t('pages.movements.dateFrom')}
               <input

@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import { parseCsv } from '../utils/csv.js';
+import { validMovementAllocation } from '../utils/movementValidation.js';
 import fs from 'fs/promises';
 import path from 'path';
 import express from 'express';
@@ -30,32 +32,6 @@ const decodeCsvBuffer = (buffer) => {
     return buffer.toString('latin1').replace(/^﻿/, '');
   }
   return utf8;
-};
-
-const parseCsvLine = (line, delimiter = ';') => {
-  const out = [];
-  let current = '';
-  let quoted = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (char === '"') {
-      if (quoted && line[i + 1] === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        quoted = !quoted;
-      }
-      continue;
-    }
-    if (char === delimiter && !quoted) {
-      out.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  out.push(current.trim());
-  return out;
 };
 
 const normalizeMovementType = (value = '') => {
@@ -545,15 +521,13 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
   }
 
   const text = decodeCsvBuffer(parsedFile.buffer);
-  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length < 2) {
-    return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'CSV vuoto o non valido.');
-  }
-
-  const semicolonHeaders = parseCsvLine(lines[0], ';');
-  const commaHeaders = parseCsvLine(lines[0], ',');
-  const delimiter = semicolonHeaders.length >= commaHeaders.length ? ';' : ',';
-  const headers = (delimiter === ';' ? semicolonHeaders : commaHeaders).map((h) => h.toLowerCase());
+  let records;
+  try {
+    const semicolon = parseCsv(text, ';'), comma = parseCsv(text, ',');
+    records = (semicolon[0]?.values.length || 0) >= (comma[0]?.values.length || 0) ? semicolon : comma;
+  } catch (error) { return sendModuleError(res, error); }
+  if (records.length < 2) return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'CSV vuoto o non valido.');
+  const headers = records[0].values.map(h => h.toLowerCase());
 
   const idx = {
     date: headers.indexOf('date'),
@@ -568,6 +542,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     property: headers.indexOf('property') >= 0 ? headers.indexOf('property') : headers.indexOf('immobile'),
     job: headers.indexOf('commessa') >= 0 ? headers.indexOf('commessa') : headers.indexOf('job'),
     description: headers.indexOf('description'),
+    allocations: headers.indexOf('account_allocations'),
   };
 
   if (idx.date < 0 || idx.type < 0 || idx.amount < 0 || idx.accountNames < 0) {
@@ -583,7 +558,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     await client.query('BEGIN');
     const current = await lockCompanyModules(client, req.companyId);
     const capabilities = ['finance'];
-    const contentRows = lines.slice(1).map(line => parseCsvLine(line, delimiter));
+    const contentRows = records.slice(1).map(record => record.values);
     if (contentRows.some(row => (idx.propertyCode >= 0 && String(row[idx.propertyCode] || '').trim()) || (idx.property >= 0 && String(row[idx.property] || '').trim()))) capabilities.push('property_links');
     if (contentRows.some(row => idx.job >= 0 && String(row[idx.job] || '').trim())) capabilities.push('job_links');
     assertModuleAccess(current.states, capabilities, 'write', { permissionGranted: canRole(req.companyRole, 'import_movements') });
@@ -610,14 +585,14 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
     const jobByName = new Map(jobsResult.rows.map((r) => [String((r.name || r.title || '')).trim().toLowerCase(), r.id]));
 
     // Lock all referenced accounts in one stable order before importing any row.
-    const accountIds = [...new Set(contentRows.flatMap(row => String(row[idx.accountNames] || '').split('→').map(name => accountByName.get(name.trim().toLowerCase())).filter(Boolean)))].sort((a, b) => a - b);
+    const accountIds = accountsResult.rows.map(row => row.id).sort((a, b) => a - b);
     if (accountIds.length) {
       const locked = await client.query('SELECT id FROM accounts WHERE company_id=$1 AND id=ANY($2::int[]) ORDER BY id FOR UPDATE', [req.companyId, accountIds]);
       if (locked.rowCount !== accountIds.length) throw Object.assign(new Error('VALIDATION_MISSING_FIELDS'), { code: 'VALIDATION_MISSING_FIELDS', status: 400 });
     }
 
-    for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
-      const row = parseCsvLine(lines[lineIndex], delimiter);
+    for (let lineIndex = 1; lineIndex < records.length; lineIndex += 1) {
+      const row = records[lineIndex].values;
       let date;
       const type = normalizeMovementType(row[idx.type]);
       const amountAbs = Math.abs(parseAmount(row[idx.amount]));
@@ -627,23 +602,35 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
         date = parseCsvDateToISO(row[idx.date]);
       } catch {
         skipped += 1;
-        errors.push({ line: lineIndex + 1, message: 'Data non valida (formati supportati: YYYY-MM-DD, DD/MM/YYYY, formato legacy export)' });
+        errors.push({ line: records[lineIndex].line, message: 'Data non valida (formati supportati: YYYY-MM-DD, DD/MM/YYYY, formato legacy export)' });
         continue;
       }
 
       if (!date || !type || !Number.isFinite(amountAbs) || amountAbs <= 0 || !accountRaw) {
         skipped += 1;
-        errors.push({ line: lineIndex + 1, message: 'Campi obbligatori mancanti o non validi' });
+        errors.push({ line: records[lineIndex].line, message: 'Campi obbligatori mancanti o non validi' });
         continue;
       }
 
       const accountParts = accountRaw.split('→').map((v) => v.trim()).filter(Boolean);
       let accountEntries = [];
 
-      if (type === 'transfer') {
-        if (accountParts.length < 2) {
+      if (idx.allocations >= 0 && row[idx.allocations]) {
+        try {
+          const allocations = JSON.parse(row[idx.allocations]);
+          if (!Array.isArray(allocations)) throw new Error();
+          accountEntries = allocations.map(leg => {
+            const matches = accountsResult.rows.filter(account => account.name.trim().toLowerCase() === String(leg.account_name || '').trim().toLowerCase());
+            if (matches.length !== 1) throw new Error();
+            return { account_id: matches[0].id, direction: leg.direction, amount: leg.amount };
+          });
+        } catch {
+          skipped++; errors.push({ line: records[lineIndex].line, message: 'Ripartizione conti non valida o conto ambiguo' }); continue;
+        }
+      } else if (type === 'transfer') {
+        if (accountParts.length !== 2) {
           skipped += 1;
-          errors.push({ line: lineIndex + 1, message: 'Transfer richiede due conti' });
+          errors.push({ line: records[lineIndex].line, message: 'Transfer richiede due conti' });
           continue;
         }
 
@@ -651,7 +638,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
         const inId = accountByName.get(accountParts[1].toLowerCase());
         if (!outId || !inId) {
           skipped += 1;
-          errors.push({ line: lineIndex + 1, message: 'Conti non trovati' });
+          errors.push({ line: records[lineIndex].line, message: 'Conti non trovati' });
           continue;
         }
 
@@ -660,10 +647,13 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
           { account_id: inId, direction: 'in', amount: amountAbs },
         ];
       } else {
+        if (accountParts.length !== 1) {
+          skipped++; errors.push({ line: records[lineIndex].line, message: 'CSV con più conti senza quote: riesportare con account_allocations' }); continue;
+        }
         const accountId = accountByName.get(accountParts[0].toLowerCase());
         if (!accountId) {
           skipped += 1;
-          errors.push({ line: lineIndex + 1, message: 'Conto non trovato' });
+          errors.push({ line: records[lineIndex].line, message: 'Conto non trovato' });
           continue;
         }
 
@@ -672,6 +662,9 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
         ];
       }
 
+      if (!validMovementAllocation(type, amountAbs, accountEntries)) {
+        skipped++; errors.push({ line: records[lineIndex].line, message: 'Importo e ripartizioni dei conti non coerenti' }); continue;
+      }
       const categoryId = idx.category >= 0 ? (categoryByName.get(String(row[idx.category] || '').trim().toLowerCase()) || null) : null;
       const contactId = idx.contact >= 0 ? (contactByName.get(String(row[idx.contact] || '').trim().toLowerCase()) || null) : null;
       const propertyCode = idx.propertyCode >= 0 ? String(row[idx.propertyCode] || '').trim() : '';
@@ -682,7 +675,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
         propertyId = propertyByCode.get(propertyCode) || null;
         if (!propertyId) {
           skipped += 1;
-          errors.push({ line: lineIndex + 1, message: `Codice immobile non trovato: ${propertyCode}` });
+          errors.push({ line: records[lineIndex].line, message: `Codice immobile non trovato: ${propertyCode}` });
           continue;
         }
       } else if (propertyName) {
@@ -690,7 +683,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
         if (matchingPropertyIds.length !== 1) {
           skipped += 1;
           errors.push({
-            line: lineIndex + 1,
+            line: records[lineIndex].line,
             message: matchingPropertyIds.length > 1
               ? `Nome immobile ambiguo: ${propertyName}. Usa property_code.`
               : `Immobile non trovato: ${propertyName}`,
@@ -703,7 +696,7 @@ router.post('/movements/import-csv', requirePermission('import_movements'), rawU
       const jobId = jobName ? jobByName.get(jobName.toLowerCase()) || null : null;
       if (jobName && !jobId) {
         skipped += 1;
-        errors.push({ line: lineIndex + 1, message: `Commessa non trovata: ${jobName}` });
+        errors.push({ line: records[lineIndex].line, message: `Commessa non trovata: ${jobName}` });
         continue;
       }
       const description = idx.description >= 0 ? String(row[idx.description] || '').trim() : '';

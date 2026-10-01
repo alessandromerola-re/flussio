@@ -1,4 +1,5 @@
 import express from 'express';
+import { moneyCents } from '../utils/movementValidation.js';
 import { getClient, query } from '../db/index.js';
 import { requirePermission } from '../middleware/permissions.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -11,8 +12,8 @@ const parseNumberOrNull = (value) => {
   if (value == null || value === '') {
     return null;
   }
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? null : parsed;
+  const cents = moneyCents(value, { signed: true });
+  return cents == null ? null : cents / 100;
 };
 
 const reconciliationQuery = `
@@ -126,7 +127,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { name, type, opening_balance = 0, is_active = true } = req.body;
   const parsedOpeningBalance = parseNumberOrNull(opening_balance);
-  if (!name || !type || !allowedTypes.includes(type) || parsedOpeningBalance == null || typeof is_active !== 'boolean') {
+  if (typeof name !== 'string' || !name.trim() || !type || !allowedTypes.includes(type) || parsedOpeningBalance == null || typeof is_active !== 'boolean') {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
   try {
@@ -149,7 +150,7 @@ router.put('/:id', async (req, res) => {
   const { name, type, opening_balance, is_active } = req.body;
   const { id } = req.params;
   const parsedOpeningBalance = parseNumberOrNull(opening_balance);
-  if (!name || !type || !allowedTypes.includes(type) || parsedOpeningBalance == null || typeof is_active !== 'boolean') {
+  if (typeof name !== 'string' || !name.trim() || !type || !allowedTypes.includes(type) || parsedOpeningBalance == null || typeof is_active !== 'boolean') {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 

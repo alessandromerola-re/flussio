@@ -5,7 +5,8 @@ const parseCompanyId = (value) => {
   if (value == null) return null;
   const normalized = String(value).trim();
   if (!/^\d+$/.test(normalized)) return null;
-  return Number.parseInt(normalized, 10);
+  const id = Number(normalized);
+  return Number.isInteger(id) && id > 0 && id <= 2147483647 ? id : null;
 };
 
 const applyLegacyCompanyFallback = async (req, companyId) => {
