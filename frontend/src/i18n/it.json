@@ -660,5 +660,8 @@
   "modules.applyHint": "Il piano applica tutti gli stati dell’anteprima e registra il motivo nello storico. I dati esistenti vengono conservati.",
   "modules.applied": "Piano applicato. Stati e storico aggiornati.",
   "modules.noChanges": "Gli stati erano già quelli richiesti. Nessuna modifica registrata.",
-  "modules.conflictReload": "Un altro amministratore ha modificato i moduli. Gli stati sono stati ricaricati: prepara e verifica una nuova anteprima."
+  "modules.conflictReload": "Un altro amministratore ha modificato i moduli. Gli stati sono stati ricaricati: prepara e verifica una nuova anteprima.",
+  "pages.movements.preserveAllocations": "Le quote sui conti di questo movimento sono conservate. Puoi modificare data, descrizione e collegamenti; importo, tipo e ripartizioni restano invariati.",
+  "errors.CATEGORY_INVALID_PARENT": "Categoria madre non valida: scegli una categoria della stessa azienda e direzione, senza creare cicli.",
+  "errors.CSV_INVALID_FORMAT": "CSV non valido: controlla le virgolette dei campi."
 }

@@ -54,6 +54,7 @@ vi.mock('../src/services/api.js', () => ({
     getProperties: vi.fn(),
     getJobs: vi.fn(),
     getAttachments: vi.fn(),
+    updateTransaction: vi.fn(),
   },
 }));
 
@@ -181,4 +182,26 @@ it('edits Base fields without sending or deleting a historic read-only property 
   await waitFor(()=>expect(api.updateTransaction).toHaveBeenCalledTimes(1));
   const [id,payload]=api.updateTransaction.mock.calls[0]; expect(id).toBe(10); expect(payload.description).toBe('Updated Base description');
   expect(payload).not.toHaveProperty('property_id'); expect(payload).not.toHaveProperty('job_id'); expect(api.getJobs).not.toHaveBeenCalled();
+});
+
+
+it('editing split movements preserves every allocation and prevents silently replacing them with one account', async () => {
+  const allocations = [
+    { account_id: 1, account_name: 'Banca', direction: 'out', amount: 150 },
+    { account_id: 2, account_name: 'Cassa', direction: 'out', amount: 300 },
+  ];
+  api.getTransactions.mockResolvedValue({ data: [{ ...movement, accounts: allocations }], headers: new Headers({ 'X-Has-More': 'false', 'X-Total-Count': '1' }) });
+  api.getAccounts.mockResolvedValue([{ id: 1, name: 'Banca' }, { id: 2, name: 'Cassa' }]);
+  api.updateTransaction.mockResolvedValue({ id: movement.id });
+  renderPage();
+  await screen.findByText('1 movimenti');
+  fireEvent.click(screen.getAllByRole('button', { name: 'Apri' })[0]);
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Modifica' }));
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByLabelText('Importo').disabled).toBe(true);
+  expect(within(dialog).getByLabelText('Tipo').disabled).toBe(true);
+  expect(within(dialog).getByLabelText('Conto').disabled).toBe(true);
+  fireEvent.change(within(dialog).getByLabelText('Descrizione'), { target: { value: 'Updated note' } });
+  fireEvent.submit(dialog.querySelector('form'));
+  await waitFor(() => expect(api.updateTransaction).toHaveBeenCalledWith(10, expect.objectContaining({ description: 'Updated note', accounts: allocations.map(({ account_id, direction, amount }) => ({ account_id, direction, amount })) })));
 });

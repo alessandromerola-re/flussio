@@ -1,4 +1,5 @@
 import express from 'express';
+import { getDateRangeFromQuery, countInclusiveDays, shiftRangeByDays, buildBuckets } from '../utils/dashboardDates.js';
 import { withCompanyReport } from '../modules/reportAccess.js';
 import { sendModuleError } from '../modules/access.js';
 import { canRole, getRole } from '../middleware/permissions.js';
@@ -8,86 +9,6 @@ const router = express.Router();
 
 const allowedKinds = new Set(['income', 'expense']);
 const allowedDimensions = new Set(['category', 'contact', 'account', 'job']);
-
-const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
-const toIsoDate = (date) => date.toISOString().slice(0, 10);
-
-const getPeriodRange = (period) => {
-  const now = new Date();
-  const end = new Date(now);
-
-  if (period === 'last30days') {
-    const start = new Date(now);
-    start.setDate(start.getDate() - 29);
-    start.setHours(0, 0, 0, 0);
-    return { from: toIsoDate(start), to: toIsoDate(end) };
-  }
-
-  if (period === 'currentmonth') {
-    return { from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: toIsoDate(end) };
-  }
-
-  if (period === 'currentyear') {
-    return { from: toIsoDate(new Date(now.getFullYear(), 0, 1)), to: toIsoDate(end) };
-  }
-
-  // default: last6months
-  const sixMonths = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  return { from: toIsoDate(sixMonths), to: toIsoDate(end) };
-};
-
-const getDateRangeFromQuery = (input = {}) => {
-  const { from, to, period = 'last6months' } = input;
-
-  if (from || to) {
-    if ((from && !isoDateRegex.test(from)) || (to && !isoDateRegex.test(to))) {
-      return { error: true };
-    }
-    const fallback = getPeriodRange(period);
-    const resolvedFrom = from || fallback.from;
-    const resolvedTo = to || fallback.to;
-    if (resolvedFrom > resolvedTo) return { error: true };
-    return { from: resolvedFrom, to: resolvedTo };
-  }
-
-  return getPeriodRange(period);
-};
-
-const countInclusiveDays = (range) => {
-  const from = new Date(`${range.from}T00:00:00`);
-  const to = new Date(`${range.to}T00:00:00`);
-  return Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1;
-};
-
-const shiftRangeByDays = (range, deltaDays) => {
-  const from = new Date(`${range.from}T00:00:00`);
-  const to = new Date(`${range.to}T00:00:00`);
-  from.setDate(from.getDate() + deltaDays);
-  to.setDate(to.getDate() + deltaDays);
-  return { from: toIsoDate(from), to: toIsoDate(to) };
-};
-
-const buildBuckets = (range, period) => {
-  const start = new Date(`${range.from}T00:00:00`);
-  const end = new Date(`${range.to}T00:00:00`);
-  const buckets = [];
-  const twoDigits = (value) => String(value).padStart(2, '0');
-  const formatMonthLabel = (date) => `${date.toLocaleString('it-IT', { month: 'short' })} ${date.getFullYear()}`;
-
-  if (period === 'last30days' || period === 'currentmonth') {
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}-${twoDigits(d.getDate())}`;
-      buckets.push({ key, label: `${twoDigits(d.getDate())}/${twoDigits(d.getMonth() + 1)}` });
-    }
-    return { granularity: 'day', buckets };
-  }
-
-  for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d.setMonth(d.getMonth() + 1)) {
-    const key = `${d.getFullYear()}-${twoDigits(d.getMonth() + 1)}`;
-    buckets.push({ key, label: formatMonthLabel(d) });
-  }
-  return { granularity: 'month', buckets };
-};
 
 router.get('/summary', async (req, res) => {
   const period = req.query.period || 'last6months';

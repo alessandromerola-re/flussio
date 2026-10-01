@@ -4,12 +4,12 @@ import { lockCompanyModules } from '../modules/registry.js';
 import { canRole, getRole } from '../middleware/permissions.js';
 import { getClient, query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
-import { formatDateISO } from '../utils/dateParse.js';
+import { validMovementAllocation } from '../utils/movementValidation.js';
+import { formatDateISO, isValidISODate } from '../utils/dateParse.js';
 
 const router = express.Router();
 
 const isValidDirection = (direction) => direction === 'in' || direction === 'out';
-const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const getAccountDelta = (direction, amount) => (direction === 'in' ? amount : -amount);
 
@@ -70,7 +70,7 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
   }
 
   if (filters.date_from) {
-    if (!isoDateRegex.test(filters.date_from)) {
+    if (!isValidISODate(filters.date_from)) {
       return { error: true };
     }
     params.push(filters.date_from);
@@ -78,7 +78,7 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
   }
 
   if (filters.date_to) {
-    if (!isoDateRegex.test(filters.date_to)) {
+    if (!isValidISODate(filters.date_to)) {
       return { error: true };
     }
     params.push(filters.date_to);
@@ -164,8 +164,8 @@ const buildTransactionsFilters = (filters = {}, companyId, options = {}) => {
       const searchParam = `$${params.length}`;
       where.push(`(
         COALESCE(t.description, '') ILIKE ${searchParam}
-        OR EXISTS (SELECT 1 FROM categories c2 WHERE c2.id = t.category_id AND c2.name ILIKE ${searchParam})
-        OR EXISTS (SELECT 1 FROM contacts ct2 WHERE ct2.id = t.contact_id AND ct2.name ILIKE ${searchParam})
+        OR EXISTS (SELECT 1 FROM categories c2 WHERE c2.id = t.category_id AND c2.company_id = t.company_id AND c2.name ILIKE ${searchParam})
+        OR EXISTS (SELECT 1 FROM contacts ct2 WHERE ct2.id = t.contact_id AND ct2.company_id = t.company_id AND ct2.name ILIKE ${searchParam})
         OR EXISTS (SELECT 1 FROM properties p2 WHERE p2.id = t.property_id AND p2.company_id = t.company_id AND p2.name ILIKE ${searchParam})
         OR EXISTS (
           SELECT 1 FROM jobs j2
@@ -275,13 +275,13 @@ const getTransactionsQuery = ({ whereSql, orderBySql, includePagination = true, 
       '[]'::json
     ) AS accounts
   FROM transactions t
-  LEFT JOIN categories c ON t.category_id = c.id
-  LEFT JOIN contacts ct ON t.contact_id = ct.id
+  LEFT JOIN categories c ON t.category_id = c.id AND c.company_id = t.company_id
+  LEFT JOIN contacts ct ON t.contact_id = ct.id AND ct.company_id = t.company_id
   LEFT JOIN properties p ON t.property_id = p.id AND p.company_id = t.company_id
   LEFT JOIN jobs j ON t.job_id = j.id AND j.company_id = t.company_id
-  LEFT JOIN recurring_templates rt ON t.recurring_template_id = rt.id
+  LEFT JOIN recurring_templates rt ON t.recurring_template_id = rt.id AND rt.company_id = t.company_id
   LEFT JOIN transaction_accounts ta ON t.id = ta.transaction_id
-  LEFT JOIN accounts a ON ta.account_id = a.id
+  LEFT JOIN accounts a ON ta.account_id = a.id AND a.company_id = t.company_id
   WHERE ${whereSql}
   GROUP BY t.id, c.name, ct.name, p.name, p.external_id, j.title, j.name, rt.title
   ORDER BY ${orderBySql}
@@ -369,7 +369,7 @@ router.get('/export', requireTransactionFilterModules, async (req, res) => {
     );
 
     const header =
-      'date;type;amount_total;account_names;category;contact;property_code;property;commessa;description';
+      'date;type;amount_total;account_names;category;contact;property_code;property;commessa;description;account_allocations';
     const rows = result.rows.map((movement) => {
       const accountNames = (movement.accounts || [])
         .map((account) => account?.account_name)
@@ -387,6 +387,7 @@ router.get('/export', requireTransactionFilterModules, async (req, res) => {
         csvEscape(movement.property_name),
         csvEscape(movement.job_name),
         csvEscape(movement.description),
+        csvEscape(JSON.stringify((movement.accounts || []).map(({ account_name, direction, amount }) => ({ account_name, direction, amount })))),
       ].join(';');
     });
 
@@ -464,7 +465,7 @@ router.post('/', async (req, res) => {
   let property_id = links.property_id ?? null;
   let job_id = links.job_id ?? null;
 
-  if (!date || !type || amount_total == null || accounts.length === 0) {
+  if (!isValidISODate(date) || !validMovementAllocation(type, amount_total, accounts)) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 
@@ -599,7 +600,7 @@ router.put('/:id', async (req, res) => {
   let property_id = links.property_id ?? null;
   let job_id = links.job_id ?? null;
 
-  if (!date || !type || amount_total == null || accounts.length === 0) {
+  if (!isValidISODate(date) || !validMovementAllocation(type, amount_total, accounts)) {
     return res.status(400).json({ error_code: 'VALIDATION_MISSING_FIELDS' });
   }
 

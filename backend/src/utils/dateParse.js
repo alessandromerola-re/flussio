@@ -1,4 +1,6 @@
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+export const isValidISODate = value => typeof value === 'string' && isoDateRegex.test(value) && Number(value.slice(0, 4)) > 0 && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+
 const itDateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
 
 const isValidIsoDateParts = (year, month, day) => {
@@ -22,6 +24,10 @@ const toIsoFromDate = (date) => {
 };
 
 export const parseCsvDateToISO = (input) => {
+  if (input instanceof Date) {
+    if (!Number.isFinite(input.getTime())) throw new Error('Invalid date');
+    return `${input.getFullYear()}-${String(input.getMonth() + 1).padStart(2, '0')}-${String(input.getDate()).padStart(2, '0')}`;
+  }
   const raw = String(input || '').trim();
   if (!raw) {
     throw new Error('Invalid date');

@@ -660,5 +660,8 @@
   "modules.applyHint": "The plan applies all previewed states and records the reason in the history. Existing data is retained.",
   "modules.applied": "Plan applied. States and history updated.",
   "modules.noChanges": "The states already matched the request. No change recorded.",
-  "modules.conflictReload": "Another administrator changed the modules. States were reloaded: prepare and verify a new preview."
+  "modules.conflictReload": "Another administrator changed the modules. States were reloaded: prepare and verify a new preview.",
+  "pages.movements.preserveAllocations": "Account allocations are preserved. You can edit the date, description and links; the amount, type and allocations remain unchanged.",
+  "errors.CATEGORY_INVALID_PARENT": "Invalid parent category: use a category in the same company and direction without creating a cycle.",
+  "errors.CSV_INVALID_FORMAT": "Invalid CSV: check the quoted fields."
 }

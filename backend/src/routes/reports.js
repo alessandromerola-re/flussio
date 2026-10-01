@@ -1,4 +1,5 @@
 import express from 'express';
+import { isValidISODate, formatDateISO } from '../utils/dateParse.js';
 import { query } from '../db/index.js';
 import { withCompanyReport } from '../modules/reportAccess.js';
 import { sendModuleError } from '../modules/access.js';
@@ -19,7 +20,6 @@ const reportRoute = (work, action = 'read') => async (req, res) => {
     return res.json(result.body);
   } catch (error) { return sendModuleError(res, error); }
 };
-const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const csvEscape = (value) => {
   const stringValue = value == null ? '' : String(value);
@@ -34,7 +34,7 @@ const buildDateFilters = (dateFrom, dateTo) => {
   const params = [];
 
   if (dateFrom) {
-    if (!isoDateRegex.test(dateFrom)) {
+    if (!isValidISODate(dateFrom)) {
       return { error: { code: 'VALIDATION_INVALID_DATE_FORMAT', field: 'date_from' } };
     }
     params.push(dateFrom);
@@ -42,7 +42,7 @@ const buildDateFilters = (dateFrom, dateTo) => {
   }
 
   if (dateTo) {
-    if (!isoDateRegex.test(dateTo)) {
+    if (!isValidISODate(dateTo)) {
       return { error: { code: 'VALIDATION_INVALID_DATE_FORMAT', field: 'date_to' } };
     }
     params.push(dateTo);
@@ -258,7 +258,7 @@ router.get('/job/:jobId/export.csv', requirePermission('export'), reportRoute(as
   const header = 'date;type;amount_total;account_name;category;contact;commessa;description';
   const lines = rowsResult.rows.map((row) =>
     [
-      csvEscape(row.date),
+      csvEscape(formatDateISO(row.date)),
       csvEscape(row.type),
       csvEscape(row.amount_total),
       csvEscape(row.account_name),

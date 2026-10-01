@@ -111,6 +111,8 @@ const uploadAttachmentHandler = async (req, res) => {
   }
 
   const client = await getClient();
+  let uploadedPath = null;
+  let commitAttempted = false;
   try {
     await client.query('BEGIN');
 
@@ -128,6 +130,7 @@ const uploadAttachmentHandler = async (req, res) => {
     const relativePath = path.join(relativeDir, generatedName);
     const fullPath = path.join(uploadsRoot, relativePath);
 
+    uploadedPath = fullPath;
     await fs.writeFile(fullPath, parsedFile.buffer);
 
     const insertResult = await client.query(
@@ -163,11 +166,15 @@ const uploadAttachmentHandler = async (req, res) => {
       ]
     );
 
+    await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'attachments', entityId: insertResult.rows[0].id, meta: { transaction_id: transaction.id } });
+    commitAttempted = true;
     await client.query('COMMIT');
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'create', entityType: 'attachments', entityId: insertResult.rows[0].id, meta: { transaction_id: transaction.id } });
     return res.status(201).json(insertResult.rows[0]);
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
+    // Preserve the file if the COMMIT outcome is uncertain. Before COMMIT, an
+    // insert/audit failure can safely remove the uncommitted upload.
+    if (uploadedPath && !commitAttempted) await fs.unlink(uploadedPath).catch(() => {});
     console.error(error);
     return sendError(res, 500, 'UPLOAD_FAILED', 'Caricamento allegato non riuscito.');
   } finally {
@@ -202,16 +209,14 @@ router.delete('/:id', async (req, res) => {
 
     const attachment = result.rows[0];
     await client.query('DELETE FROM attachments WHERE id = $1', [id]);
+    await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'attachments', entityId: id, meta: {} });
     await client.query('COMMIT');
 
     const fullPath = path.join(uploadsRoot, attachment.storage_path);
     await fs.unlink(fullPath).catch((error) => {
-      if (error.code !== 'ENOENT') {
-        throw error;
-      }
+      if (error.code !== 'ENOENT') console.error('Attachment removed from database; file cleanup failed:', error);
     });
 
-    await writeAuditLog({ companyId: req.companyId, userId: req.user.user_id, action: 'delete', entityType: 'attachments', entityId: id, meta: {} });
     return res.status(204).send();
   } catch (error) {
     await client.query('ROLLBACK');

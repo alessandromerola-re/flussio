@@ -1,4 +1,9 @@
 import express from 'express';
+import { computeNextRunAtForTemplate, nextRunAtAfterEdit } from '../services/recurring.js';
+import { normalizeTemplatePayload, validatePayload } from '../services/recurringValidation.js';
+import { formatDateISO } from '../utils/dateParse.js';
+import { parseCsv } from '../utils/csv.js';
+import { validateCategory } from '../services/registryValidation.js';
 import { assertModuleAccess, assertModuleLinkChanges, assertRecurringActivation, withModuleWrite, sendModuleError } from '../modules/access.js';
 import { lockCompanyModules } from '../modules/registry.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -41,21 +46,9 @@ const exportFilenameByEntity = {
 };
 const csvEsc = (v) => {
   const s = v == null ? '' : String(v);
-  if (/[",\n;]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  if (/[",\n\r;]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 };
-const parseCsvLine = (line, delimiter = ',') => {
-  const out = []; let cur = ''; let quoted = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const c = line[i];
-    if (c === '"') { if (quoted && line[i + 1] === '"') { cur += '"'; i += 1; } else quoted = !quoted; continue; }
-    if (c === delimiter && !quoted) { out.push(cur); cur = ''; continue; }
-    cur += c;
-  }
-  out.push(cur);
-  return out.map((x) => x.trim());
-};
-
 const ensurePermission = (req, res, entity = req.params.entity) => {
   const permission = ['GET', 'HEAD'].includes(req.method)
     ? 'export'
@@ -74,7 +67,7 @@ const exportEntity = async (entity, companyId, executor = { query }) => {
   }
   if (entity === 'categories') {
     const r = await executor.query(`SELECT c.external_id,c.name,c.direction,c.color,c.is_active,p.external_id AS parent_external_id,p.name AS parent_name,p.direction AS parent_direction
-      FROM categories c LEFT JOIN categories p ON p.id=c.parent_id WHERE c.company_id=$1 ORDER BY c.id`, [companyId]);
+      FROM categories c LEFT JOIN categories p ON p.id=c.parent_id AND p.company_id=c.company_id WHERE c.company_id=$1 ORDER BY c.id`, [companyId]);
     return { headers: ['external_id', 'name', 'direction', 'color', 'is_active', 'category_parent_external_id'], rows: r.rows.map((x) => [x.external_id || `${slug(x.name)}_${x.direction}`, x.name, x.direction, x.color || '', x.is_active, x.parent_external_id || (x.parent_name ? `${slug(x.parent_name)}_${x.parent_direction}` : '')]) };
   }
   if (entity === 'contacts') {
@@ -102,7 +95,7 @@ const exportEntity = async (entity, companyId, executor = { query }) => {
     );
     return {
       headers: ['code', 'title', 'name', 'notes', 'contact_name', 'is_active', 'is_closed', 'expected_revenue_cents', 'expected_cost_cents', 'start_date', 'end_date'],
-      rows: r.rows.map((x) => [x.code || slug(x.title || x.name), x.title || '', x.name || '', x.notes || '', x.contact_name || '', x.is_active, x.is_closed, x.expected_revenue_cents ?? '', x.expected_cost_cents ?? '', x.start_date || '', x.end_date || '']),
+      rows: r.rows.map((x) => [x.code || slug(x.title || x.name), x.title || '', x.name || '', x.notes || '', x.contact_name || '', x.is_active, x.is_closed, x.expected_revenue_cents ?? '', x.expected_cost_cents ?? '', x.start_date ? formatDateISO(x.start_date) : '', x.end_date ? formatDateISO(x.end_date) : '']),
     };
   }
   if (entity === 'properties') {
@@ -129,7 +122,7 @@ const exportEntity = async (entity, companyId, executor = { query }) => {
     );
     return {
       headers: ['external_id', 'title', 'frequency', 'interval', 'start_date', 'end_date', 'is_active', 'amount', 'movement_type', 'account_external_id', 'account_name', 'notes', 'property_external_id', 'job_code', 'job_name'],
-      rows: r.rows.map((x) => [x.external_id || slug(x.title), x.title, x.frequency, x.interval, x.start_date || '', x.end_date || '', x.is_active, Number(x.amount).toFixed(2), x.movement_type, x.account_external_id || '', x.account_name || '', x.notes || '', x.property_external_id || '', x.job_code || '', x.job_name || '']),
+      rows: r.rows.map((x) => [x.external_id || slug(x.title), x.title, x.frequency, x.interval, x.start_date ? formatDateISO(x.start_date) : '', x.end_date ? formatDateISO(x.end_date) : '', x.is_active, Number(x.amount).toFixed(2), x.movement_type, x.account_external_id || '', x.account_name || '', x.notes || '', x.property_external_id || '', x.job_code || '', x.job_name || '']),
     };
   }
   if (entity === 'transactions') {
@@ -138,13 +131,13 @@ const exportEntity = async (entity, companyId, executor = { query }) => {
       ct.external_id AS contact_external_id,ct.name AS contact_name,
       j.code AS job_code,p.external_id AS property_external_id,p.name AS property_name
       FROM transactions t
-      LEFT JOIN categories c ON c.id=t.category_id
-      LEFT JOIN contacts ct ON ct.id=t.contact_id
+      LEFT JOIN categories c ON c.id=t.category_id AND c.company_id=t.company_id
+      LEFT JOIN contacts ct ON ct.id=t.contact_id AND ct.company_id=t.company_id
       LEFT JOIN jobs j ON j.id=t.job_id AND j.company_id=t.company_id
       LEFT JOIN properties p ON p.id=t.property_id AND p.company_id=t.company_id
       WHERE t.company_id=$1 ORDER BY t.id`, [companyId]);
     return { headers: ['external_id', 'date', 'type', 'amount_total', 'description', 'category_external_id', 'contact_external_id', 'job_code', 'property_external_id'],
-      rows: r.rows.map((x) => [`tx_${x.id}`, x.date, x.type, Number(Math.abs(x.amount_total)).toFixed(2), x.description || '', x.category_external_id || (x.category_name ? slug(x.category_name) : ''), x.contact_external_id || (x.contact_name ? slug(x.contact_name) : ''), x.job_code || '', x.property_external_id || (x.property_name ? slug(x.property_name) : '')]) };
+      rows: r.rows.map((x) => [x.external_id || `tx_${x.id}`, formatDateISO(x.date), x.type, Number(Math.abs(x.amount_total)).toFixed(2), x.description || '', x.category_external_id || (x.category_name ? slug(x.category_name) : ''), x.contact_external_id || (x.contact_name ? slug(x.contact_name) : ''), x.job_code || '', x.property_external_id || (x.property_name ? slug(x.property_name) : '')]) };
   }
   return null;
 };
@@ -183,10 +176,10 @@ router.post('/:entity', rawUpload, async (req, res) => {
   let client;
   try {
     const text = fileBuffer.toString('utf8').replace(/^\uFEFF/, '');
-    const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    if (lines.length < 2) return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Empty CSV');
-    const headers = parseCsvLine(lines[0], ',').map((h) => h.toLowerCase());
-    const rows = lines.slice(1).map((l) => parseCsvLine(l, ','));
+    const records = parseCsv(text);
+    if (records.length < 2) return sendError(res, 400, 'VALIDATION_MISSING_FIELDS', 'Empty CSV');
+    const headers = records[0].values.map(h => h.toLowerCase());
+    const rows = records.slice(1).map(record => record.values);
     client = await getClient();
     let created = 0; let updated = 0; let errors = 0; const errorRows = [];
 
@@ -207,7 +200,7 @@ router.post('/:entity', rawUpload, async (req, res) => {
     };
 
     await client.query('BEGIN');
-    const current = await lockCompanyModules(client, req.companyId);
+    const current = await lockCompanyModules(client, req.companyId, { exclusive: entity === 'categories' });
     assertModuleAccess(current.states, capabilitiesForEntity(entity), 'write', { permissionGranted: canRole(req.companyRole, 'import') });
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i];
@@ -237,6 +230,8 @@ router.post('/:entity', rawUpload, async (req, res) => {
           const parentExternal = row[idx('category_parent_external_id')];
           const parentId = parentExternal ? await resolveByExternal('categories', parentExternal, parentExternal) : null;
           const found = await client.query('SELECT id FROM categories WHERE company_id=$1 AND external_id=$2', [req.companyId, externalId]);
+          if (parentExternal && !parentId) throw new Error('CATEGORY_INVALID_PARENT');
+          await validateCategory(client, req.companyId, { name: row[idx('name')], direction: row[idx('direction')] || 'expense', parent_id: parentId, is_active: asBool(row[idx('is_active')]) }, found.rows[0]?.id);
           if (found.rowCount) {
             await client.query('UPDATE categories SET name=$1,direction=$2,color=$3,parent_id=$4,is_active=$5 WHERE id=$6', [row[idx('name')], row[idx('direction')] || 'expense', row[idx('color')] || null, parentId, asBool(row[idx('is_active')]), found.rows[0].id]);
             updated += 1;
@@ -247,11 +242,16 @@ router.post('/:entity', rawUpload, async (req, res) => {
         } else if (entity === 'contacts') {
           const externalId = row[idx('external_id')] || slug(row[idx('name')]);
           const found = await client.query('SELECT id FROM contacts WHERE company_id=$1 AND external_id=$2', [req.companyId, externalId]);
+          const hasCategory = idx('default_category_external_id') >= 0 || idx('default_category_name') >= 0;
+          const categoryExternal = row[idx('default_category_external_id')] || '';
+          const categoryName = row[idx('default_category_name')] || '';
+          const categoryId = await resolveByExternal('categories', categoryExternal, categoryName);
+          if ((categoryExternal || categoryName) && !categoryId) throw new Error('Default category not found');
           if (found.rowCount) {
-            await client.query('UPDATE contacts SET name=$1,email=$2,phone=$3,is_active=$4 WHERE id=$5', [row[idx('name')], row[idx('email')] || null, row[idx('phone')] || null, asBool(row[idx('is_active')]), found.rows[0].id]);
+            await client.query('UPDATE contacts SET name=$1,email=$2,phone=$3,is_active=$4,default_category_id=CASE WHEN $6::boolean THEN $7::integer ELSE default_category_id END WHERE id=$5', [row[idx('name')], row[idx('email')] || null, row[idx('phone')] || null, asBool(row[idx('is_active')]), found.rows[0].id, hasCategory, categoryId]);
             updated += 1;
           } else {
-            await client.query('INSERT INTO contacts (company_id,external_id,name,email,phone,is_active) VALUES ($1,$2,$3,$4,$5,$6)', [req.companyId, externalId, row[idx('name')], row[idx('email')] || null, row[idx('phone')] || null, asBool(row[idx('is_active')])]);
+            await client.query('INSERT INTO contacts (company_id,external_id,name,email,phone,is_active,default_category_id) VALUES ($1,$2,$3,$4,$5,$6,$7)', [req.companyId, externalId, row[idx('name')], row[idx('email')] || null, row[idx('phone')] || null, asBool(row[idx('is_active')]), categoryId]);
             created += 1;
           }
         } else if (entity === 'jobs') {
@@ -302,11 +302,15 @@ router.post('/:entity', rawUpload, async (req, res) => {
           const nextActive = idx('is_active') >= 0 ? asBool(row[idx('is_active')]) : previous.is_active ?? true;
           if (nextActive && !previous.is_active) assertRecurringActivation(current.states, links, { permissionGranted: canRole(req.companyRole, 'import') });
           const params = [row[idx('title')], row[idx('frequency')] || 'monthly', Number(row[idx('interval')] || 1), row[idx('start_date')] || null, row[idx('end_date')] || null, nextActive, asNum(row[idx('amount')]), row[idx('movement_type')] || 'expense', accountId, row[idx('notes')] || null];
+          const payload = normalizeTemplatePayload({ ...previous, title: params[0], frequency: params[1], interval: params[2], start_date: params[3], end_date: params[4], is_active: nextActive, amount: params[6], movement_type: params[7], account_id: accountId, ...links });
+          const validation = await validatePayload(payload, req.companyId, client);
+          if (!validation.valid) throw new Error(validation.errorCode);
+          const nextRunAt = found.rowCount ? nextRunAtAfterEdit(payload, previous) : computeNextRunAtForTemplate(payload);
           if (found.rowCount) {
-            await client.query('UPDATE recurring_templates SET title=$1,frequency=$2,interval=$3,start_date=$4,end_date=$5,is_active=$6,amount=$7,movement_type=$8,account_id=$9,notes=$10,property_id=$11,job_id=$12 WHERE id=$13 AND company_id=$14', [...params, links.property_id, links.job_id, found.rows[0].id, req.companyId]);
+            await client.query('UPDATE recurring_templates SET title=$1,frequency=$2,interval=$3,start_date=$4,end_date=$5,is_active=$6,amount=$7,movement_type=$8,account_id=$9,notes=$10,property_id=$11,job_id=$12,next_run_at=$15,updated_at=NOW() WHERE id=$13 AND company_id=$14', [...params, links.property_id, links.job_id, found.rows[0].id, req.companyId, nextRunAt]);
             updated += 1;
           } else {
-            await client.query('INSERT INTO recurring_templates (company_id,external_id,title,frequency,interval,start_date,end_date,is_active,amount,movement_type,account_id,notes,property_id,job_id,next_run_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())', [req.companyId, externalId, ...params, links.property_id, links.job_id]);
+            await client.query('INSERT INTO recurring_templates (company_id,external_id,title,frequency,interval,start_date,end_date,is_active,amount,movement_type,account_id,notes,property_id,job_id,next_run_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)', [req.companyId, externalId, ...params, links.property_id, links.job_id, nextRunAt]);
             created += 1;
           }
         } else {
@@ -318,7 +322,7 @@ router.post('/:entity', rawUpload, async (req, res) => {
         await client.query('RELEASE SAVEPOINT csv_row');
         if (rowError.status === 403) throw rowError;
         errors += 1;
-        errorRows.push({ line: i + 2, message: rowError.message });
+        errorRows.push({ line: records[i + 1].line, message: rowError.message });
       }
     }
     await writeAuditLog({ client, companyId: req.companyId, userId: req.user.user_id, action: 'import', entityType: entity, meta: { created, updated, errors } });

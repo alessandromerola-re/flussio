@@ -7,115 +7,10 @@ import { recurringGeneratorEnabled, computeNextRunAtForTemplate, generateDueTemp
 import { writeAuditLog } from '../services/audit.js';
 import { sendError } from '../utils/httpErrors.js';
 
+import { normalizeTemplatePayload, validatePayload } from '../services/recurringValidation.js';
+import { nextRunAtAfterEdit } from '../services/recurring.js';
+
 const router = express.Router();
-const validFrequencies = ['weekly', 'monthly', 'yearly'];
-
-const parseNullableInteger = (value) => {
-  if (value == null || value === '') {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isInteger(parsed) ? parsed : null;
-};
-
-const parseNullableNumber = (value) => {
-  if (value == null || value === '') {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const normalizeTemplatePayload = (payload = {}) => ({
-  title: payload.title?.trim(),
-  frequency: payload.frequency,
-  interval: Number(payload.interval ?? 1),
-  start_date: payload.start_date || null,
-  end_date: payload.end_date || null,
-  is_active: payload.is_active ?? true,
-  amount: parseNullableNumber(payload.amount),
-  movement_type: payload.movement_type,
-  account_id: parseNullableInteger(payload.account_id),
-  category_id: parseNullableInteger(payload.category_id),
-  contact_id: parseNullableInteger(payload.contact_id),
-  property_id: parseNullableInteger(payload.property_id),
-  job_id: parseNullableInteger(payload.job_id),
-  notes: payload.notes?.trim() || null,
-  weekly_anchor_dow: parseNullableInteger(payload.weekly_anchor_dow),
-  yearly_anchor_mm: parseNullableInteger(payload.yearly_anchor_mm),
-  yearly_anchor_dd: parseNullableInteger(payload.yearly_anchor_dd),
-});
-
-const validateReference = async (table, id, companyId, { activeOnly = false, executor = { query } } = {}) => {
-  if (id == null) {
-    return { valid: true };
-  }
-  const result = await executor.query(
-    `SELECT id FROM ${table} WHERE id = $1 AND company_id = $2${activeOnly ? ' AND is_active = true' : ''}`,
-    [id, companyId]
-  );
-  return result.rowCount > 0;
-};
-
-const validatePayload = async (payload, companyId, executor = { query }) => {
-  if (!payload.title) {
-    return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'title' };
-  }
-
-  if (!validFrequencies.includes(payload.frequency)) {
-    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_FREQUENCY', field: 'frequency' };
-  }
-
-  if (!Number.isInteger(payload.interval) || payload.interval < 1) {
-    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_INTERVAL', field: 'interval' };
-  }
-
-  if (!(payload.amount > 0)) {
-    return { valid: false, status: 400, errorCode: 'RECURRING_MISSING_AMOUNT', field: 'amount' };
-  }
-
-  if (!['income', 'expense'].includes(payload.movement_type)) {
-    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_MOVEMENT_TYPE', field: 'movement_type' };
-  }
-
-  if (payload.account_id == null) {
-    return { valid: false, status: 400, errorCode: 'RECURRING_MISSING_ACCOUNT', field: 'account_id' };
-  }
-
-  if (payload.start_date && payload.end_date && payload.end_date < payload.start_date) {
-    return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'end_date' };
-  }
-
-  const refs = await Promise.all([
-    validateReference('accounts', payload.account_id, companyId, { activeOnly: true, executor }),
-    validateReference('categories', payload.category_id, companyId, { executor }),
-    validateReference('contacts', payload.contact_id, companyId, { executor }),
-    validateReference('properties', payload.property_id, companyId, { executor }),
-    validateReference('jobs', payload.job_id, companyId, { executor }),
-  ]);
-
-  if (refs.some((refOk) => !refOk)) {
-    return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_REFERENCE' };
-  }
-
-  if (payload.frequency === 'weekly') {
-    if (payload.weekly_anchor_dow != null && (payload.weekly_anchor_dow < 1 || payload.weekly_anchor_dow > 7)) {
-      return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_ANCHOR' };
-    }
-  }
-
-  if (payload.frequency === 'yearly') {
-    if (payload.yearly_anchor_mm != null && (payload.yearly_anchor_mm < 1 || payload.yearly_anchor_mm > 12)) {
-      return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_ANCHOR' };
-    }
-    if (payload.yearly_anchor_dd != null && (payload.yearly_anchor_dd < 1 || payload.yearly_anchor_dd > 31)) {
-      return { valid: false, status: 400, errorCode: 'RECURRING_INVALID_ANCHOR' };
-    }
-  }
-
-  return { valid: true };
-};
-
 const statesForCompany = async companyId => Object.fromEntries((await readCompanyModules(companyId)).modules.map(module => [module.code, module.state]));
 const withSuspension = (row, states) => ({ ...row, module_suspension: recurringModuleBlock(states, row) });
 const fail = (code, status = 400, field) => Object.assign(new Error(code), { code, status, field });
@@ -258,7 +153,7 @@ router.put('/:id', moduleWriteRoute(['recurring'], async (req, client, current) 
     throw fail(validation.errorCode, validation.status || 400, validation.field);
   }
 
-  const nextRunAt = computeNextRunAtForTemplate(payload);
+  const nextRunAt = nextRunAtAfterEdit(payload, old.rows[0]);
 
     const result = await query(
       `

@@ -1,4 +1,5 @@
 import express from 'express';
+import { isValidISODate } from '../utils/dateParse.js';
 import { moduleWriteRoute, requireModuleRead } from '../modules/access.js';
 import { query } from '../db/index.js';
 import { writeAuditLog } from '../services/audit.js';
@@ -6,7 +7,6 @@ import { sendError } from '../utils/httpErrors.js';
 
 const router = express.Router();
 router.use((req, res, next) => ['GET', 'HEAD'].includes(req.method) ? requireModuleRead(['jobs'])(req, res, next) : next());
-const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const parseNullableInteger = (value) => {
   if (value == null || value === '') {
@@ -80,11 +80,11 @@ const validateJobPayload = async (payload, companyId, currentId = null, executor
     return { valid: false, status: 400, errorCode: 'VALIDATION_MISSING_FIELDS', field: 'expectedCostCents' };
   }
 
-  if (startDate && !isoDateRegex.test(startDate)) {
+  if (startDate && !isValidISODate(startDate)) {
     return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'start_date' };
   }
 
-  if (endDate && !isoDateRegex.test(endDate)) {
+  if (endDate && !isValidISODate(endDate)) {
     return { valid: false, status: 400, errorCode: 'VALIDATION_INVALID_DATE_RANGE', field: 'end_date' };
   }
 
