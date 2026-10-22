@@ -791,8 +791,19 @@ button.danger {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   border-radius: 999px;
-  padding: 0.15rem 0.5rem;
+  padding: 0.4rem 0.65rem;
+  min-height: 36px;
+  cursor: pointer;
+  white-space: nowrap;
 }
+
+.attachment-indicator:hover { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+.attachment-indicator:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.movement-attachments-modal { max-width: 560px; }
+.movement-attachments-list { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
+.attachment-file-button { display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; min-height: 44px; }
+.attachment-file-button .app-icon { flex-shrink: 0; color: #2563eb; }
+.attachment-file-button span { overflow-wrap: anywhere; min-width: 0; }
 
 .attachment-upload {
   display: flex;
@@ -1353,6 +1364,23 @@ button.danger {
   color: #1f2933;
   text-align: left;
 }
+
+.movement-mobile-open {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.movement-mobile-open:hover { background: #f8fafc; color: inherit; }
+.movement-mobile-open:focus-visible { outline: 3px solid #2563eb; outline-offset: 4px; }
+.movement-mobile-card > .attachment-indicator { flex-shrink: 0; min-width: 44px; min-height: 44px; margin: 0; }
 
 .movement-mobile-main {
   min-width: 0;

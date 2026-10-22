@@ -1,4 +1,5 @@
 const paths = {
+  attachment: <path d="m21 11-8.4 8.4a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.9-2.9L15 5.5" />,
   dashboard: <><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v10h13V10M9 20v-6h6v6" /></>,
   movements: <><path d="M4 7h14M14 3l4 4-4 4" /><path d="M20 17H6M10 13l-4 4 4 4" /></>,
   registry: <><path d="M4 6.5h6l2 2h8v11H4z" /><path d="M4 6.5V4h6l2 2" /></>,

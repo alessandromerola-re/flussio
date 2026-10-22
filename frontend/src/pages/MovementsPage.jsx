@@ -10,6 +10,7 @@ import { formatCurrency } from '../utils/currency.js';
 import { previousPageAfterDelete } from '../utils/pagination.js';
 import { saveMovementWithAttachment } from '../utils/saveMovement.js';
 import AttachmentPreviewModal from '../components/AttachmentPreviewModal.jsx';
+import MovementAttachmentsButton from '../components/MovementAttachmentsButton.jsx';
 import Modal from '../components/Modal.jsx';
 import FloatingAddButton from '../components/FloatingAddButton.jsx';
 
@@ -741,7 +742,9 @@ const MovementsPage = () => {
     try {
       await api.uploadAttachment(selected.id, attachmentFile);
       setAttachmentFile(null);
-      setAttachments(await api.getAttachments(selected.id));
+      const updatedAttachments = await api.getAttachments(selected.id);
+      setAttachments(updatedAttachments);
+      updateAttachmentCount(selected.id, updatedAttachments.length);
       setUploadMessage(t('pages.movements.uploadSuccess'));
     } catch (uploadAttachmentError) {
       const messageKey = uploadAttachmentError.code
@@ -816,9 +819,15 @@ const MovementsPage = () => {
     if (!selected) {
       return;
     }
-    setAttachments(await api.getAttachments(selected.id));
+    const updatedAttachments = await api.getAttachments(selected.id);
+    setAttachments(updatedAttachments);
+    updateAttachmentCount(selected.id, updatedAttachments.length);
   };
 
+  const updateAttachmentCount = (movementId, count) => {
+    setMovements(rows => rows.map(row => row.id === movementId
+      ? { ...row, attachment_count: count, attachments_count: count } : row));
+  };
 
   const getAttachmentTypeLabel = (attachment) => {
     const mime = (attachment?.mime_type || '').toLowerCase();
@@ -1289,7 +1298,6 @@ const MovementsPage = () => {
                 </thead>
                 <tbody>
                   {movements.map((movement) => {
-                    const attachmentCount = Number(movement.attachment_count || movement.attachments_count || 0);
                     return (
                       <tr key={movement.id}>
                         <td>{formatDateIT(movement.date)}</td>
@@ -1303,7 +1311,7 @@ const MovementsPage = () => {
                           {movement.contact_name && <div>{movement.contact_name}</div>}
                           {movement.property_name && <div className="muted">{movement.property_name}</div>}
                           {movement.job_name && <div className="muted">{movement.job_name}</div>}
-                          {attachmentCount > 0 && <span className="attachment-indicator" aria-label={`${attachmentCount} ${t('pages.movements.attachments')}`}>📎 {attachmentCount}</span>}
+                          <MovementAttachmentsButton movement={movement} />
                         </td>
                         <td className={`align-right ${movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}`}>
                           {formatCurrency(movement.amount_total)}
@@ -1320,24 +1328,25 @@ const MovementsPage = () => {
           {movements.length > 0 && (
             <div className="movements-mobile-list mobile-only">
               {movements.map((movement) => {
-                const attachmentCount = Number(movement.attachment_count || movement.attachments_count || 0);
                 return (
-                  <button key={movement.id} type="button" className="movement-mobile-card" onClick={() => setSelected(movement)}>
-                    <span className="movement-mobile-main">
-                      <span className="movement-mobile-topline">
-                        <strong>{movement.description || t(`pages.movements.${movement.type}`)}</strong>
-                        <span className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>{formatCurrency(movement.amount_total)}</span>
+                  <div key={movement.id} className="movement-mobile-card">
+                    <button type="button" className="movement-mobile-open" onClick={() => setSelected(movement)}>
+                      <span className="movement-mobile-main">
+                        <span className="movement-mobile-topline">
+                          <strong>{movement.description || t(`pages.movements.${movement.type}`)}</strong>
+                          <span className={movement.type === 'income' ? 'amount positive' : movement.type === 'expense' ? 'amount negative' : 'amount'}>{formatCurrency(movement.amount_total)}</span>
+                        </span>
+                        <span className="muted">{formatDateIT(movement.date)} · {formatAccounts(movement.accounts)}</span>
+                        <span className="movement-mobile-meta">
+                          {movement.category_name && <span>{movement.category_name}</span>}
+                          {movement.contact_name && <span>{movement.contact_name}</span>}
+                          {movement.property_name && <span>{movement.property_name}</span>}
+                        </span>
                       </span>
-                      <span className="muted">{formatDateIT(movement.date)} · {formatAccounts(movement.accounts)}</span>
-                      <span className="movement-mobile-meta">
-                        {movement.category_name && <span>{movement.category_name}</span>}
-                        {movement.contact_name && <span>{movement.contact_name}</span>}
-                        {movement.property_name && <span>{movement.property_name}</span>}
-                        {attachmentCount > 0 && <span aria-label={`${attachmentCount} ${t('pages.movements.attachments')}`}>📎 {attachmentCount}</span>}
-                      </span>
-                    </span>
-                    <span aria-hidden="true">›</span>
-                  </button>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <MovementAttachmentsButton movement={movement} />
+                  </div>
                 );
               })}
             </div>

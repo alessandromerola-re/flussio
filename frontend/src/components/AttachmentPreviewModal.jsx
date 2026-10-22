@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal.jsx';
 
-const AttachmentPreviewModal = ({ isOpen, onClose, attachment, fetchPreviewBlob, onDownload }) => {
+const AttachmentPreviewModal = ({ isOpen, onClose, attachment, fetchPreviewBlob, onDownload, downloadError = '' }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -80,6 +80,8 @@ const AttachmentPreviewModal = ({ isOpen, onClose, attachment, fetchPreviewBlob,
         {!loading && !previewAvailable && (
           <div className="muted">{t('pages.movements.previewNotAvailable')}</div>
         )}
+
+        {downloadError && <div className="error" role="alert">{downloadError}</div>}
 
         <div className="modal-actions">
           <button type="button" className="ghost" onClick={() => onDownload(attachment)}>
