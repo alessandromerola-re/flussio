@@ -3,6 +3,7 @@ import React from 'react';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import MovementsPage from '../src/pages/MovementsPage.jsx';
 import { api } from '../src/services/api.js';
 
@@ -23,6 +24,12 @@ vi.mock('react-i18next', () => ({
       'pages.movements.property': 'Immobile',
       'pages.movements.job': 'Commessa',
       'pages.movements.attachments': 'Allegati',
+      'pages.movements.openAttachments': `Apri allegati (${options.count})`,
+      'pages.movements.attachmentPreview': 'Anteprima allegato',
+      'pages.movements.attachmentsLoadError': 'Impossibile caricare gli allegati.',
+      'pages.movements.retryAttachments': 'Riprova',
+      'pages.movements.noAttachments': 'Nessun allegato',
+      'pages.movements.attachmentDownloadError': 'Download non riuscito',
       'pages.movements.filters': 'Filtri',
       'pages.movements.search': 'Cerca movimenti',
       'pages.movements.searchPlaceholder': 'Cerca movimenti…',
@@ -54,6 +61,9 @@ vi.mock('../src/services/api.js', () => ({
     getProperties: vi.fn(),
     getJobs: vi.fn(),
     getAttachments: vi.fn(),
+    downloadAttachment: vi.fn(),
+    uploadAttachment: vi.fn(),
+    deleteAttachment: vi.fn(),
     updateTransaction: vi.fn(),
   },
 }));
@@ -109,7 +119,7 @@ describe('MovementsPage responsive UX', () => {
   it('opens one complete detail dialog from the mobile card', async () => {
     renderPage();
     await waitFor(() => expect(document.querySelector('.movement-mobile-card')).toBeTruthy());
-    const mobileCard = document.querySelector('.movement-mobile-card');
+    const mobileCard = document.querySelector('.movement-mobile-open');
     fireEvent.click(mobileCard);
 
     const dialog = screen.getByRole('dialog');
@@ -132,6 +142,109 @@ describe('MovementsPage responsive UX', () => {
     expect(within(propertyFilter).getByRole('option', { name: 'Tutti' })).toBeTruthy();
     expect(screen.getByLabelText('Ricorrenza')).toBeTruthy();
     expect(screen.getByLabelText('Allegati')).toBeTruthy();
+  });
+});
+
+const pdfAttachment = { id: 101, file_name: 'ricevuta.pdf', mime_type: 'application/pdf' };
+
+describe('attachments directly from the movement list', () => {
+  beforeEach(() => {
+    URL.createObjectURL = vi.fn(() => 'blob:attachment-preview');
+    URL.revokeObjectURL = vi.fn();
+    api.downloadAttachment.mockResolvedValue(new Blob(['PDF'], { type: 'application/pdf' }));
+  });
+
+  it('updates the list shortcut immediately after uploading and removing an attachment in the detail', async () => {
+    api.getTransactions.mockResolvedValue({ data: [{ ...movement, attachment_count: 0 }], headers: new Headers({ 'X-Has-More': 'false', 'X-Total-Count': '1' }) });
+    api.uploadAttachment.mockResolvedValue(pdfAttachment);
+    api.deleteAttachment.mockResolvedValue(null);
+    api.getAttachments.mockResolvedValueOnce([]).mockResolvedValueOnce([pdfAttachment]).mockResolvedValueOnce([]);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderPage();
+    await screen.findByText('1 movimenti');
+    expect(document.querySelector('.attachment-indicator')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apri' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(dialog.querySelector('input[type="file"]'), { target: { files: [new File(['PDF'], 'ricevuta.pdf', { type: 'application/pdf' })] } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Carica' }));
+    await waitFor(() => expect(document.querySelectorAll('.attachment-indicator')).toHaveLength(2));
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Elimina' })[0]);
+    await waitFor(() => expect(api.deleteAttachment).toHaveBeenCalledWith(101));
+    await waitFor(() => expect(document.querySelector('.attachment-indicator')).toBeNull());
+    confirm.mockRestore();
+  });
+
+  it.each(['.movements-table', '.movement-mobile-card'])('opens the only attachment from %s without opening the movement', async selector => {
+    api.getAttachments.mockResolvedValue([pdfAttachment]);
+    renderPage();
+    await screen.findByText('1 movimenti');
+    const button = within(document.querySelector(selector)).getByRole('button', { name: /Apri allegati/ });
+    button.focus();
+    await userEvent.keyboard('{Enter}');
+    const preview = await screen.findByRole('dialog', { name: 'Anteprima allegato' });
+    expect(within(preview).getByText('ricevuta.pdf')).toBeTruthy();
+    await waitFor(() => expect(within(preview).getByTitle('PDF preview').getAttribute('src')).toBe('blob:attachment-preview'));
+    expect(api.getAttachments).toHaveBeenCalledWith(10);
+    expect(api.downloadAttachment).toHaveBeenCalledWith(101);
+    expect(screen.queryByRole('heading', { name: 'Dettaglio movimento' })).toBeNull();
+    expect(document.querySelector('button button')).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(button));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:attachment-preview');
+  });
+
+  it('lets the user choose among multiple attachments and return to the list', async () => {
+    api.getAttachments.mockResolvedValue([pdfAttachment, { id: 102, file_name: 'foto.png', mime_type: 'image/png' }]);
+    renderPage();
+    await screen.findByText('1 movimenti');
+    fireEvent.click(screen.getAllByRole('button', { name: /Apri allegati/ })[0]);
+    const chooser = await screen.findByRole('dialog', { name: 'Allegati' });
+    await waitFor(() => expect(within(chooser).getByRole('button', { name: 'foto.png' })).toBeTruthy());
+    expect(api.downloadAttachment).not.toHaveBeenCalled();
+    fireEvent.click(within(chooser).getByRole('button', { name: 'foto.png' }));
+    const preview = await screen.findByRole('dialog', { name: 'Anteprima allegato' });
+    await waitFor(() => expect(within(preview).getByAltText('foto.png')).toBeTruthy());
+    expect(api.downloadAttachment).toHaveBeenCalledWith(102);
+    await userEvent.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: 'Allegati' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Dettaglio movimento' })).toBeNull();
+  });
+
+  it('shows a retry after a failed list request and handles an attachment removed since listing', async () => {
+    api.getAttachments.mockRejectedValueOnce(new Error('Network')).mockResolvedValueOnce([]);
+    renderPage();
+    await screen.findByText('1 movimenti');
+    fireEvent.click(screen.getAllByRole('button', { name: /Apri allegati/ })[0]);
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Impossibile caricare gli allegati.');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Riprova' }));
+    expect(await screen.findByText('Nessun allegato')).toBeTruthy();
+  });
+
+  it('ignores a late attachment response after the dialog is closed', async () => {
+    let resolve;
+    api.getAttachments.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    renderPage();
+    await screen.findByText('1 movimenti');
+    fireEvent.click(screen.getAllByRole('button', { name: /Apri allegati/ })[0]);
+    await screen.findByRole('dialog', { name: 'Allegati' });
+    await userEvent.keyboard('{Escape}');
+    resolve([pdfAttachment]);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.downloadAttachment).not.toHaveBeenCalled();
+  });
+
+  it('keeps unsupported files downloadable and reports download errors inside the preview', async () => {
+    api.getAttachments.mockResolvedValue([{ id: 103, file_name: 'documento.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }]);
+    api.downloadAttachment.mockRejectedValueOnce(new Error('Network'));
+    renderPage();
+    await screen.findByText('1 movimenti');
+    fireEvent.click(screen.getAllByRole('button', { name: /Apri allegati/ })[0]);
+    const preview = await screen.findByRole('dialog', { name: 'Anteprima allegato' });
+    expect(within(preview).getByText('pages.movements.previewNotAvailable')).toBeTruthy();
+    fireEvent.click(within(preview).getByRole('button', { name: 'Scarica' }));
+    expect(await within(preview).findByRole('alert')).toHaveProperty('textContent', 'Download non riuscito');
   });
 });
 
@@ -172,7 +285,7 @@ it('blocks revoked module deep links without silently querying unfiltered Base m
 it('edits Base fields without sending or deleting a historic read-only property link', async () => {
   api.updateTransaction=vi.fn().mockResolvedValue({id:10});
   render(<MemoryRouter><MovementsPage /></MemoryRouter>, {modules:{jobs:'disabled',real_estate:'read_only'}});
-  await screen.findByText('1 movimenti'); fireEvent.click(screen.getAllByRole('button',{name:/Spese condominiali/})[0]);
+  await screen.findByText('1 movimenti'); fireEvent.click(document.querySelector('.movement-mobile-open'));
   const detail=await screen.findByRole('dialog'); expect(within(detail).queryByRole('button',{name:'Elimina'})).toBeNull();
   fireEvent.click(within(detail).getByRole('button',{name:'Modifica'}));
   const edit=await screen.findByRole('dialog'); expect(within(edit).getByLabelText('Immobile').disabled).toBe(true);
