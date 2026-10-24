@@ -1,4 +1,5 @@
 import { clearSession, isPersistentSession, readSession, writeSession, writeSessionRole } from '../utils/authStorage.js';
+import { writeCompanies } from '../utils/companyStorage.js';
 
 const API_BASE = import.meta.env?.VITE_API_BASE || '/api';
 let refreshPromise = null;
@@ -107,7 +108,7 @@ const refreshAccessToken = async () => {
       const data = await response.json();
       assertContext(refreshContext);
       writeSession(data.token, data.role, remember);
-      localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
+      writeCompanies(data.companies);
 
       const activeCompanyId = getActiveCompanyId();
       const stillAvailable = (data.companies || []).some(

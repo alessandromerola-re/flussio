@@ -19,15 +19,7 @@ import BrandMark from './components/BrandMark.jsx';
 import PageLoader from './components/PageLoader.jsx';
 import { applyBrandingIconsToHead } from './utils/brandingIcons.js';
 import { bootstrapPublicBrandingIcons } from './services/publicBranding.js';
-
-const readCompanies = () => {
-  try {
-    const stored = JSON.parse(localStorage.getItem('flussio_companies') || '[]');
-    return Array.isArray(stored) ? stored : [];
-  } catch {
-    return [];
-  }
-};
+import { readCompanies } from './utils/companyStorage.js';
 
 const App = () => {
   const { t } = useTranslation();
@@ -110,8 +102,16 @@ const App = () => {
 
   useEffect(() => {
     const changed = () => { setTokenState(getToken()); setCompanies(readCompanies()); setActiveCompanyIdState(getActiveCompanyId() || ''); };
+    const companiesChanged = () => setCompanies(readCompanies());
+    const storedCompaniesChanged = event => { if (event.key === 'flussio_companies') companiesChanged(); };
     window.addEventListener('flussio-context-change', changed);
-    return () => window.removeEventListener('flussio-context-change', changed);
+    window.addEventListener('flussio-companies-change', companiesChanged);
+    window.addEventListener('storage', storedCompaniesChanged);
+    return () => {
+      window.removeEventListener('flussio-context-change', changed);
+      window.removeEventListener('flussio-companies-change', companiesChanged);
+      window.removeEventListener('storage', storedCompaniesChanged);
+    };
   }, []);
 
   useEffect(() => {

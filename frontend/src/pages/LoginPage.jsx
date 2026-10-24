@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, setActiveCompanyId, setToken } from '../services/api.js';
+import { writeCompanies } from '../utils/companyStorage.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import BrandMark from '../components/BrandMark.jsx';
 
@@ -30,7 +31,7 @@ const LoginPage = ({ onLogin, brandLogoUrl }) => {
       const data = await api.login({ email: email.trim(), password, remember });
       if (current !== generation.current) return;
       setToken(data.token, data.role, remember);
-      localStorage.setItem('flussio_companies', JSON.stringify(data.companies || []));
+      writeCompanies(data.companies);
       setActiveCompanyId(data.default_company_id);
       onLogin(data.token);
       navigate('/dashboard');
