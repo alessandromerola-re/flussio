@@ -5,13 +5,36 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import SettingsAdminPage from '../src/pages/SettingsAdminPage.jsx';
 import { api, getIsSuperAdmin, getRole } from '../src/services/api.js';
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key) => key }) }));
-vi.mock('../src/services/api.js', () => ({ getIsSuperAdmin: vi.fn(() => true), getRole: vi.fn(() => 'super_admin'), api: Object.fromEntries(['getBranding', 'getCompanies', 'createCompany', 'deleteCompany', 'downloadBrandLogo', 'downloadBrandIcon', 'uploadBrandLogo', 'deleteBrandLogo', 'uploadBrandIcons', 'deleteBrandIcons', 'importMovementsCsv'].map((key) => [key, vi.fn()])) }));
+vi.mock('../src/services/api.js', () => ({ getIsSuperAdmin: vi.fn(() => true), getRole: vi.fn(() => 'super_admin'), getActiveCompanyId: vi.fn(() => '1'), setActiveCompanyId: vi.fn(), setRole: vi.fn(), api: Object.fromEntries(['getBranding', 'getCompanies', 'createCompany', 'deleteCompany', 'downloadBrandLogo', 'downloadBrandIcon', 'uploadBrandLogo', 'deleteBrandLogo', 'uploadBrandIcons', 'deleteBrandIcons', 'importMovementsCsv'].map((key) => [key, vi.fn()])) }));
 const setup = () => render(<MemoryRouter><SettingsAdminPage /></MemoryRouter>);
 beforeEach(() => {
+  localStorage.clear(); sessionStorage.clear();
   vi.clearAllMocks(); getIsSuperAdmin.mockReturnValue(true); getRole.mockReturnValue('super_admin');
   api.getBranding.mockResolvedValue({ has_logo: false }); api.getCompanies.mockResolvedValue([{ id: 1, name: 'One' }]);
   api.createCompany.mockResolvedValue({ id: 2 }); api.deleteCompany.mockResolvedValue({});
   vi.spyOn(window, 'confirm').mockReturnValue(false);
+});
+
+it('does not replace the cached company list when creation fails', async () => {
+  api.createCompany.mockRejectedValueOnce(new Error('offline'));
+  setup(); await screen.findByText('One');
+  const cached = localStorage.getItem('flussio_companies');
+  fireEvent.change(screen.getByLabelText('pages.settings.companyName'), { target: { value: 'New company' } });
+  fireEvent.click(screen.getByRole('button', { name: 'pages.settings.createCompany' }));
+  await screen.findByRole('alert');
+  expect(localStorage.getItem('flussio_companies')).toBe(cached);
+  expect(api.getCompanies).toHaveBeenCalledTimes(1);
+});
+
+it('ignores a company list response after unmount', async () => {
+  let resolve;
+  api.getCompanies.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  localStorage.setItem('flussio_companies', JSON.stringify([{ id: 9, name: 'New session' }]));
+  const view = setup();
+  await waitFor(() => expect(api.getCompanies).toHaveBeenCalled());
+  view.unmount();
+  await act(async () => resolve([{ id: 1, name: 'Old session' }]));
+  expect(JSON.parse(localStorage.getItem('flussio_companies'))).toEqual([{ id: 9, name: 'New session' }]);
 });
 it('keeps a single import path and hides technical icon details initially', async () => {
   setup(); await screen.findByText('One');

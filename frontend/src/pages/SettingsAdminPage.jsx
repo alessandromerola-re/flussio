@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { api, getIsSuperAdmin, getRole } from '../services/api.js';
+import { api, getIsSuperAdmin, getRole, getActiveCompanyId, setActiveCompanyId, setRole } from '../services/api.js';
+import { writeCompanies } from '../utils/companyStorage.js';
 import { getErrorMessage } from '../utils/errorMessages.js';
 import Modal from '../components/Modal.jsx';
 
@@ -130,7 +131,15 @@ const SettingsAdminPage = ({ onBrandingChanged }) => {
     if (!mounted.current || !isSuperAdmin) return;
     const current = lifecycle.current;
     const list = await api.getCompanies();
-    if (current === lifecycle.current) setCompanies(list || []);
+    if (current !== lifecycle.current) return;
+    const available = (list || []).map(company => ({ ...company, role: 'super_admin' }));
+    setCompanies(available);
+    writeCompanies(available);
+    const activeId = getActiveCompanyId();
+    if (activeId && !available.some(company => String(company.id) === String(activeId))) {
+      setRole(available[0]?.role || 'viewer');
+      setActiveCompanyId(available[0]?.id);
+    }
   };
 
   const handleCreateCompany = async (event) => {

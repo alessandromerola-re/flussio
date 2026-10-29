@@ -117,3 +117,23 @@ test('CSV refusals retain structured module errors for the interface', async () 
   globalThis.fetch = async () => json({ error: { code: 'MODULE_DISABLED', message: 'Disabled', details: { module: 'jobs' } } }, 403);
   await assert.rejects(api.exportAdvancedReportCsv({ snapshot_id: 'blocked' }), error => error.code === 'MODULE_DISABLED' && error.details.module === 'jobs');
 });
+
+test('refresh updates the company selector without invalidating the active company request', async () => {
+  const { api, getContextRevision } = await prepare();
+  const events = [];
+  window.dispatchEvent = event => events.push(event.type);
+  const revision = getContextRevision();
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    if (calls === 1) return json({}, 401);
+    if (calls === 2) return json({ token: 'renewed', role: 'admin', default_company_id: 1,
+      companies: [{ id: 1, name: 'Current', role: 'admin' }, { id: 3, name: 'New', role: 'admin' }] });
+    return json([{ id: 7, name: 'Account' }]);
+  };
+  assert.deepEqual(await api.getAccounts(), [{ id: 7, name: 'Account' }]);
+  assert.deepEqual(events, ['flussio-companies-change']);
+  assert.equal(getContextRevision(), revision);
+  assert.equal(localStorage.getItem('flussio_company_id'), '1');
+  assert.equal(JSON.parse(localStorage.getItem('flussio_companies')).length, 2);
+});
